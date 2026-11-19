@@ -1,6 +1,6 @@
 # PLAN — language comparison v2, F3 stories: the series and the report — the series over six tasks, one pre-registration, the pilot, five paid rounds, the read-back, the record, blind adjudication and the Stage 2 decision line
 
-> Status: **plan only, 2026-11-19: F3's stories document, written when F3 starts. F2 is done (the freeze `spec-frozen-B-20261118` is accepted: C `502b65ad153887464c0c45ebc13e9bbef545c415`, W `f3d256e5fe1f774e189a9850056559b39b995a27`). Nothing of F3 is built. Three steps of it need the owner's explicit go before they run: the push of the pre-registration tag, the pilot's paid sessions, and the paid rounds (§4). Twenty open points for the team lead are in §11; thirteen of them must be answered before the pre-registration files are written.**
+> Status: **plan only, 2026-11-19: F3's stories document, written when F3 starts. F2 is done (the freeze `spec-frozen-B-20261118` is accepted: C `502b65ad153887464c0c45ebc13e9bbef545c415`, W `f3d256e5fe1f774e189a9850056559b39b995a27`). Nothing of F3 is built. Three steps of it need the owner's explicit go before they run: the push of the pre-registration tag, the pilot's paid sessions, and the paid rounds (§4). Twenty-one open points for the team lead are in §11; thirteen of them must be answered before the pre-registration files are written. Revised the same day for F3's plan round 1 (`proceed`, 2 of 2 reviewers, five findings, all accepted): every harness change merges before the pre-registration's manifest and the tag; a read-back is done and on `main` before the next slot is offered; the disk recovery frees named cache folders only and restores them before the record is hashed; the adjudication writes per-session revised verdicts that the record tools read; the disk reserve is recomputed before every launch, a pilot repeat included.**
 > Epic F3 of [PLAN_lang_comparison_v2.md](PLAN_lang_comparison_v2.md) (*Operative plan for epoch 9* with its epoch-10 lines,
 > *Epics in force*, F3; build order steps 5 to 7; D69–D76). A stories document keeps no ledger: its changes are entries in the
 > parent (`common.plan-change-control`), and writing it when the epic starts is not a change. Read at `main` `5740809f` (#230, the
@@ -138,9 +138,12 @@ F1's §3 and F2's §3 hold here unchanged (roles, the merge conditions, red-gree
   is written as a dated line into the registered `amendments.md` before the step, and the paid command refuses a launch whose
   scope has no such line (F3.S1 (a), PR 3). An agent's message, a consultant's answer or an earlier go for another step is not
   a go.
-- **The harness is fixed at `stage-init`.** Every pull request that changes a folder of the Stage 1 harness identity (F3.S1
-  (b)) merges before the Stage 1 series is made. After `stage-init` such a change is an instrument amendment with a dated line;
-  after the first data session it is refused (v1's rule, `spikes/minigit-bench/lib/run-map.mjs:15`, `hasDataSession`). The record
+- **The harness is fixed by the tag** (plan round 1, finding 1). Every pull request that changes a folder of the Stage 1
+  harness identity (F3.S1 (b)) merges before the pre-registration files are generated: PRs 2 to 7, the pilot's, the
+  read-back's and the adjudication's tools among them. The manifest holds that identity, the dry run of step T runs on it,
+  and the tag freezes it, so the instrument the pilot and the rounds use is the one the tag names. `stage-init` refuses any
+  other harness. After the tag a harness change is an instrument amendment with a dated line, possible only before the first
+  data session; after it, it is refused (v1's rule, `spikes/minigit-bench/lib/run-map.mjs:15`, `hasDataSession`). The record
   tools live under `research/lang-v2/tools/`, outside that identity, as v1's do.
 - **No task-repository pull request.** Merge condition 5 does not bite in F3. Merge conditions 1 to 4 do, and §8 says which for
   each pull request.
@@ -160,7 +163,7 @@ F1's §3 and F2's §3 hold here unchanged (roles, the merge conditions, red-gree
 | # | Step | Why | What the go must name | What runs without it |
 |---|---|---|---|---|
 | O1 | The push of the tag `prereg/lang-v2-<yyyymmdd>` to this repository's remote (F3.S1 (b), step T) | Public and not to be undone: the analysis is fixed in public history; from then on a registered snapshot cannot be superseded (`cache-store.mjs`) and a registered file changes only by a dated amendment | the tag's name and the commit it is put on | everything before it: the tools, the files' pull request, the dry run, the local tag and its check |
-| O2 | The pilot's paid sessions: the A/A pair and the two pilot pairs, six sessions (F3.S2 (a), step P) | Money: void spend, each session capped at $50, so at most $300; the quick run's mean was $1.86 a session (information, not a bound the plan relies on) | the pilot, and whether the go also covers one repeat of a pair after a NO GO | `stage-init`, the dry run of the pilot, the free rehearsal |
+| O2 | The pilot's paid sessions: the A/A pair and the two pilot pairs, six sessions (F3.S2 (a), step P) | Money: void spend, each session capped at $50, so at most $300; the quick run's mean was $1.86 a session (information, not a bound the plan relies on) | the pilot, and how many repeat pairs after a NO GO it also covers (none, unless it says so); each repeat is two more sessions at the same cap, and the disk reserve is checked again before it | `stage-init`, the dry run of the pilot, the free rehearsal |
 | O3 | The paid rounds: 60 data sessions in five rounds, and at most one re-run of each void (F3.S2 (b), step R) | Money: no total ceiling exists (D7), so the only bound is 120 sessions (60 and one re-run each) times $50; at the quick run's mean the 60 sessions are about $110 (information, not a bound) | the rounds it covers (all five, or fewer); a go that names fewer is asked again before the next round | the GO table, the dated lines, the seed reveal, every dry run |
 
 Nothing else in F3 needs the owner: not a merge, not the seed reveal, not an amendment for the wall and the stall, not the
@@ -181,7 +184,7 @@ halting below its threshold, and the guard refusing a changed identity; the tag 
 | (a) | the series over six tasks: `stage-init`, `stage-run`, the task slice, the kinds, the record's `arm` and `model` | PR 3 |
 | (a) | the guards before a paid pair: the frozen record, the identities, memory certification, the disk reserve and rule, the clear held-out folder | PR 4 |
 | (b) | the pre-registration tools: the generators, the widened guard, the seed, the CLI pin, the price read | PR 5 |
-| (b) | the pre-registration files | PR 6 |
+| (b) | the pre-registration files | PR 8 |
 | (b) | the dry run and the tag | step T — **the owner's go (O1)** |
 
 ### (a) the schedule — PR 2
@@ -213,10 +216,18 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
   attempt and is finished. Only a void is offered a re-run: an `unscored: environment` session (`VOID_UNSCORED`) and v1's void
   classes. A killed or crashed session is a data attempt (§9).
 - **The gates on a data slot.** No data slot is offered before the pilot's table says GO and the seed is revealed (F3.S2
-  (a)); no slot of round 3 is offered before the two read-back lines exist (F3.S2 (c)). The module takes both facts as
-  arguments.
+  (a)). The module takes both facts as arguments.
 - **The read-back pairs.** One slot of round 1 and one of round 2, one of a daemon task and one of a web task, named from the
   seed, so they are not picked after a result is seen.
+- **The read-back gate: nothing runs past an unread read-back slot** (plan round 1, finding 2). When a read-back slot is
+  scored, no later slot is offered until each of its two sessions that counts has its dated read-back line on `main`
+  (`holds` or `refuted`). A `refuted` line makes that session `void: harness`; its one re-run is then the schedule's next
+  step, as for any void, and the re-run is read back too before any later slot. So a read-back can never void a session
+  after later slots ran, the re-run stays next to its partner in time, and the schedule needs no way back to a finished
+  slot. **Why this and not a later invalidation:** a read-back that voids a session rounds later would need `nextSlot` to
+  reopen a finished slot, a re-run far from its partner, and a rule for round 3 while that re-run is unsettled; each is a
+  new state in the part of the harness that spends money, and the price of avoiding them is two short waits. The parent's
+  rule, the lines before round 3, follows from this gate, and the module still states it as its own check.
 - **The pilot's plan.** The A/A is two sessions of one task and one stack, one on each mask, kind `aa`, twins `a` and `b`.
   The two pilot pairs are kind `pilot`; in the daemon pair C# is on mask A, in the web pair on mask B. Which tasks, and the
   A/A's task and stack, are data the pre-registration names (open point 2).
@@ -241,7 +252,16 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
     `intermittently incorrect` entries; the terminal rule of D71 at the schedule's level.
 13. `An_unscored_environment_session_is_a_void_and_is_offered_its_one_re_run`
 14. `No_data_slot_is_offered_before_the_pilot_is_GO_and_the_seed_is_revealed`
-15. `Round_3_is_refused_until_the_read_back_lines_of_rounds_1_and_2_exist`
+15. `Round_3_is_refused_until_the_read_back_lines_of_rounds_1_and_2_exist` — kept as the parent's own rule, with a map built
+    by hand in which the gate of 15a was skipped.
+    - 15a. `No_slot_after_a_read_back_slot_is_offered_until_both_its_sessions_have_their_dated_line` — one line of two is
+      not enough; the sentence names the slot and the rid still unread.
+    - 15b. `A_refuted_read_back_makes_the_session_a_void_and_its_re_run_is_the_next_step_before_any_later_slot`
+    - 15c. `The_re_run_of_a_refuted_session_is_read_back_too_before_the_next_slot_is_offered`
+    - 15d. `A_second_refuted_read_back_ends_the_cell_and_the_next_slot_is_offered_only_then` — the cell is `missing`, as after
+      any second void; nothing loops.
+    - 15e. `A_read_back_line_for_a_slot_that_is_no_read_back_slot_opens_nothing_and_closes_nothing` — a line about another
+      slot's rid neither satisfies the gate nor reopens a finished slot.
 16. `The_read_back_pairs_are_named_by_the_seed_one_of_each_kind_in_rounds_1_and_2`
 17. `The_pilot_plan_holds_the_A_A_twins_on_the_two_masks_and_one_pair_per_kind_and_no_data_rid`
 
@@ -252,7 +272,7 @@ an export of what the module needs (`pairComplete`, `stackState`, `MASKS`, `STAC
 `nextSlot({ map, slots, pilotGo, seedRevealed, readbackLines })` → `ok(slot)` | `fail(sentence)` | `ok(null)` when the series is
 done, `readbackSlots({ seed })`, `pilotPlan({ pilot })`. No command changes in this pull request.
 
-**Done when:** the seventeen scenarios went red, green, red; §8's row for PR 2.
+**Done when:** the seventeen scenarios and 15a to 15e went red, green, red; §8's row for PR 2.
 
 ### (a) the series over six tasks — PR 3
 
@@ -276,11 +296,15 @@ through the code a quick-run pair runs through today; what is new is which task 
    guard), without a clean tree under `spikes/`, and while any held-out side is not the registered one. It calls
    `checkWorkspaces` (`lib/workspaces-check.mjs:111`) on a checkout of the task repository at W and records the commit, so what
    a session is launched with and restored from is what the task repository publishes (parent F2.S2). It pins the series'
-   harness identity (PR 5's list). With `--rehearsal` it makes an `r-` series for the free stub round and needs no tag.
+   harness identity (PR 5's list) and refuses one that is not the manifest's, unless a dated instrument line accepted it. With
+   `--rehearsal` it makes an `r-` series for the free stub round and needs no tag.
 3. **`stage-run --series <dir> --what aa | pilot:<NN> | next` (new verb; SPENDS MONEY unless `--dry-run`).** `next` is the
-   schedule's next slot; no flag names another data pair. A void's one re-run is the schedule's next step, so `next` runs it, alone, before any later slot; no flag skips it. `--until round`
-   repeats `next` until the round's last slot is finished, a halt, a stop, or a file `<series>/pause` exists (checked between
-   slots only; a running pair is never interrupted by it). `--accept-noisy <why>` is as today. The body is `runPair`'s: the
+   schedule's next slot; no flag names another data pair. A void's one re-run is the schedule's next step, so `next` runs
+   it, alone, before any later slot; no flag skips it. `--until round` repeats `next` until the round's last slot is
+   finished, a halt, a stop, or a file `<series>/pause` exists (checked between slots only; a running pair is never
+   interrupted by it). It also ends, with exit 3 and a sentence naming the slot and the command that prints its read-back,
+   when the slot it just scored is a read-back slot: nothing later runs until the lines are on `main` (the read-back gate of
+   PR 2). `--accept-noisy <why>` is as today. The body is `runPair`'s: the
    part of `lib/run.mjs` after the plan (`readyOrRefused`, `loopAndFinalize`, `finishedIfInterrupted`, `finalizePair`) is called
    with the slot's task and the task's slice; it is extracted into one exported function both verbs call, not copied.
    `run` and `init` refuse a Stage 1 series and name the new verbs; `stage-run` refuses any other series.
@@ -342,6 +366,7 @@ through the code a quick-run pair runs through today; what is new is which task 
 32. `An_owner_go_for_rounds_1_to_2_does_not_cover_round_3_and_one_for_the_pilot_covers_no_round`
 33. `A_malformed_go_line_is_reported_and_never_counts`
 34. `until_round_stops_at_the_rounds_last_slot_at_a_halt_and_at_the_pause_file`
+    - 34a. `until_round_ends_after_a_read_back_slot_and_says_what_is_awaited_and_goes_on_once_the_lines_are_there`
 35. `A_halted_slot_is_resumed_and_plans_no_new_session`
 36. `A_session_that_reaches_the_cap_is_killed_cap_and_stays_a_data_attempt_and_five_rounds_stay_planned_whatever_was_spent`
     (T-L10 for Stage 1: no ceiling line)
@@ -358,7 +383,7 @@ for PR 3.
 
 ### (a) the guards before a paid pair — PR 4
 
-**Brief (Sonnet coder).** Branch `feat/lang-v2-f3s1-guards`. Three new modules; each check is a sentence per problem, and a
+**Brief (Sonnet coder).** Branch `feat/lang-v2-f3s1-guards`. Four new modules; each check is a sentence per problem, and a
 refusal happens before anything is planned or paid.
 
 1. **`lib/stage-guard.mjs`.** `stageGuard({ repo, series, taskRepo, paid, requireSeed })` → `ok(null)` | `fail(reason,
@@ -373,13 +398,17 @@ refusal happens before anything is planned or paid.
      `inputs/hashes-lang.txt` is `freeze.hashesLangSha256`;
    - **the identities:** `liveIdentities()` reads every identity the pre-registration freezes, each from the place that owns
      it, and `identityProblems(manifest, live)` names each one that differs with both short hashes. The list (parent F3.S1 (a),
-     §9, E4.S3): the runner manifest (`inputs/specs.d/runner.json`), the execution layer's tree hash and the memory policy
+     §9, E4.S3): the Stage 1 harness identity (PR 5's list of folders; plan round 1, finding 1: the tag freezes the
+     instrument that is used), the runner manifest (`inputs/specs.d/runner.json`), the execution layer's tree hash and the
+     memory policy
      (`exec-layer.json`, `memory-policy.json`), `pidsMax` 512 read from `lib/exec-layer/scope-entry.sh`, the CLI copy's sha256,
      the toolchain checksums, the two snapshots' tree hashes, FORMAT's sha256, the six specs' sha256, the six archives', clear
      trees' and trap tables' hashes with their counts, the memory value and its registration, the contract's identity
      (`contractIdentity()`), the templates' identity, the registered prompts' and statements' sha256, the price file's and the
      policy's sha256, the caps, the locale and the base environment's allow-list, and the certifying host (host name, kernel,
-     cgroup version). The manifest is PR 5's file; this module owns the list;
+     cgroup version). The manifest is PR 5's file; this module owns the list. For the harness identity alone a difference
+     is accepted when a dated `instrument | harness:<12 hex>` line names the live one and no data session has left `planned`;
+     for every other identity there is no acceptance;
    - **paid only:** the checks of PR 5's guard (the tag, the registered blobs, the clean tree, the harness identity, the
      seed for a data slot).
 2. **Memory certification before the launch.** Before a data slot or a pilot or A/A launch is planned, the layer's own probe
@@ -389,9 +418,14 @@ refusal happens before anything is planned or paid.
    as the second line.
 3. **D15's environment (T-L14's half).** Before a launch, the agent box's environment is the registered base and holds
    neither per-case heap key; a clash or a planted heap key refuses the launch. The record lists the keys of both boxes.
-4. **`lib/stage-disk.mjs`.** `reserveProblem` before the first launch of the series (the A/A): free disk under
-   `~/rsd/lang-v2/` is at least the whole series' bound, the 66 sessions times the measured worst case of one session with
-   every retry and its one void re-run. `diskRuleVerdict` (`lib/growth.mjs:32`) before every slot: below twice the pair's
+4. **`lib/stage-disk.mjs`.** **The reserve is recomputed before every paid launch** (plan round 1, finding 5), not only
+   before the first: free disk under `~/rsd/lang-v2/` is at least the bound of everything still to run, which is the sessions
+   of this launch and every session the schedule still holds, times the measured worst case of one session with every retry
+   and its one void re-run. Before the A/A that is the parent's whole-series bound, the 66 sessions. A repeat pair after a
+   NO GO is no part of the 66: it adds its own two sessions to the launch that runs it, so a repeat that would leave less
+   than the remaining series needs is refused before it is paid, and every later launch counts what is really left. The
+   sessions that already ran are counted by what they hold on disk, not by the estimate. `diskRuleVerdict`
+   (`lib/growth.mjs:32`) before every slot: below twice the pair's
    measured worst case the series halts, exit 3, with a `disk-rule` event line in the ledger (an event, never a charge) and
    both numbers in the sentence; it goes on when the space is there. A missing or zero size is a refusal, never a rule that
    passes. **Which number is "the measured worst case":** `inputs/growth.json` measures the scoring's files (the built copy
@@ -399,11 +433,33 @@ refusal happens before anything is planned or paid.
    box. The rule here takes both: the largest kept session folder (measured by the tool over the quick run's series before
    the pilot, and again over the pilot's sessions, the larger standing) plus `growth.json`'s figures. Open point 13 asks the
    team lead to confirm this reading.
-5. **The recovery path keeps the data.** It is an operator procedure, written into the module doc: copy the series folder to
-   the private backup, write the sha256 list of the source and verify the copy against it with v1's
-   `research/minigit/tools/manifest.mjs` (`write`, `verify`, `--runs`), record the archive's identity (the list's sha256, the
-   bytes, the place, the date) in `<series>/archive.json`; only then free local space, and only of what the verified archive
-   holds. A scenario runs the tool over a fixture series first; it is widened only if that red asks for it.
+5. **`lib/stage-archive.mjs`: the recovery path keeps the data, and says exactly what may go** (plan round 1, finding 3).
+   Three FREE verbs; none launches or scores, and each takes the series lock.
+   - **`stage-archive --series <dir> --to <backup dir>`** copies the whole series folder to the private backup, writes the
+     sha256 list of the source (one line per file, `sha256  path`, links recorded and never followed, the walker of
+     `lib/workspaces-tree.mjs` widened to stream a large tree), verifies the copy against that list file by file, and appends
+     the archive's identity to `<series>/archive.json`: the list's sha256, the bytes, the place, the date and the slots
+     finished at that time. It deletes nothing.
+   - **`stage-free --series <dir>`** is the only thing that frees local space, and it frees one closed list:
+     `FREEABLE = ['box/nuget', 'box/npm', 'box/home/.dotnet']`, the cache copies inside a session's box, and only of sessions
+     that are final (scored, or a settled void) in a finished slot. It first verifies again that the newest archive is at its
+     place and that every file it is about to remove is in that archive's list with the same sha256; a file that is not is
+     kept and named. In each session it leaves `freed.json` with the archive's identity and the removed folders' own list.
+     **Never freed:** the workspace tree a session left (`work/`), `score/` with its build record, attempts, events and
+     score, `record.json`, `meta.json`, `plan.json`, `argv.json`, the streams, the transcripts, the OTel and broker and
+     egress logs, the read-back files, and everything at the series' root (the run-map, the ledger, `pairs/`, `private/`,
+     the adjudication folders, `archive.json`). An unfinished slot's sessions are never touched.
+   - **`stage-restore --series <dir> [--rid <rid>]`** copies a freed session's folders back from the archive, verifies them
+     against `freed.json`'s list and removes `freed.json`.
+   - **Who needs a freed folder, and when it comes back.** Nothing between the halt and the report reads `FREEABLE`: the
+     resume of the open slot and every later slot work in their own sessions; the scoring builds from `work/` over the
+     registered snapshot, never the session's cache (D65); `rescore` and `replay` the same; the adjudication reads
+     `score/passes/` and the frozen spec; `extract` reads the records; the replay of the contamination scan reads the streams
+     and `argv.json`. Two things do need the whole tree, and each refuses a series that still holds a `freed.json`, naming
+     `stage-restore`: the final sha256 list of the record (PR 13) and the last `stage-archive` after the series ended. A
+     command that rebuilds a finished session's record from its folder refuses a freed session the same way. An absent cache
+     is therefore never read as an empty one.
+   - `prune` stays refused for a Stage 1 series: it would remove `score/`.
 6. **`lib/stage-heldout.mjs`: the clear held-out folder per slot.** A slot runs inside `withOpenedHeldout`
    (`lib/heldout-lifecycle.mjs:324`) for its own task: the folder is made from the archive, checked against the registered
    tree hash, and removed when the slot ends, whether it returns or throws. A run after an interruption removes a stale
@@ -428,9 +484,24 @@ repositories; `test/stage-guard-real.test.mjs`, real, behind `needs`):
 49. `A_host_that_cannot_certify_memory_refuses_every_paid_launch_before_anything_is_planned_and_a_rehearsal_goes_on_with_its_flag`
 50. `A_heap_key_in_the_agent_boxs_environment_refuses_the_launch`
 51. `The_reserve_refuses_the_first_launch_below_the_series_bound_and_names_both_numbers`
+    - 51a. `The_reserve_is_recomputed_before_every_launch_over_the_sessions_still_to_run`
+    - 51b. `A_pilot_repeat_counts_its_own_two_sessions_and_is_refused_when_the_rest_of_the_series_would_not_fit`
+    - 51c. `A_launch_after_a_repeat_counts_what_is_really_left_and_what_the_ended_sessions_really_hold`
 52. `The_disk_rule_halts_a_slot_below_twice_its_worst_case_resumably_and_records_why_and_goes_on_when_the_space_is_there`
 53. `A_missing_or_zero_size_is_a_refusal_and_never_a_rule_that_passes`
 54. `A_copy_that_differs_from_the_source_in_one_byte_fails_the_archives_verification`
+    - 54a. `stage_free_removes_only_the_three_cache_folders_of_final_sessions_in_finished_slots` — a fixture series with one
+      finished and one open slot: after it, every other file of the series has its bytes, and the open slot's sessions are
+      whole.
+    - 54b. `stage_free_removes_nothing_that_is_not_in_the_verified_archive_with_the_same_hash_and_names_what_it_kept`
+    - 54c. `stage_free_refuses_when_the_archive_is_not_at_its_place_or_no_longer_verifies`
+    - 54d. `stage_restore_brings_a_freed_session_back_to_its_listed_bytes_and_a_copy_that_differs_is_refused`
+    - 54e. `A_series_that_halted_on_the_disk_rule_was_archived_freed_and_resumed_ends_with_the_records_of_one_that_never_halted`
+      — the fixture series runs twice with fakes for the sessions, once straight and once with a halt before slot 3,
+      `stage-archive`, `stage-free`, the resume to the end, the adjudication's reader and `stage-restore`; every
+      `record.json`, pair record, the run-map and the ledger are equal but for their time stamps and the event lines of the
+      halt. The report's half of this path is scenario 118a.
+    - 54f. `The_final_hash_list_and_the_last_archive_refuse_a_series_that_still_holds_a_freed_session`
 55. `The_clear_folder_of_a_slots_task_is_made_for_the_slot_and_removed_after_it_whether_the_slot_ends_or_throws`
 56. `A_run_after_an_interruption_removes_the_stale_clear_folder_first`
 57. `A_slot_is_refused_before_its_launch_when_the_keys_backup_cannot_be_verified`
@@ -439,7 +510,7 @@ repositories; `test/stage-guard-real.test.mjs`, real, behind `needs`):
 
 **Done when:** the scenarios went red, green, red; the real probe passes on the series host; §8's row for PR 4.
 
-### (b) one pre-registration — PR 5 (the tools) and PR 6 (the files)
+### (b) one pre-registration — PR 5 (the tools) and PR 8 (the files)
 
 **What is registered** (parent F3.S1 (b), §9, D26, E4.S1 to S3). New folder `spikes/lang-explore/inputs/prereg/`:
 
@@ -450,7 +521,7 @@ repositories; `test/stage-guard-real.test.mjs`, real, behind `needs`):
 | `prediction.md` | the prediction for six tasks, bare, and when it was written (T28) | its source is open point 7 |
 | `prompts-lang.json` | the bare template and its sha256; per task and stack the prompt text, the stack sentence, the framework sentence of a web task, and the sha256 of the workspace's `STATEMENT.md` as published at W | `prereg/write-prompts.mjs` |
 | `schedule.json` | the tasks, the rounds, the mask of all 30 (round, task) cells, the two scoring profiles, the pass and attempt counts, the caps, the pilot's tasks, the A/A's task and stack, the read-back rule, the re-run rule | `prereg/write-schedule.mjs` (it refuses without the answers to open point 2) |
-| `manifest.json` | every identity of PR 4's list, and the disk projection for the 66 sessions | `prereg/write-manifest.mjs` from `liveIdentities()` |
+| `manifest.json` | every identity of PR 4's list, the Stage 1 harness identity among them, read when PRs 2 to 7 are all on `main`; the disk projection for the 66 sessions, and beside it what one repeat pair of the pilot adds | `prereg/write-manifest.mjs` from `liveIdentities()`; it runs last but for the seed, after `pin-cli.mjs` |
 | `prices-<yyyy-mm-dd>.json` | the published prices read that day, in v1's shape | `prereg/read-prices.mjs` (the one step that uses the network) |
 | `crosscheck-policy.json` | T1 to T5's policy, starting from v1's registered values | copied once, then its own file |
 | `amendments.md` | the line formats and no line | prose |
@@ -481,7 +552,9 @@ fixes):
 - the spend lines: pilot, A/A, data, void and re-run, with the split of PR 3's item 9;
 - the pilot's GO table: v1's G-1 to G-14 with its definition of GO, and G-16, G-17 and G-18 as the parent's §11 reads them
   for Stage 1 (open points 3 to 5), with the stops (G-2, G-8 and G-12 refuted, alias drift);
-- the read-back pairs' rule; the blind adjudication's two steps and what the revised reading is (F3.S3 (b); open point 15);
+- the read-back pairs' rule, and that no later slot runs before a read-back slot's lines are written; the blind
+  adjudication's two steps and what the revised reading is (F3.S3 (b); open point 15);
+- the disk reserve, recomputed before every launch, and the closed list of what a recovery may free;
 - the memory causes counted per task and stack (kernel kill, each runtime's abort) and the flags `abort-below-evidence` and
   `child-abort-line`, with the 50 % evidence threshold (D56);
 - `deviations` (frozen files the restore had to put back, count and paths) beside `accepted`, never deciding it;
@@ -544,36 +617,42 @@ v1's `test/prereg-fixtures.mjs`; v1's `prereg-guard.test.mjs` and `seed.test.mjs
 78. `The_engine_prices_a_stage_session_from_the_registered_price_file`
 79. `A_stage_session_runs_the_pinned_CLI_copy_by_its_sha256`
 
-**PR 6, the files** (branch `docs/lang-v2-prereg`; the team lead with an Opus writer for the prose). The generators run at a
-named commit of `origin/main`; `statement.md`, the contract's own part and `prediction.md` are written; `seed-commit` runs
+**PR 8, the files** (branch `docs/lang-v2-prereg`; the team lead with an Opus writer for the prose). It is written only when
+PRs 2 to 7 are all on `main`, because the manifest reads the harness identity (plan round 1, finding 1). The generators run
+at a named commit of `origin/main` that holds them; `statement.md`, the contract's own part and `prediction.md` are written; `seed-commit` runs
 last. Before it merges: every `--check` exits 0; the document gate (`mcp__coai__review_document`) reads `statement.md`,
-`analysis-contract.md` and `prediction.md` and every finding is resolved; `leakcheck` and the line scan are clean. **PR 6 is
+`analysis-contract.md` and `prediction.md` and every finding is resolved; `leakcheck` and the line scan are clean. **PR 8 is
 the last merge before the tag**: the tag goes on its merge commit. §11 marks the open points that must be answered before
 these files are written.
 
-**Done when (PR 5 and PR 6):** the scenarios went red, green, red; the files are on `main`, each generated one equal to its
-generator's output; the document gate at `proceed`; §8's rows.
+**Done when (PR 5 and PR 8):** the scenarios went red, green, red; the files are on `main`, each generated one equal to its
+generator's output, the manifest's harness identity equal to the live one on PR 8's merge commit; the document gate at `proceed`; §8's rows.
 
 ### (b) the dry run and the tag — step T · the owner's go (O1)
 
 **Steps** (the team lead, never a coder).
 
+0. **The harness is final.** PRs 2 to 7 are on `main` and PR 8's manifest was generated after the last of them: the dry run
+   first runs `write-manifest.mjs --check` and `identityProblems` on PR 8's merge commit and stops at any difference. Nothing
+   that changes a harness folder merges between this step and the pilot.
 1. **The dry run**, in a scratch clone of this repository with a scratch bare remote; nothing reaches the real remote. A local
-   annotated tag `prereg/lang-v2-<yyyymmdd>` on PR 6's merge commit is pushed to the scratch remote; the guard passes; then the
+   annotated tag `prereg/lang-v2-<yyyymmdd>` on PR 8's merge commit is pushed to the scratch remote; the guard passes; then the
    pairs of D64 on the real files: an appended dated amendment line is accepted, and one changed byte of
-   `analysis-contract.md`, of the cap in `explore.json` and of one spec pin is each refused, naming the file.
+   `analysis-contract.md`, of the cap in `explore.json`, of one spec pin and of one file under `spikes/lang-explore/lib` (the
+   harness identity) is each refused, naming the file or the identity.
 2. **The free stub round.** `stage-init --rehearsal`, then round 1's six slots with the stub CLI, a fixture seed, the hello
    programs of `rehearsal/` and the fixture held-out set, in the real boxes with the one-pass scoring: the order, the masks
-   read back for each slot, the launch, both ends, the scoring, the next slot. Its lines are kept as the evidence of the
-   parent's *Accepted when* beside scenarios 1 to 59.
-3. `leakcheck` and the line scan on PR 6's merge commit; `plan-lifecycle`; the three `--check` tools of lang-bench.
+   read back for each slot, the launch, both ends, the scoring, the next slot; then `stage-verdicts`, the read-back's print
+   and the adjudication's `packets` step over that rehearsal series, so every tool of PRs 2 to 7 has run once on the
+   harness the tag will name. Its lines are kept as the evidence of the parent's *Accepted when* beside scenarios 1 to 59.
+3. `leakcheck` and the line scan on PR 8's merge commit; `plan-lifecycle`; the three `--check` tools of lang-bench.
 4. **The owner's go for the tag (O1)**, asked with the commit, the dry run's result and what the tag locks.
-5. The tag is made on the real clone: annotated, on PR 6's merge commit, its message one generated sentence that names the
+5. The tag is made on the real clone: annotated, on PR 8's merge commit, its message one generated sentence that names the
    commit; checked before the push (not on the remote; annotated; on that commit; the commit is on `origin/main`); pushed
    alone; read back from the remote, peeled, equal to the commit.
 6. One dated line in `spikes/lang-bench/inputs/checkpoints.md`: the tag, its commit, the dry run, the go.
 
-**Done when:** the tag is on the remote and peels to PR 6's merge commit; the dry run and the stub round are recorded; no paid
+**Done when:** the tag is on the remote and peels to PR 8's merge commit; the dry run and the stub round are recorded; no paid
 session has been launched.
 
 ### The rules of F3.S1 and their pairs (D64)
@@ -582,14 +661,16 @@ session has been launched.
 |---|---|---|---|
 | the mask rule | a cell whose mask is not the table's | the 30 cells of the table | scenario 3; the stub round's read-backs |
 | the barrier and the round rule | a slot while an earlier one is open; round 3 without the read-back lines | the schedule's next slot | scenarios 9, 10, 15 |
+| the read-back gate | any slot after a read-back slot whose two lines are not on `main`; a later slot before a refuted session's re-run | the next slot once both lines hold | scenarios 15a to 15e, 34a |
 | a registered file | one changed byte | an appended dated amendment line | scenario 70; the dry run |
 | the caps | a changed cap in dollars; a second change of the wall or the stall | one dated change of the wall and the stall | scenario 72 |
-| an identity | a live identity that differs from the manifest | the manifest's identities | scenario 48; the dry run |
+| an identity | a live identity that differs from the manifest, the harness identity among them | the manifest's identities | scenario 48; the dry run |
 | the frozen record | a missing field, a spec blob or a workspace commit that differs | the accepted record | scenarios 42 to 47 |
 | the seed | a seed at the tag; a data slot before the reveal | the pilot before the reveal | scenarios 65, 73 |
 | the harness | another identity after the first data session | a dated acceptance before it | scenario 75 |
 | the owner's go | a paid launch with no line for its scope | the launch under its line | scenarios 31, 32 |
-| the disk | a launch below the reserve; a slot below the rule | the launch with the space there | scenarios 51 to 53 |
+| the disk | a launch below the reserve of what is still to run, a repeat pair included; a slot below the rule | the launch with the space there | scenarios 51 to 53 |
+| the recovery | freeing anything outside the three cache folders, of an open slot, or not in the verified archive; the final hash list over a freed session | freeing the listed folders of final sessions after a verified archive; the list after `stage-restore` | scenarios 54 to 54f, 118a |
 | the clear folder | a slot whose backup cannot be verified; a second task in clear | one task's folder for one slot | scenarios 55 to 58 |
 
 ## F3.S2 — the pilot, the paid rounds and the read-back
@@ -600,17 +681,21 @@ GO; every session is classed; no round k+1 starts with round k unscored; the rea
 
 | Part | What | Pull request or step (§8) |
 |---|---|---|
-| (a), (c) | the pilot's table and the read-back's reading, as tools | PR 7 |
-| (a) | the go line for the pilot | PR 8 |
+| (a), (c) | the pilot's table and the read-back's reading, as tools | PR 6, before the tag |
+| (a) | the go line for the pilot | PR 9 |
 | (a) | `stage-init`, the A/A pair, the two pilot pairs | step P — **the owner's go (O2)** |
-| (a) | the pilot's record: the by-hand lines, the wall and the stall, the seed revealed | PR 9 |
+| (a) | the pilot's record: the by-hand lines, the wall and the stall, the seed revealed | PR 10 |
 | (b) | rounds 1 to 5 | step R — **the owner's go (O3)** |
-| (c) | the read-back lines of rounds 1 and 2 | PR 10, before round 3 |
+| (c) | the read-back lines of round 1's read-back slot | PR 11, before the slot after it |
+| (c) | the read-back lines of round 2's read-back slot | PR 12, before the slot after it |
 
-### (a) and (c) the tools — PR 7
+### (a) and (c) the tools — PR 6
 
-**Brief (Sonnet coder).** Branch `feat/lang-v2-f3s2-pilot-readback`. It changes folders of the harness identity, so it merges
-before `stage-init` (§3). By the parent's build order it comes after the tag; it may be built beside PRs 4 to 6.
+**Brief (Sonnet coder).** Branch `feat/lang-v2-f3s2-pilot-readback`. It adds files under `spikes/lang-explore/lib`, a folder
+of the harness identity, so it merges **before the pre-registration files are generated and before the tag** (§3; plan
+round 1, finding 1): merged after the tag, it would make the live harness differ from the tagged manifest, the guard would
+refuse the pilot, and the tag would not name the instrument the pilot uses. It may be built beside PRs 4 and 5. The pilot
+and the read-back themselves keep the parent's place, after the tag (open point 21).
 
 1. **`lib/stage-pilot.mjs` (new) and the verb `stage-verdicts --series <dir>`** (FREE, read only but for
    `<series>/pilot-verdicts.json`; exit 0 GO, 2 NO GO or STOP, 4 a refusal). The table is computed, never typed:
@@ -642,7 +727,8 @@ before `stage-init` (§3). By the parent's build order it comes after the tag; i
    and the frozen spec's sha256). `readbackOf` (`lib/readback.mjs:57`) stays what it is and is one part of the output.
    The judge writes one dated by-hand line per session in v1's form with the read-back's row,
    `YYYY-MM-DD | G-1 | holds|refuted | <rid> | <evidence path> | <who>`. A `refuted` line makes the session `void: harness`
-   through `handVerdictsFor` (PR 3) and the schedule offers its re-run.
+   through `handVerdictsFor` (PR 3), and its re-run is the schedule's next step. The verb refuses a slot that is not
+   scored yet, and for a read-back slot it prints at its end which lines the gate of PR 2 still waits for.
 4. **Docs:** the module doc's sections on the pilot's table and the read-back; `research/module_tests.md`.
 
 **Scenarios** (`test/stage-pilot.test.mjs`, `test/stage-readback.test.mjs`, fixture series; v1's `aa-verdicts.test.mjs` and
@@ -662,19 +748,22 @@ before `stage-init` (§3). By the parent's build order it comes after the tag; i
 90. `The_read_back_of_a_pair_shows_argv_binds_cache_hashes_packages_both_boxes_keys_the_affinity_and_the_spec_blob`
 91. `A_read_back_value_that_differs_from_the_manifest_is_marked_and_named`
 92. `A_refuted_read_back_line_makes_the_session_a_void_harness_and_offers_its_re_run`
+    - 92a. `The_read_back_of_a_slot_that_is_not_scored_is_refused`
+    - 92b. `After_a_read_back_slot_the_print_names_the_lines_still_awaited_and_none_when_both_are_there`
 
-**Done when:** the scenarios went red, green, red; §8's row for PR 7.
+**Done when:** the scenarios went red, green, red; §8's row for PR 6.
 
 ### (a) the pilot — step P · the owner's go (O2)
 
-**Before any launch.** PRs 2 to 7 are merged; the tag is on the remote. The series runs from one worktree of its own at
-`origin/main`, moved forward only by the dated-line pull requests (8, 9 and 10), with a clean tree under `spikes/`. The
-share with the key's backup is mounted. Long commands are started detached from the operator's session, so a session that
-ends does not end a pair.
+**Before any launch.** PRs 2 to 8 are merged; the tag is on the remote, and no harness folder changed since PR 8's manifest.
+The series runs from one worktree of its own at `origin/main`, moved forward only by the dated-line pull requests (9 to
+12), with a clean tree under `spikes/`. The share with the key's backup is mounted. Long commands are started detached from
+the operator's session, so a session that ends does not end a pair.
 
-1. `stage-init` (FREE): the series is made; its harness identity, the CLI copy and the tag are pinned; the reserve is checked.
+1. `stage-init` (FREE): the series is made; its harness identity is the manifest's; the CLI copy and the tag are pinned; the
+   reserve is checked for the first time (it is checked again before every launch).
 2. `stage-run --what aa --dry-run` and `--what pilot:<NN> --dry-run`: the rids, the masks and the cap, nothing claimed.
-3. **The owner's go for the pilot (O2).** Its line is PR 8.
+3. **The owner's go for the pilot (O2).** Its line is PR 9.
 4. `stage-run --what aa`: the two twins start together, are collected, classified, charged (ledger kind `aa`) and scored by
    the ten passes. Then `stage-run --what pilot:<daemon task>` and `--what pilot:<web task>` (ledger kind `pilot`). All six
    are void spend and never data (D16).
@@ -685,11 +774,13 @@ ends does not end a pair.
    a case.
 6. `stage-verdicts`: GO, NO GO or STOP. On NO GO the instrument is fixed (a dated `instrument` line; the harness accepted
    before any data session), and the pair that missed is run again: paid, so under O2's words if they cover a repeat, else
-   under a new go. A second NO GO on the same row goes to the owner before a third pair is paid for (v1's rule).
+   under a new go. The repeat is two more sessions than the 66 the projection counts: the reserve is recomputed before it
+   with those two and everything still to run, and it is refused when the rest of the series would no longer fit (PR 4).
+   A second NO GO on the same row goes to the owner before a third pair is paid for (v1's rule).
 7. The wall and the stall: the one dated `caps` line. The T3 and T5 policy, if the A/A asks for another, as a commit of
    `crosscheck-policy.json` in its free fields.
 8. `seed-reveal`: `seed.txt` is written and committed; the guard asks for it from the first data slot on.
-9. PR 9 carries steps 5, 7 and 8 and the table's result (counts only). The pilot's spend is on its two ledger lines.
+9. PR 10 carries steps 5, 7 and 8 and the table's result (counts only). The pilot's spend is on its two ledger lines.
 
 **Done when:** `pilot-verdicts.json` says GO; the dated lines, the `caps` line and `seed.txt` are on `main`; no data session
 has been launched.
@@ -697,33 +788,54 @@ has been launched.
 ### (b) the paid rounds — step R · the owner's go (O3)
 
 1. **The owner's go for the rounds (O3)**, asked with the pilot's settled costs and the GO table. Its line names the rounds
-   it covers; it rides in PR 9 or in a pull request of its own.
+   it covers; it rides in PR 10 or in a pull request of its own.
 2. Round by round: `stage-run --series <dir> --what next --until round`. Each slot: the go line, the guard, the certification
    probe, the reserve and the disk rule, the clear folder opened, the quiet check, the masks read back, both sessions
    launched together, collected, classified and charged, then scored by the ten passes, the records written, the clear
-   folder removed. Then the next slot.
+   folder removed. Then the next slot. In rounds 1 and 2 the loop ends after the read-back slot; (c) says what happens
+   before it goes on.
 3. **What the operator does at a halt** (exit 3, resumable; the same command goes on): not quiet → wait; `--accept-noisy` is
    not used on a data slot without the team lead's written reason, and the flag stays in the record; a mask not applied, the
    preflight, a scoring environment halt → fix the cause and run again; `harness-moved` → restore the harness the series was
-   made with; the disk rule → the recovery path of PR 4; the backup not verified → mount the share; `void: rate limit` →
-   later. A file `<series>/pause` stops the loop between slots.
+   made with; the backup not verified → mount the share; `void: rate limit` → later; a read-back awaited → (c). **The disk
+   rule or the reserve** → the recovery of PR 4, in this order and no other: `stage-archive` to the private backup (copy,
+   list, verify, identity recorded); `stage-free`, which removes the three cache folders of final sessions of finished
+   slots and nothing else; the same `stage-run` again. Nothing a later slot, the scoring, the adjudication or the extraction
+   reads is ever freed, so the series goes on without a restore; `stage-restore` runs once, after the last slot, before the
+   final archive and the record's hash list, which both refuse a series with a freed session. A file `<series>/pause` stops
+   the loop between slots.
 4. **A stop** (exit 2: a `stop:` class, a T1 breach under its policy, a second contaminated void, alias drift) ends the
    series' launches for good, as v1 and the engine have it. The record then names the slots that did not run. Whether the
    rest runs in a new series under the same tag is open point 16; nothing is built for it.
-5. Between rounds the team lead reads `stage-status`: every session classed, the round's flags, the spend lines. Before
-   round 3 the read-back lines must be on `main` (c). A go that covered fewer rounds is asked again here.
+5. Between rounds the team lead reads `stage-status`: every session classed, the round's flags, the spend lines. A go that
+   covered fewer rounds is asked again here.
+6. After the last slot: `stage-restore` if anything was freed, then the final `stage-archive`.
 
 **Done when:** 30 slots are finished (both stacks scored, or void after the one re-run), or a stop ended the series and the
 record names the missing slots; every data session has its `record.json` with ten passes' verdict, its timestamps, `arm` and
 `model`; every pair has its pair record; no round started with the round before it unscored; the spend lines are settled.
 
-### (c) the read-back — PR 10, before round 3
+### (c) the read-back — PRs 11 and 12, each before the slot after its read-back slot
 
 In round 1 and in round 2, the pair the schedule named from the seed (one daemon, one web) is read back by an Opus judge with
-PR 7's tool, after the pair was scored and before round 3. The judge is given the tool's output and the manifest and writes
-the dated lines; a mismatch is `refuted` and the session becomes `void: harness` with its re-run. PR 10 carries the lines;
-the schedule refuses round 3 without them (scenario 15). This is measurement rule 1 for Stage 1: the stacks of a pair differ
-only where the harness says they do.
+PR 6's tool. This is measurement rule 1 for Stage 1: the stacks of a pair differ only where the harness says they do.
+
+**It is done at once, and nothing runs meanwhile** (plan round 1, finding 2; the gate is PR 2's, scenarios 15a to 15e).
+
+1. The read-back slot is scored; `stage-run --until round` ends there and names the slot.
+2. The judge is given the print of `readback --series <dir> --pair <slot>` and the manifest, and writes one dated line per
+   session, `holds` or `refuted`.
+3. The lines go to `main` by their own small pull request (PR 11 for round 1's slot, PR 12 for round 2's); the series'
+   worktree is moved forward to it.
+4. Both `holds`: `stage-run` goes on with the next slot.
+5. One `refuted`: that session is `void: harness`. Its one re-run is the schedule's next step and runs alone, before any
+   later slot. The re-run is read back the same way, its line riding in the same pull request's follow-up, and only then is
+   the next slot offered. A second `refuted` ends the cell (`missing`), like any second void.
+6. A `refuted` line whose cause is the harness itself, and not one launch, cannot be mended after the first data session,
+   because the instrument is frozen: the team lead stops the series there, and what follows is open point 16.
+
+So no session is ever voided after later slots ran, the parent's rule (the lines before round 3) holds with room to spare,
+and the cost is two waits of a judge's reading and a small pull request each.
 
 ## F3.S3 — the record, blind adjudication and the Stage 2 decision
 
@@ -732,16 +844,19 @@ line: open point 12. **Parent:** F3.S3 (E6.S1, from `note.mjs` to a series rollu
 
 | Part | What | Pull request (§8) |
 |---|---|---|
-| (b) | the packets and the two steps for a ten-pass series | PR 11 |
-| (a) | the record tools | PR 12 |
-| (a), (b) | the data, the bare report, the adjudication's counts, the module docs | PR 13 |
-| (c) | the dated decision line | PR 14 |
+| (b) | the packets and the two steps for a ten-pass series, as a tool | PR 7, before the tag |
+| (b) | the adjudication's run | after the last slot, before PR 14 |
+| (a) | the record tools | PR 13 |
+| (a), (b) | the data, the bare report, the adjudication's counts, the module docs | PR 14 |
+| (c) | the dated decision line | PR 15 |
 
-### (b) blind adjudication — PR 11
+### (b) blind adjudication — PR 7
 
 **Brief (Sonnet coder).** Branch `feat/lang-v2-f3s3-adjudication`. It changes `spikes/lang-explore/lib` and v1's
-`lib/adjudicate.mjs`, both in the harness identity, so it merges only when no launch remains (every slot finished), as the
-parent's build order puts it after the rounds.
+`lib/adjudicate.mjs`, both in the harness identity, so it merges **before the pre-registration files are generated and
+before the tag**, like every harness change (§3; plan round 1, finding 1). That also fixes the masks and the revised
+reading's rule before any result is seen. The adjudication itself runs where the parent puts it, after the rounds (open
+point 21).
 
 1. **v1's five steps are reused, with another reader.** `spikes/minigit-bench/lib/adjudicate.mjs`: `buildPackets`,
    `classifyAmbiguity`, `revealFor`, `classifyOrigin` and `revisedFor` take their cells from `readCells` (`:42`), which reads
@@ -759,13 +874,25 @@ parent's build order puts it after the rounds.
 4. **The verbs.** `explore.mjs adjudicate --series <dir> --step packets|classify|reveal|class|revised` with v1's flags. The
    packets go to `<series>/adjudication-packets/`, the verdicts to `<series>/adjudication/`; both are refused inside any git
    worktree. `adjudication/summary.json` holds counts only (per task and stack: packets, each step-1 verdict, each step-2
-   class, mixed against always failing) and is the one file the record tools read.
+   class, mixed against always failing). It and `adjudication/revised.json` (item 6) are the two files the record tools
+   read.
 5. **The two steps.** Step 1: an Opus judge that is given the packets folder and nothing else answers `spec-ambiguity` or
    `not-ambiguous` with a reason for every packet; the reveal is refused until all are answered, and the answers are frozen
    by it. Step 2, after the reveal: `product` or `harness` with a reason.
-6. **The revised reading.** A case judged ambiguous in any session is dropped from every session; a session's revised verdict
-   is the verdict rule (`verdictOf`) over its passes without the dropped cases; the revised CPC stands beside the primary one
-   and never replaces it. What a `harness` class does is open point 15.
+6. **The revised reading, and what carries it to the record** (plan round 1, finding 4). A case judged ambiguous in any
+   session is dropped from every session of its task; a session's revised verdict is the verdict rule (`verdictOf`) over its
+   passes without the dropped cases; a session whose build failed keeps its primary verdict. The revised CPC stands beside
+   the primary one and never replaces it. What a `harness` class does is open point 15.
+   The step `revised` writes **`adjudication/revised.json`**, once (`wx`; a later run writes a new dated file beside it and
+   never over it). It holds one row for **every** data session of the series, also one with no packet, so the record
+   tools need no rule of their own: `{ rid, task, stack, round, attempt, primaryVerdict, revisedVerdict, primaryAccepted,
+   revisedAccepted, packets, droppedCases, buildFailed }`, the last three as counts and a flag; per task the count of
+   dropped cases; `complete: true`; and a fingerprint, the sha256 over the sessions' `score.json` hashes it was computed
+   from. **What it must not hold (D41 and the blind rule):** no case id, no blind id, no reason text (a reason may quote a
+   case), no packet content, no requirement id; every field it has is one the public record already carries for a session,
+   or a count. It is written only by `revised`, which refuses until the reveal exists and every packet has its step-2
+   class, and it lives in `adjudication/`, never in the packets folder, which is the only folder the step-1 judge is given.
+   The cost is not copied into it: CPC's cost has one source, the session's record.
 
 **Scenarios** (`test/stage-adjudicate.test.mjs`, a synthetic series; v1's `adjudicate.test.mjs` stays green):
 
@@ -778,25 +905,39 @@ parent's build order puts it after the rounds.
 99. `A_failed_build_gets_no_packet_and_is_counted_apart`
 100. `The_packets_and_the_verdicts_are_refused_inside_any_git_worktree`
 101. `The_summary_holds_counts_only`
+     - 101a. `The_revised_file_has_one_row_for_every_data_session_and_a_session_with_no_packet_keeps_its_primary_verdict`
+     - 101b. `The_revised_file_holds_no_case_id_no_blind_id_no_reason_and_no_requirement_id` — a scan over the written file
+       against the fixture's case ids, blind ids, reasons and requirement ids, and against the list of its allowed keys.
+     - 101c. `The_revised_file_is_refused_until_the_reveal_exists_and_every_packet_has_its_second_class`
+     - 101d. `The_packets_folder_holds_packets_and_the_mask_list_and_nothing_that_names_a_stack_a_verdict_or_a_session`
+     - 101e. `A_second_revised_run_writes_a_new_dated_file_and_never_changes_the_first`
+     - 101f. `A_case_dropped_in_one_task_changes_no_session_of_another_task`
 
-**Running it** (after PR 11 merges): `packets`; the step-1 judge; `reveal`; the step-2 judge; `revised`. **Done when:** every
-failing or mixed case has a step-1 and a step-2 verdict; `summary.json` exists; the revised reading is computed.
+**Running it** (after the last slot; the tool has been on `main` since before the tag): `packets`; the step-1 judge;
+`reveal`; the step-2 judge; `revised`. **Done when:** every failing or mixed case has a step-1 and a step-2 verdict;
+`summary.json` and `revised.json` exist, `revised.json` complete and with a row for every data session.
 
-### (a) the record tools — PR 12
+### (a) the record tools — PR 13
 
 **Brief (Sonnet coder).** Branch `feat/lang-v2-f3s3-record-tools`. A new folder `research/lang-v2/tools/`, outside the harness
 identity, built on v1's `research/minigit/tools/` by import (`format.mjs`, `pairs.mjs` `median`, `replay.mjs`, `manifest.mjs`),
 never by copy. It may be built during the rounds.
 
 1. **`extract.mjs --series <dir> [--out research/lang-v2/data/<series>.json]`.** Read only. It reads the run-map, the ledger,
-   the pair records, every session's `record.json`, `pilot-verdicts.json`, the registered amendments and
-   `adjudication/summary.json`. It writes the data file: per session the kind, task, round, stack, `arm`, `model`, class,
+   the pair records, every session's `record.json`, `pilot-verdicts.json`, the registered amendments,
+   `adjudication/summary.json` and `adjudication/revised.json` (PR 7). From the last it takes each session's revised verdict
+   and `revisedAccepted`, by rid. It refuses, naming the count, when that file is absent or not `complete`, when its rows
+   are not exactly the data sessions of the run-map, or when its fingerprint is not the one of the sessions' `score.json`
+   files now (a re-score after the adjudication makes it stale). It never opens the packets or the verdict files. It writes
+   the data file: per session the kind, task, round, stack, `arm`, `model`, class,
    flags, the four cost views with T1 to T5, the tokens per model and kind with the cache split, the time partition with every
    category, the scoring time apart, the verdict of the ten passes, the counts of visible and held-out cases passed, the
    defects as counts, `deviations`, the memory causes and flags; per pair the masks, the stamps and the flags; the identities.
    It never opens `score/` beyond what `record.json` holds, drops every case id, and writes the home as `~`.
 2. **CPC has one source.** The per-task figures call `cpcBoth` (`spikes/lang-explore/lib/records.mjs:181`); the ratios, the
-   median, the geometric mean and the count are new small pure functions (`summary.mjs`) over §9's five cases.
+   median, the geometric mean and the count are new small pure functions (`summary.mjs`) over §9's five cases. **The revised
+   reading is the same functions over the same sessions and the same costs, with `accepted` taken from `revisedAccepted`**;
+   nothing about a case is needed for it, and both readings stand side by side in every table that has a CPC.
 3. **`render.mjs`: the whole report is generated.** `report-template.md` holds the prose with two kinds of placeholder: a
    block computed from the data file, and a quote read from the parent at the commit the pre-registration quoted. The
    template holds no digit outside a placeholder and a heading's number; a test fails on one. The output is
@@ -816,7 +957,10 @@ never by copy. It may be built during the rounds.
    counts and the revised reading beside the primary; the claim's limit beside every ratio; the sentences of T5, T6 and T9,
    T23 and T25 to T28; the paragraph on what the analysis licenses; the olympiad notes and the quick run cited as exploratory
    controls outside the claim, never pooled.
-5. **The raw records' hashes.** v1's `manifest.mjs` over the series writes its sha256 list beside the data file.
+5. **The raw records' hashes.** v1's `manifest.mjs` over the series writes its sha256 list beside the data file. It is
+   written over the whole tree: it refuses a series in which any session still holds a `freed.json` and names
+   `stage-restore` (PR 4). `extract` and `render` do not need the freed folders and give the same bytes with or without
+   them.
 6. **Docs:** `research/module_lang_explore.md` (the record tools and where the one engine ends), `research/module_tests.md`.
 
 **Scenarios** (`research/lang-v2/tools/test/*.test.mjs`, fixture series built in the test; no private file):
@@ -840,13 +984,22 @@ never by copy. It may be built during the rounds.
 116. `Every_line_is_given_with_and_without_the_pairs_that_hold_an_unpaired_or_a_loaded_session`
 117. `The_data_file_holds_no_case_id_no_home_path_and_no_token`
 118. `The_schema_holds_arm_and_model_for_every_session`
+     - 118a. `A_series_that_was_halted_archived_freed_resumed_and_restored_gives_the_data_file_and_the_report_of_one_that_never_halted`
+       — the report's half of scenario 54e: the two fixture series of that scenario, extracted and rendered, give equal
+       bytes; the same with the three cache folders still freed; and the hash list is refused until `stage-restore` ran,
+       then equals the straight series' list.
+     - 118b. `The_revised_CPC_is_computed_from_the_per_session_revised_verdicts_and_stands_beside_the_primary` — a fixture
+       where one ambiguous case turns a rejected session into an accepted one: the primary CPC is unchanged, the revised
+       one counts that session in its denominator.
+     - 118c. `Extraction_refuses_an_absent_incomplete_or_stale_revised_file_and_one_whose_rows_are_not_the_data_sessions`
+     - 118d. `The_data_file_carries_the_revised_verdict_per_session_and_nothing_else_of_the_adjudication_but_counts`
 
-**Done when:** the scenarios went red, green, red; §8's row for PR 12.
+**Done when:** the scenarios went red, green, red; §8's row for PR 13.
 
-### (a), (b) the bare report — PR 13
+### (a), (b) the bare report — PR 14
 
-Branch `docs/lang-v2-stage1-report` (the team lead; no code). `extract`, the replay, the manifest and `render` run over the
-finished series; the data files and the report are committed with the rows of `research/README.md`, the updated
+Branch `docs/lang-v2-stage1-report` (the team lead; no code). After the adjudication's run and `stage-restore`: `extract`,
+the replay, the manifest and `render` run over the finished series; the data files and the report are committed with the rows of `research/README.md`, the updated
 `research/module_lang_explore.md` (it describes the one engine, the series and the record tools), the two
 language-comparison rows of `research/architecture.md` (one still says "not a series yet", the other calls the engine
 exploratory), and `research/module_tests.md`. `render.mjs --check` exits 0;
@@ -856,14 +1009,14 @@ and no number stands outside a generated block.
 
 **Done when:** the report is on `main`, generated from the data alone, with T26's sentence and the claim's limit.
 
-### (c) the Stage 2 decision line — PR 14
+### (c) the Stage 2 decision line — PR 15
 
 The line stands in the parent, under *Stage 2: the dated decision*, dated the day the report was generated:
 
 > Stage 2, the process arm on the same six tasks, is decided on `<date>`: go, defer to `<date>`, or cancel, with a reason that
 > does not depend on which stack won Stage 1.
 
-PR 14 (branch `docs/lang-v2-stage2-decision`) writes it with the status lines of the parent and of this document and their
+PR 15 (branch `docs/lang-v2-stage2-decision`) writes it with the status lines of the parent and of this document and their
 `todo/README.md` rows. It is the plan as written being carried out, so it is no entry of the ledger. What follows is outside
 F3: on *go*, the engagement pilot before any Stage 2 epic is split; on *defer*, the references and the trap table stay
 private until the next dated line; on *cancel*, E6.S3 (the publication, which is public and not to be undone and so waits
@@ -884,40 +1037,49 @@ at a time in this repository.
 | # | Story | Branch | What it is | What it runs before it merges | Conditions |
 |---|---|---|---|---|---|
 | 1 | — | `docs/lang-v2-f3-stories` | this document and its `todo/README.md` row | line scan; `plan-lifecycle`; CI; an Opus reading by the team lead | (2) CI only, (3) line scan, (4) |
-| 2 | F3.S1 (a) | `feat/lang-v2-f3s1-schedule` | the schedule | the gates; lang-explore whole runs, both ways; line scan | (1), (2), (3) line scan, (4) |
+| 2 | F3.S1 (a) | `feat/lang-v2-f3s1-schedule` | the schedule, with the read-back gate | the gates; lang-explore whole runs, both ways; line scan | (1), (2), (3) line scan, (4) |
 | 3 | F3.S1 (a) | `feat/lang-v2-f3s1-series` | the series over six tasks, the seam in v1, the go line | the gates; lang-explore and minigit-bench whole runs, both ways; the free rehearsal of round 1; line scan | (1), (2), (3) line scan, (4) |
-| 4 | F3.S1 (a) | `feat/lang-v2-f3s1-guards` | the guards before a paid pair | the gates; lang-explore and lang-bench whole runs, both ways, `LANG_V2_TASK_REPO` at W; the real probe; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`: it changes how the held-out side is opened, (4) |
+| 4 | F3.S1 (a) | `feat/lang-v2-f3s1-guards` | the guards before a paid pair, the reserve before every launch, the archive, free and restore verbs | the gates; lang-explore and lang-bench whole runs, both ways, `LANG_V2_TASK_REPO` at W; the real probe; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`: it changes how the held-out side is opened, (4) |
 | 5 | F3.S1 (b) | `feat/lang-v2-f3s1-prereg-tools` | the pre-registration tools, the widened guard, the seed, the CLI pin | the gates; lang-explore and minigit-bench whole runs, both ways; line scan | (1), (2), (3) line scan, (4) |
-| 6 | F3.S1 (b) | `docs/lang-v2-prereg` | the pre-registration files | every generator's `--check`; the document gate; the three `--check` tools of lang-bench; `leakcheck`; line scan; CI | (2) CI only, (3) with `leakcheck`: public text over the private side, (4) |
-| T | F3.S1 (b) | — | the dry run, the stub round, **the tag — the owner's go (O1)** | step T's six steps | (3): the tag's message is public text |
-| 7 | F3.S2 (a), (c) | `feat/lang-v2-f3s2-pilot-readback` | the pilot's table and the read-back's reading | the gates; lang-explore and minigit-bench whole runs, both ways; line scan | (1), (2), (3) line scan, (4) |
-| 8 | F3.S2 (a) | `docs/lang-v2-go-pilot` | the owner's go line for the pilot | line scan; CI | (2) CI only, (3) line scan |
+| 6 | F3.S2 (a), (c) | `feat/lang-v2-f3s2-pilot-readback` | the pilot's table and the read-back's reading, as tools | the gates; lang-explore and minigit-bench whole runs, both ways; line scan | (1), (2), (3) line scan, (4) |
+| 7 | F3.S3 (b) | `feat/lang-v2-f3s3-adjudication` | the packets, the two steps and the per-session revised verdicts, as a tool | the gates; lang-explore and minigit-bench whole runs, both ways; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`, (4) |
+| 8 | F3.S1 (b) | `docs/lang-v2-prereg` | the pre-registration files; the manifest read after PRs 2 to 7 | every generator's `--check`; `identityProblems` empty on its head; the document gate; the three `--check` tools of lang-bench; `leakcheck`; line scan; CI | (2) CI only, (3) with `leakcheck`: public text over the private side, (4) |
+| T | F3.S1 (b) | — | the dry run and the stub round on the final harness, **the tag — the owner's go (O1)** | step T's steps 0 to 6 | (3): the tag's message is public text |
+| 9 | F3.S2 (a) | `docs/lang-v2-go-pilot` | the owner's go line for the pilot | line scan; CI | (2) CI only, (3) line scan |
 | P | F3.S2 (a) | — | `stage-init`; **the A/A and the two pilot pairs — the owner's go (O2)**; the by-hand reads; `stage-verdicts` | step P | — |
-| 9 | F3.S2 (a) | `docs/lang-v2-pilot-record` | the by-hand lines, the `caps` line, the policy if it moved, `seed.txt`, the go line for the rounds | `leakcheck`; line scan; CI | (2) CI only, (3) with `leakcheck` |
-| R | F3.S2 (b) | — | **rounds 1 to 5 — the owner's go (O3)** | step R | — |
-| 10 | F3.S2 (c) | `docs/lang-v2-readback-lines` | the read-back lines of rounds 1 and 2 (before round 3) | `leakcheck`; line scan; CI | (2) CI only, (3) with `leakcheck` |
-| 11 | F3.S3 (b) | `feat/lang-v2-f3s3-adjudication` | the packets and the two steps | the gates; lang-explore and minigit-bench whole runs, both ways; `leakcheck`; line scan | (1), (2), (3) with `leakcheck`, (4) |
-| 12 | F3.S3 (a) | `feat/lang-v2-f3s3-record-tools` | the record tools | the gates; the tools' tests; lang-explore whole runs (it imports `records.mjs`); line scan | (1), (2), (3) line scan, (4) |
-| 13 | F3.S3 (a), (b) | `docs/lang-v2-stage1-report` | the data, the bare report, the docs | `render.mjs --check`; `leakcheck`; line scan; CI; an Opus reading against the pre-registration | (2) CI only, (3) with `leakcheck` |
-| 14 | F3.S3 (c) | `docs/lang-v2-stage2-decision` | the dated decision line | `plan-lifecycle`; line scan; CI | (2) CI only, (3) line scan |
+| 10 | F3.S2 (a) | `docs/lang-v2-pilot-record` | the by-hand lines, the `caps` line, the policy if it moved, `seed.txt`, the go line for the rounds | `leakcheck`; line scan; CI | (2) CI only, (3) with `leakcheck` |
+| R | F3.S2 (b) | — | **rounds 1 to 5 — the owner's go (O3)**; the loop ends after each read-back slot | step R | — |
+| 11 | F3.S2 (c) | `docs/lang-v2-readback-r1` | the read-back lines of round 1's read-back slot, before the slot after it | `leakcheck`; line scan; CI | (2) CI only, (3) with `leakcheck` |
+| 12 | F3.S2 (c) | `docs/lang-v2-readback-r2` | the read-back lines of round 2's read-back slot, before the slot after it | `leakcheck`; line scan; CI | (2) CI only, (3) with `leakcheck` |
+| 13 | F3.S3 (a) | `feat/lang-v2-f3s3-record-tools` | the record tools | the gates; the tools' tests; lang-explore whole runs (it imports `records.mjs`); line scan | (1), (2), (3) line scan, (4) |
+| 14 | F3.S3 (a), (b) | `docs/lang-v2-stage1-report` | the data, the bare report, the docs | the adjudication's run complete; `stage-restore` if anything was freed; `render.mjs --check`; `leakcheck`; line scan; CI; an Opus reading against the pre-registration | (2) CI only, (3) with `leakcheck` |
+| 15 | F3.S3 (c) | `docs/lang-v2-stage2-decision` | the dated decision line | `plan-lifecycle`; line scan; CI | (2) CI only, (3) line scan |
 
 **Order and why.** PR 1 first, so every brief cites a merged document. PR 2 is pure and comes first of the code; PR 3 needs
-it. PRs 4 and 5 are built beside PR 3 and merge after it (they supply the guard it refuses to run without). PR 6 is the last
-merge before the tag. Step T, then PR 7, which the parent's order puts after the tag and which must be merged before
-`stage-init`; nothing forbids building it earlier. PR 8, step P, PR 9. Step R: rounds 1 and 2, PR 10, rounds 3 to 5. PR 11
-only when no launch remains. PR 12 may be built any time after PR 3; PR 13 needs PRs 11 and 12 and the adjudication's run;
-PR 14 the same day as PR 13's report. This is the parent's build order, steps 5, 6 and 7, unchanged.
+it. PRs 4 and 5 are built beside PR 3 and merge after it (they supply the guard it refuses to run without). PRs 6 and 7 are
+built beside them. **Every pull request that changes a harness folder, PRs 2 to 7, is on `main` before PR 8's manifest is
+generated** (plan round 1, finding 1), so the manifest names the harness the pilot and the rounds will run, the dry run of
+step T runs on that harness, and nothing of it moves after the tag. PR 8 is the last merge before the tag. Step T. PR 9,
+step P, PR 10. Step R: round 1 up to its read-back slot, PR 11, the rest of round 1 and round 2 up to its read-back slot,
+PR 12, then to the end of round 5. PR 13 is outside the harness identity and may be built any time after PR 3. After the
+last slot: the adjudication's run, `stage-restore` if anything was freed, the final archive, PR 14, and PR 15 the same day
+as PR 14's report.
+
+**Against the parent's build order.** Steps 5, 6 and 7 keep their order as activities: the series code and the tag, then
+the pilot, the rounds and the read-back, then the adjudication, the record and the decision line. What moved is where two
+tools are built: the pilot's and the read-back's (PR 6) and the adjudication's (PR 7) merge before the tag, although they
+belong to F3.S2 and F3.S3. Whether that is an entry of the parent's ledger is the team lead's (open point 21).
 
 ## 9. The model per role
 
 | Role | Model | In F3 |
 |---|---|---|
 | Stories, scenarios and briefs | opus by the role table | this document was written by the Fable planner on the team lead's order of 2026-11-19 (open point 18); F3 has no cornerstone |
-| Coder | sonnet | the code and tests of PRs 2 to 5, 7, 11 and 12, and the fixes after review |
-| Small edit | main session or sonnet | the dated-line pull requests 8, 9, 10 and 14: one file each, a few lines, bounded before the first edit |
-| Reviewer and judge | opus | the review of every code pull request beside the coai code round; the by-hand rows G-10, G-13 and G-16; the read-back of rounds 1 and 2; both adjudication steps (step 1 sees the packets only); the reading of the report against the pre-registration |
+| Coder | sonnet | the code and tests of PRs 2 to 7 and 13, and the fixes after review |
+| Small edit | main session or sonnet | the dated-line pull requests 9 to 12 and 15: one file each, a few lines, bounded before the first edit |
+| Reviewer and judge | opus | the review of every code pull request beside the coai code round; the by-hand rows G-10, G-13 and G-16; the read-back of rounds 1 and 2, done at once after its slot; both adjudication steps (step 1 sees the packets only); the reading of the report against the pre-registration |
 | Scout | sonnet | evidence only: a stream's quiet gaps, the remote's tags, a series' state |
-| The team lead (main session) | — | asking the owner for O1, O2 and O3; the tag; `stage-init`; every paid command; `seed-commit` and `seed-reveal`; the pre-registration's prose with an Opus writer; never a coder |
+| The team lead (main session) | — | asking the owner for O1, O2 and O3; the tag; `stage-init`; every paid command; `stage-archive`, `stage-free` and `stage-restore`; `seed-commit` and `seed-reveal`; the pre-registration's prose with an Opus writer; never a coder |
 
 The cornerstone ledger does not change: the parent's line reads *Cornerstones: 2 of 2 — F1.S2, F2.S1*, and this document
 marks none.
@@ -925,12 +1087,18 @@ marks none.
 ## 10. Growth
 
 - **The Stage 1 series** (`~/rsd/lang-v2/explore/x-<date>-<hex>/`, outside git): 66 sessions and at most one re-run of each
-  void. At the quick run's size, about 1.4 GB a session, that is about 92 GB, and about 176 GB if every data session were
-  re-run; the ten passes' records add under 1 MB a session. Kept for ever, append only (D34); `prune` refuses it. Before the
-  first launch the reserve is checked, before every slot the disk rule. Interrupted: a halted slot is resumed, a `launching`
-  session is settled by v1's `reconcile`, an interrupted pass is an environment attempt and is run again (D71).
+  void; a repeat pair of the pilot after a NO GO adds two sessions each. At the quick run's size, about 1.4 GB a session,
+  that is about 92 GB, and about 176 GB if every data session were re-run; the ten passes' records add under 1 MB a
+  session. Kept for ever, append only (D34); `prune` refuses it. **The reserve is checked before every paid launch** over
+  what is still to run, a repeat pair included, and the disk rule before every slot. **What a disk halt may free** is one
+  closed list, the three cache folders in the box of a final session of a finished slot (`box/nuget`, `box/npm`,
+  `box/home/.dotnet`), and only after the archive holding them was verified; they are restored from it before the final
+  archive and the record's hash list. Nothing else of the series is ever removed. Interrupted: a halted slot is resumed, a
+  `launching` session is settled by v1's `reconcile`, an interrupted pass is an environment attempt and is run again
+  (D71); a `stage-archive`, `stage-free` or `stage-restore` that was killed is run again and finishes from the lists
+  (each removes or copies only what its list names, and verifies after).
 - **Its verified copy** on the private backup: the same size, made after the series ended and at any disk halt before local
-  space is freed; its identity is `archive.json`.
+  space is freed; each archive is an entry of `archive.json` with its list's sha256.
 - **The clear held-out folder:** one task's at a time, for one slot, mode 700, removed after it and at the start of a run
   after an interruption.
 - **The free rehearsal series** (`r-…`): six slots of hello programs, well under 1 GB. It is no data; it is removed by hand
@@ -938,7 +1106,8 @@ marks none.
 - **The pre-registration files and the dated lines:** kilobytes, in git; `amendments.md` only grows.
 - **The seed:** one file of a few bytes, outside git, mode 600, kept.
 - **The CLI copy:** one folder under `~/rsd/lang-v2/toolchains/`, kept, because every record names it.
-- **The adjudication's packets and verdicts:** a few megabytes in the series' folder, private, kept with it.
+- **The adjudication's packets and verdicts:** a few megabytes in the series' folder, private, kept with it; `revised.json`
+  is a few kilobytes of rows and counts, and a second run adds a dated file beside it.
 - **The data files, the hash list and the report:** in git, written once per series. v1's are 28 to 112 KB a series and a
   2.4 MB hash list for 12 sessions; Stage 1's are a few megabytes in all. A second render replaces the report whole.
 - **The dry run's scratch clone and remote:** owned folders, removed when step T ends.
@@ -946,8 +1115,8 @@ marks none.
 ## 11. Open points found while writing, for the team lead
 
 Each is a gap or a conflict in the parent, or a reading this document had to take. None is decided here. Line numbers are of
-`todo/PLAN_lang_comparison_v2.md` at `5740809f`. **Needed before the pre-registration files are written (PR 6):** 1 to 5, 7 to
-11 and 13 to 15.
+`todo/PLAN_lang_comparison_v2.md` at `5740809f`. **Needed before the pre-registration files are written (PR 8):** 1 to 5, 7 to
+11 and 13 to 15. Point 21 came from the plan round of 2026-11-19.
 
 1. **When a void is re-run.** §4.4 says after the round's own pairs and before the next round (`:1283`). The operative part
    says "the barrier and the one void re-run stay" (`:764`), and the barrier as built refuses the next pair until the void is
@@ -990,7 +1159,9 @@ Each is a gap or a conflict in the parent, or a reading this document had to tak
     worst case "two sessions' trees plus that size twice" (`:904`). `inputs/growth.json` measures the built copy and the
     retained scoring records, 117 MB for a pair, and F2.S1's reference measurements are in the private package records only.
     With that number alone the reserve for 66 sessions is a few gigabytes against about 92 GB of real growth. This document
-    adds the measured session folder to the rule; that makes the rule stricter, never smaller.
+    adds the measured session folder to the rule; that makes the rule stricter, never smaller. It also checks the reserve
+    before every launch and not only before the first pair (`:757`–`:759`), so that a repeat pair of the pilot is counted;
+    that adds a check and removes none.
 14. **The re-run spend line.** D7 and the Definition of Done name pilot, A/A, data, void and re-run lines (`:1008`, `:482`);
     the ledger has no re-run kind. This document derives the line from the attempt number and asks for the split to be
     confirmed, because the pre-registration states it.
@@ -1008,28 +1179,41 @@ Each is a gap or a conflict in the parent, or a reading this document had to tak
     for §4. It is no spend limit (D53 adds none); if the team lead reads it as a change, it becomes procedure only.
 20. **No ruleset protects the pre-registration tag** in this repository; the task repository's cover `spec-frozen-*` only.
     The guard sees a moved tag, because the series pins the commit. A ruleset would need the owner's own go.
+21. **Two tools are built before the tag** (plan round 1, finding 1, accepted). The parent's build order names F3.S2 after
+    the tag and F3.S3 after the rounds (`:815`–`:817`). The pilot's and the read-back's tools (PR 6) and the adjudication's
+    (PR 7) change harness folders, so they merge before the manifest and the tag; the pilot, the rounds, the read-back, the
+    adjudication's run and the report keep the parent's order. Whether moving the two tools is a build-order entry of the
+    parent's ledger, or only the plan as written being met (the tag must freeze the instrument that is used), is the team
+    lead's. The same round's findings 2 to 5 add checks and steps inside F3's own briefs and change nothing the parent fixes:
+    the read-back gate is stricter than "before round 3" (`:788`), the reserve is checked more often (`:757`), and the
+    recovery frees less than "what the verified archive holds" allows (`:761`–`:763`).
 
 ## 12. Definition of Done (F3)
 
 - [ ] F3.S1 (a): PRs 2, 3 and 4 merged, every scenario red, green, red; the free rehearsal of round 1 recorded; the real
       certification probe passes on the series host.
-- [ ] F3.S1 (b): PRs 5 and 6 merged; every generated file equals its generator's output; the document gate at `proceed`; the
-      dry run and its pairs recorded; **the tag `prereg/lang-v2-<yyyymmdd>` on the remote, under the owner's go (O1), before any
+- [ ] F3.S1 (b): PRs 5 and 8 merged, PR 8's manifest read after PRs 2 to 7 were all on `main`; every generated file equals its
+      generator's output; the document gate at `proceed`; the dry run on the final harness and its pairs recorded; **the tag `prereg/lang-v2-<yyyymmdd>` on the remote, under the owner's go (O1), before any
       launch**; `prediction.md` in it and no `seed.txt`.
-- [ ] F3.S2 (a): PR 7 merged before `stage-init`; **the pilot run under the owner's go (O2)**; the by-hand lines, the one
+- [ ] F3.S2 (a): PR 6 merged before PR 8 and the tag; no harness folder changed between the tag and the pilot; **the pilot
+      run under the owner's go (O2)**, the reserve checked before every launch and before any repeat pair; the by-hand lines, the one
       `caps` line and the revealed seed on `main`; `pilot-verdicts.json` says GO; G-17 and G-18 read; the pilot's spend on its
       own lines.
 - [ ] F3.S2 (b): **the rounds run under the owner's go (O3)**; 30 slots finished, or a stop with the missing slots named;
       every data session scored by the ten passes with its `record.json`, `arm` and `model`; every attempt kept; no round
       started with the round before it unscored; T1 to T5 held for every data session, or the breach is in the report.
-- [ ] F3.S2 (c): the read-back lines of rounds 1 and 2 on `main` before round 3.
-- [ ] F3.S3 (b): every failing or mixed case has a step-1 and a step-2 verdict; the revised reading stands beside the primary.
+- [ ] F3.S2 (c): the read-back lines of round 1's and round 2's read-back slot on `main`, each before the slot after it ran
+      (so before round 3); a refuted session re-run and read back before any later slot.
+- [ ] F3.S3 (b): PR 7 merged before PR 8 and the tag; every failing or mixed case has a step-1 and a step-2 verdict;
+      `adjudication/revised.json` is complete, with a row for every data session and nothing of a case; the revised reading,
+      computed from it by the record tools, stands beside the primary.
 - [ ] F3.S3 (a): the report on `main`, generated from the data alone, `render.mjs --check` at 0; it carries per task CPC or
       the undefined outcome, the six-task median, the geometric mean and the count, every v1 metric, `deviations` beside
       `accepted`, the counts of `intermittently incorrect` and `unscored: environment` per stack, the claim's limit, T26's
       sentence, every identity, every attempt and the five spend lines; the olympiad notes cited as controls outside the claim.
 - [ ] F3.S3 (c): the dated decision line in the parent.
-- [ ] The series' verified copy is on the private backup, its identity recorded.
+- [ ] The series' verified copy is on the private backup, its identity recorded; if a disk halt freed cache folders, only
+      the three listed ones of final sessions were freed, and they were restored before the final archive and the hash list.
 - [ ] `research/module_lang_explore.md`, `research/module_tests.md`, `research/architecture.md` and `research/README.md`
       describe what now exists; `research/module_tests.md` lists every scenario of this document as covered, or not covered
       with a reason, and says what the harness does not prove.
