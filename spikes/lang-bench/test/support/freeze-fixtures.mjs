@@ -47,8 +47,8 @@ export function baseFiles({ format = formatText(), specs = {} } = {}) {
   return files;
 }
 
-/** The data file of the engine's pins (`spikes/lang-explore/inputs/explore.json`, only the part the freeze reads): the sha256 of each of the six gated specs of `files`. */
-export const pinsOf = files => ({ tasks: Object.fromEntries(SIX.filter(([nn, slug]) => files[specPath(`${nn}-${slug}`)] !== undefined).map(([nn, slug]) => [nn, { spec: { path: specPath(`${nn}-${slug}`), sha256: sha256(files[specPath(`${nn}-${slug}`)]) } }])) });
+/** The registry of packages the freeze reads the gated hashes from (`spikes/lang-explore/inputs/packages.json`, only the part the freeze reads): `{ NN: { specSha256 } }`, the sha256 of each of the six gated specs of `files`. */
+export const pinsOf = files => Object.fromEntries(SIX.filter(([nn, slug]) => files[specPath(`${nn}-${slug}`)] !== undefined).map(([nn, slug]) => [nn, { specSha256: sha256(files[specPath(`${nn}-${slug}`)]) }]));
 
 /** The record of the FORMATs, in the shape of `inputs/specs.d/format.json`; `over` replaces entries. */
 export function formatRecord(format, over = {}) {
@@ -77,7 +77,7 @@ export function makeFreezeRepo(t, { files, format = formatText(), record, pinned
   const recordFile = path.join(inputs, 'specs.d', 'format.json');
   writeFileSync(recordFile, `${JSON.stringify(record ?? formatRecord(format), null, 2)}\n`);
   for (const [nn] of SIX) writeFileSync(path.join(inputs, 'gates', `spec-${nn}.md`), `# The gate of task ${nn}'s spec\n`);
-  const pins = path.join(root, 'explore.json');
+  const pins = path.join(root, 'packages.json');
   writeFileSync(pins, `${JSON.stringify(pinsOf(pinned ?? files ?? baseFiles({ format })), null, 2)}\n`);
   const fixture = { root, repo, origin, inputs, recordFile, pins, base, formatSha256: sha256(format) };
   return { ...fixture, run: (verb, flags = [], seams = {}) => runVerb(fixture, verb, flags, seams) };
