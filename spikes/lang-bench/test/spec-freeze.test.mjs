@@ -539,7 +539,7 @@ test('The_command_prints_the_hash_list_and_a_plan_and_exits_2_for_usage_and_3_fo
 
 // ---- a spec edited after its gate cannot be frozen ---------------------------------------------------------------------------------------------------
 
-/** A repository whose spec of task 06 holds a changed line while the engine's pin names the gated text's sha256. */
+/** A repository whose spec of task 06 holds a changed line while the registered package's `specSha256` (the pins file of the fixture) names the gated text's sha256. */
 const editedAfterGate = t => {
   const gated = baseFiles();
   const edited = baseFiles({ specs: { '06': specText('06').replace('**R2.** For n = 1', '**R2.** For n = 2') } });

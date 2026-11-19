@@ -141,6 +141,9 @@ export function sealSeams({ frozenFile, packagesFile, hooks = {} }) {
   return { keyFile, backupFile: path.join(backupDir, 'heldout.key.bak'), shareMount, mountOf: mountFor(shareMount), retry: { tries: 3, sleepMs: 1 }, hooks, now: () => new Date('2026-11-09T09:00:00.000Z'), frozenFile, packagesFile };
 }
 
+/** A freeze record that is not there: the registrations of these tests are before any freeze, whatever the committed `spec-states.json` says. */
+export const NO_FREEZE = path.join(tmpDir('pkg-nofreeze'), 'spec-states.json');
+
 /**
  * Everything a command test needs: an invented package, the fake world, the pins of the invented task, and `io` for `main` (`say` collects `lines`). `over` replaces entries of `io`, `over.package` entries of `io.package`.
  * -> `{ p, world, io, lines, files }`.
@@ -149,13 +152,13 @@ export function commandEnv({ plan, buildOk, buildFail, over = {}, built, ...pkgO
   const p = built ?? writePackage(pkgOptions);
   const world = fakeWorld({ plan, buildOk, buildFail });
   const lines = [];
-  const files = { packagesFile: path.join(tmpDir('pkg-registry'), 'packages.json'), frozenFile: path.join(tmpDir('pkg-frozen'), 'heldout-frozen.json'), memoryFile: path.join(tmpDir('pkg-memory'), 'memory-limit.json') };
+  const files = { packagesFile: path.join(tmpDir('pkg-registry'), 'packages.json'), frozenFile: path.join(tmpDir('pkg-frozen'), 'heldout-frozen.json'), memoryFile: path.join(tmpDir('pkg-memory'), 'memory-limit.json'), statesFile: NO_FREEZE };
   const gateRecord = path.join(tmpDir('pkg-gate'), 'spec-05.md');
   writeFileSync(gateRecord, 'verdict proceed, 2 reviewers\n');
   const { package: packageOver, ...ioOver } = over;
   const io = {
     home: p.home, say: l => lines.push(l), worldFn: async () => ok(world), quietFn: async () => ok({ quiet: true }), exploreFn: () => ok({ ...EXPLORE, tasks: { ...EXPLORE.tasks, [p.task.id]: p.task } }), frozenFile: files.frozenFile,
-    now: world.clock.now, package: { parent: tmpDir('pkg-parent'), pinsFn: () => ({ runnerSha256: 'a'.repeat(64), execLayerSha256: 'b'.repeat(64) }), packagesFile: files.packagesFile, conformance: { exit: 0, firstLine: '' }, gateRecordFile: gateRecord, memoryFile: files.memoryFile, ...packageOver }, ...ioOver,
+    now: world.clock.now, package: { parent: tmpDir('pkg-parent'), pinsFn: () => ({ runnerSha256: 'a'.repeat(64), execLayerSha256: 'b'.repeat(64) }), packagesFile: files.packagesFile, statesFile: files.statesFile, conformance: { exit: 0, firstLine: '' }, gateRecordFile: gateRecord, memoryFile: files.memoryFile, ...packageOver }, ...ioOver,
   };
   return { p, world, io, lines, files };
 }

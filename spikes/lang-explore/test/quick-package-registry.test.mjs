@@ -16,7 +16,7 @@ import { materialOf, loadPackage, packageIdentity } from '../lib/package-quick.m
 import { incompleteRuns, latestRecord, openRun, packageRoot, recordS, sOfSuite, sweepOwnedTrees, writeHalt, writeRecord } from '../lib/package-record.mjs';
 import { LATER_TASKS, registerPackage } from '../lib/package-registry.mjs';
 import { quickHome, quickTask } from './quick-leak-fixture.mjs';
-import { SPEC_TEXT, TOKEN, fakeWorld, sha, writePackage } from './quick-package-fixture.mjs';
+import { NO_FREEZE, SPEC_TEXT, TOKEN, fakeWorld, sha, writePackage } from './quick-package-fixture.mjs';
 
 const SPIKE = fileURLToPath(new URL('..', import.meta.url));
 const PINS = Object.freeze({ runnerSha256: 'a'.repeat(64), execLayerSha256: 'b'.repeat(64) });
@@ -31,7 +31,7 @@ const greenRecord = (pkg, over = {}) => ({
 const packagesFile = () => path.join(tmpDir('pkg-registry'), 'packages.json');
 const frozenFile = () => path.join(tmpDir('pkg-frozen'), 'heldout-frozen.json');
 const load = (p, world = fakeWorld()) => { const r = loadPackage({ home: p.home, task: p.task, world }); assert.equal(r.ok, true, r.reason); return r.value; };
-const register = ({ p, pkg, record, files = { packagesFile: packagesFile(), frozenFile: frozenFile() }, tasks }) => registerPackage({ home: p.home, task: p.task, tasks: tasks ?? [p.task], record: record ?? greenRecord(pkg), pkg, pinsFn: () => PINS, now: () => new Date('2026-11-09T10:00:00Z'), ...files });
+const register = ({ p, pkg, record, files = { packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: NO_FREEZE }, tasks }) => registerPackage({ home: p.home, task: p.task, tasks: tasks ?? [p.task], record: record ?? greenRecord(pkg), pkg, pinsFn: () => PINS, now: () => new Date('2026-11-09T10:00:00Z'), ...files });
 
 test('The_package_is_red_while_the_conformance_check_fails_or_the_verdict_row_is_still_its_placeholder', async t => {
   const record = tmpDir('pkg-gate');
@@ -82,7 +82,7 @@ test('The_package_identity_moves_with_any_byte_of_the_material_and_with_nothing_
 test('The_registry_entry_holds_counts_hashes_and_durations_only', () => {
   const p = writePackage({ load: { cases: ['h003'], durationS: 540 } });
   const pkg = load(p);
-  const files = { packagesFile: packagesFile(), frozenFile: frozenFile() };
+  const files = { packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: NO_FREEZE };
   assert.equal(register({ p, pkg, files }).ok, true);
   const text = readFileSync(files.packagesFile, 'utf8');
   const entry = JSON.parse(text)['05'];
@@ -99,7 +99,7 @@ test('The_registry_entry_holds_counts_hashes_and_durations_only', () => {
 test('register_refuses_while_any_item_is_red_or_the_record_is_older_than_the_material', () => {
   const p = writePackage();
   const pkg = load(p);
-  const files = { packagesFile: packagesFile(), frozenFile: frozenFile() };
+  const files = { packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: NO_FREEZE };
   const red = register({ p, pkg, files, record: greenRecord(pkg, { items: { ...greenRecord(pkg).items, witnesses: { ok: false } } }) });
   assert.ok(red.ok === false && /witnesses is red or not run/.test(red.reason), red.reason);
   assert.equal(existsSync(files.packagesFile), false, 'nothing is written');
@@ -121,7 +121,7 @@ test('register_refuses_while_any_item_is_red_or_the_record_is_older_than_the_mat
 test('A_packages_entry_whose_archive_hash_differs_from_the_registry_is_refused_naming_the_task_and_both_files', () => {
   const p = writePackage();
   const pkg = load(p);
-  const files = { packagesFile: packagesFile(), frozenFile: frozenFile() };
+  const files = { packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: NO_FREEZE };
   writeFileSync(files.packagesFile, JSON.stringify({ '05': { archiveSha256: 'a'.repeat(64) } }));
   writeFileSync(files.frozenFile, JSON.stringify({ tasks: { '05': { archiveSha256: 'd'.repeat(64), treeSha256: 'e'.repeat(64), keySha256: 'f'.repeat(64) } } }));
   const r = register({ p, pkg, files });
@@ -184,7 +184,7 @@ test('No_module_but_memory_limit_writes_the_registration_field', () => {
 test('A_task_registers_before_the_memory_value_is_registered_and_register_memory_waits_for_all_six', () => {
   const p = writePackage();
   const pkg = load(p);
-  const files = { packagesFile: packagesFile(), frozenFile: frozenFile() };
+  const files = { packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: NO_FREEZE };
   assert.equal(register({ p, pkg, files }).ok, true, 'task 05 registers with no memory registration');
   const entry = JSON.parse(readFileSync(files.packagesFile, 'utf8'))['05'];
   assert.equal(entry.memoryBytes, MEMORY, 'the entry records the value its references passed at');
@@ -208,7 +208,7 @@ const registerLater = (five, id, files) => registerPackage({ home: five.home, ta
 
 test('Register_of_a_later_task_refuses_until_all_five_S_are_recorded_and_passes_after', () => {
   const five = fiveTasks();
-  const files = { packagesFile: packagesFile(), frozenFile: frozenFile() };
+  const files = { packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: NO_FREEZE };
   const none = registerLater(five, '04', files);
   assert.ok(none.ok === false && ['04', '06', '07', '08', '10'].every(id => none.reason.includes(id)), none.reason);
   for (const id of ['04', '06', '07', '08']) assert.equal(recordS({ home: five.home, task: five.ps[id].p.task, treeSha256: five.ps[id].pkg.held.treeSha256, sBytes: 100 }).ok, true);
@@ -222,7 +222,7 @@ test('Register_of_a_later_task_refuses_until_all_five_S_are_recorded_and_passes_
 
 test('An_S_recorded_for_an_older_suite_does_not_count', () => {
   const five = fiveTasks();
-  const files = { packagesFile: packagesFile(), frozenFile: frozenFile() };
+  const files = { packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: NO_FREEZE };
   for (const id of LATER_TASKS) recordS({ home: five.home, task: five.ps[id].p.task, treeSha256: five.ps[id].pkg.held.treeSha256, sBytes: 100 });
   assert.equal(registerLater(five, '04', files).ok, true, 'control: all five counted');
   const p10 = five.ps['10'].p;
@@ -230,7 +230,7 @@ test('An_S_recorded_for_an_older_suite_does_not_count', () => {
   const changed = loadPackage({ home: five.home, task: p10.task, world: fakeWorld() }).value;
   assert.notEqual(changed.held.treeSha256, five.ps['10'].pkg.held.treeSha256);
   assert.equal(sOfSuite({ home: five.home, task: p10.task, treeSha256: changed.held.treeSha256 }), null, 'the older suite\'s S is not this suite\'s');
-  const stale = registerLater(five, '06', { packagesFile: packagesFile(), frozenFile: frozenFile() });
+  const stale = registerLater(five, '06', { packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: NO_FREEZE });
   assert.ok(stale.ok === false && /task 10/.test(stale.reason), stale.reason);
   assert.equal(recordS({ home: five.home, task: p10.task, treeSha256: changed.held.treeSha256, sBytes: 12_000 }).value, 'recorded');
   assert.equal(JSON.parse(readFileSync(path.join(packageRoot(five.home, p10.task), 's.json'), 'utf8')).counts.length, 2, 'the earlier count is kept: the file is appended, never rewritten shorter');
@@ -311,7 +311,7 @@ test('Two_registrations_of_different_tasks_at_once_keep_both_entries', () => {
   const pa = load(a);
   const pb = load(b);
   recordS({ home, task: b.task, treeSha256: pb.held.treeSha256, sBytes: 1 });
-  const files = { packagesFile: packagesFile(), frozenFile: frozenFile() };
+  const files = { packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: NO_FREEZE };
   const nested = [];
   const hooks = { afterRead: () => nested.push(registerPackage({ home, task: b.task, tasks: [a.task, b.task], record: greenRecord(pb), pkg: pb, pinsFn: () => PINS, ...files })) };
   const first = registerPackage({ home, task: a.task, tasks: [a.task, b.task], record: greenRecord(pa), pkg: pa, pinsFn: () => PINS, hooks, ...files });
@@ -326,6 +326,47 @@ test('Two_registrations_of_different_tasks_at_once_keep_both_entries', () => {
 test('A_registration_with_no_task_list_is_a_refusal_not_an_empty_list', () => {
   const p = writePackage();
   const pkg = load(p);
-  const r = registerPackage({ home: p.home, task: p.task, record: greenRecord(pkg), pkg, pinsFn: () => PINS, packagesFile: packagesFile(), frozenFile: frozenFile() });
+  const r = registerPackage({ home: p.home, task: p.task, record: greenRecord(pkg), pkg, pinsFn: () => PINS, packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: NO_FREEZE });
   assert.ok(r.ok === false && /list of the quick tasks/.test(r.reason), r.reason);
+});
+
+// ---- after the freeze: a registered row of a frozen spec is not replaced (F2.S2 (f), fix round C) ----------------------------------------------------------------------------
+
+/** A spec-states file of fixtures: `freeze.state` and the tasks whose spec rows it holds. Never the real record. */
+const statesFile = ({ state = 'accepted', tasks = ['05'], text } = {}) => {
+  const file = path.join(tmpDir('pkg-states'), 'spec-states.json');
+  writeFileSync(file, text ?? JSON.stringify({ freeze: { state, tag: 'spec-frozen-B-20261118' }, specs: Object.fromEntries(tasks.map(id => [id, { state: 'frozen', sha256: 'f'.repeat(64) }])) }));
+  return file;
+};
+
+test('A_row_of_a_task_whose_spec_is_in_an_accepted_freeze_is_never_replaced_or_added_and_an_identical_one_is_a_no_op', () => {
+  const p = writePackage();
+  const pkg = load(p);
+  const files = { packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: NO_FREEZE };
+  assert.equal(register({ p, pkg, files: { ...files, statesFile: NO_FREEZE } }).value?.state, 'registered', 'before any freeze the row is written');
+  const bytes = readFileSync(files.packagesFile);
+  const frozen = statesFile();
+  const same = register({ p, pkg, files: { ...files, statesFile: frozen } });
+  assert.deepEqual([same.ok, same.value?.state], [true, 'unchanged'], 'an identical row is no change');
+  const rerun = register({ p, pkg, record: greenRecord(pkg, { gate: { ...GATE, date: '2026-12-01' } }), files: { ...files, statesFile: frozen } });
+  assert.equal(rerun.ok, false, 'a rerun after the freeze would write another identity');
+  assert.match(rerun.reason, /task 05/);
+  assert.match(rerun.reason, /accepted freeze spec-frozen-B-20261118/);
+  assert.match(rerun.reason, /superseding freeze/);
+  assert.deepEqual(readFileSync(files.packagesFile), bytes, 'the registry is as it was');
+  const added = register({ p, pkg, files: { packagesFile: packagesFile(), frozenFile: files.frozenFile, statesFile: frozen } });
+  assert.equal(added.ok, false, 'no row of a frozen task is added either');
+});
+
+test('The_freeze_guard_does_not_touch_a_task_outside_the_freeze_a_freeze_not_accepted_or_a_missing_record_and_refuses_one_it_cannot_read', () => {
+  const p = writePackage();
+  const pkg = load(p);
+  const fresh = () => ({ packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: NO_FREEZE });
+  assert.equal(register({ p, pkg, files: { ...fresh(), statesFile: statesFile({ tasks: ['04'] }) } }).ok, true, 'task 05 is not in the freeze');
+  assert.equal(register({ p, pkg, files: { ...fresh(), statesFile: statesFile({ state: 'provisional' }) } }).ok, true, 'a freeze that is not accepted guards nothing');
+  assert.equal(register({ p, pkg, files: { ...fresh(), statesFile: NO_FREEZE } }).ok, true, 'a missing record is no freeze');
+  const files = { ...fresh(), statesFile: statesFile({ text: '{' }) };
+  const broken = register({ p, pkg, files });
+  assert.ok(broken.ok === false && /spec-states\.json cannot be read/.test(broken.reason), broken.reason);
+  assert.equal(existsSync(files.packagesFile), false, 'nothing is written over a record that cannot be read');
 });
