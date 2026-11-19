@@ -1,7 +1,7 @@
 // Test plumbing for the agent box: a session layout under the (hidden) home so no bind lands in the host /tmp, the harness files the box
 // needs, and a probe that runs a command in the box and refuses to read a box that did not start as a passing probe.
 import assert from 'node:assert/strict';
-import { copyFileSync, existsSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { agentBoxArgv, agentBoxPrefix, agentEnv, dummyToken, sessionLayout } from '../lib/sandbox.mjs';
@@ -12,6 +12,8 @@ import { homeDir, spikeDir } from './helpers.mjs';
 export const nodeDir = path.dirname(path.dirname(process.execPath));
 export const TS_DIR = path.join(os.homedir(), 'rsd', 'minigit', 'toolchains', 'typescript-7.0.2');
 export const sleep = ms => new Promise(r => setTimeout(r, ms));
+/** The pinned SDK version, read from `inputs/stacks.json` and never typed in a test: every box on the distribution's dotnet is told it (E2 amendment 2026-11-19). */
+export const DOTNET_PIN = JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'stacks.json'), 'utf8')).pins.dotnetSdk;
 
 let counter = 0;
 /** A fresh session layout on disk with `box-init.mjs` installed; the root sits under the home (which the box hides) so bind mountpoints never land in the host /tmp. */
@@ -22,7 +24,7 @@ export function newSession({ rid = `s${++counter}`, root = homeDir('as') } = {})
   return made.value;
 }
 
-export const boxOptions = (layout, over = {}) => ({ layout, arm: 'bare', toolchains: [], claudeBinary: process.execPath, nodeDir, ...over });
+export const boxOptions = (layout, over = {}) => ({ layout, arm: 'bare', toolchains: [], claudeBinary: process.execPath, nodeDir, dotnetPin: DOTNET_PIN, ...over });
 export const envFor = (layout, over = {}) => agentEnv({ layout, dummyToken: dummyToken('probe'), cellId: `cell-${layout.rid}`, nodeDir, ...over });
 
 /** The argv without one single-token flag (the control that shows a probe CAN see what the flag hides). */

@@ -49,7 +49,7 @@ export const loadPrompts = (file = path.join(INPUTS, 'prompts.json')) => JSON.pa
 export function planForSession({ ctx, item }) {
   const stack = item.session.stack;
   const base = bareSessionPlan({
-    layout: item.layout, stack, phase: 'v1', claudeBinary: ctx.claudeBinary, cliVersion: ctx.cliVersion, nodeDir: ctx.nodeDir, tsDir: ctx.tsDir, token: ctx.token, dummy: dummyToken(randomBytes(6).toString('hex')),
+    layout: item.layout, stack, phase: 'v1', claudeBinary: ctx.claudeBinary, cliVersion: ctx.cliVersion, nodeDir: ctx.nodeDir, tsDir: ctx.tsDir, dotnetPin: ctx.dotnetPin, token: ctx.token, dummy: dummyToken(randomBytes(6).toString('hex')),
     prices: ctx.prices, operatorHome: ctx.home, harnessSources: ctx.harnessSources, caps: ctx.caps, envExtra: ctx.envExtra ?? {}, over: ctx.planOver ?? {},
   });
   const toolchains = ctx.dotnetDir ? { toolchains: [...base.toolchains, ctx.dotnetDir], dotnetDir: ctx.dotnetDir, hide: ctx.hide ?? [] } : {}; // the quick tasks: the pinned SDK bound and on PATH, the distribution's dotnet hidden

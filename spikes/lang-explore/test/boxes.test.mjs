@@ -47,7 +47,7 @@ test('The_agent_box_gives_both_stacks_the_locale_of_the_plan', async t => {
     const layout = made.value;
     workspace(stack, layout.work);
     const env = agentEnv({ layout, dummyToken: dummyToken('x'), cellId: 'cell-a1', nodeDir, locale: EXPLORE.locale, extra: EXPLORE.envExtra });
-    const r = await probeArgv(agentBoxPrefix({ layout, arm: 'bare', toolchains: [], claudeBinary: process.execPath, nodeDir }), COMMANDS[stack], env, { timeoutMs: 180_000 });
+    const r = await probeArgv(agentBoxPrefix({ layout, arm: 'bare', toolchains: [], claudeBinary: process.execPath, nodeDir, dotnetPin: EXPLORE.dotnet.sdk }), COMMANDS[stack], env, { timeoutMs: 180_000 });
     check(stack, r.out);
   }
 });

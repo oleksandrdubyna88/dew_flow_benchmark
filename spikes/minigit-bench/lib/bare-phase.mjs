@@ -75,9 +75,10 @@ function plantFor({ ctx, item, partner, d }) {
   return { manifest, tokens: planted.filter(t => t.status === 'planted').map(t => t.token), planted: planted.length };
 }
 
-function v1Plan({ ctx, item }) {
+/** v1's bare plan of one item, from the run context (`ctx.dotnetPin` is the pinned SDK of `inputs/stacks.json`). Exported for the test of the path from a context to a box. */
+export function v1Plan({ ctx, item }) {
   return bareSessionPlan({
-    layout: item.layout, stack: item.session.stack, phase: item.session.phase, claudeBinary: ctx.claudeBinary, cliVersion: ctx.cliVersion, nodeDir: ctx.nodeDir, tsDir: ctx.tsDir,
+    layout: item.layout, stack: item.session.stack, phase: item.session.phase, claudeBinary: ctx.claudeBinary, cliVersion: ctx.cliVersion, nodeDir: ctx.nodeDir, tsDir: ctx.tsDir, dotnetPin: ctx.dotnetPin,
     token: ctx.token, dummy: dummyToken(randomBytes(6).toString('hex')), prices: ctx.prices, operatorHome: ctx.home, harnessSources: ctx.harnessSources, caps: ctx.caps, envExtra: ctx.envExtra ?? {}, over: ctx.planOver ?? {},
   });
 }

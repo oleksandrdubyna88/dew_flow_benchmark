@@ -1,5 +1,5 @@
-// An invented host for the dotnet hide list (E2 amendment 2026-11-19): a listing of directories as `agentBoxPrefix` takes it (`exists` and `listDir`), with no folder on disk. `TWO_SDK_HOST` is the tree
-// this machine had on 2026-11-19 (SDK 10.0.114, the pin, beside 11.0.100), folder for folder; the tests of every path that builds a box read the same one.
+// An invented host for the dotnet hide list (E2 amendment 2026-11-19): a listing of directories as `agentBoxPrefix` takes it (`exists` and `listDir`), with no folder on disk. `twoSdkHost` has the shape
+// and the version names of the tree this machine had on 2026-11-19 (SDK 10.0.114, the pin, beside 11.0.100; four of its seven packs); the tests of every path that builds a box read the same one.
 import path from 'node:path';
 
 const selfAndAncestors = p => p.split('/').filter(Boolean).map((_, i, parts) => `/${parts.slice(0, i + 1).join('/')}`);

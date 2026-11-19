@@ -9,6 +9,10 @@ import { test } from 'node:test';
 import { main } from '../bare-runner.mjs';
 import { BARE_CAPS } from '../lib/bare-plan.mjs';
 import { buildRun } from '../lib/bare-config.mjs';
+import { v1Plan } from '../lib/bare-phase.mjs';
+import { layoutPaths } from '../lib/sandbox.mjs';
+import { sessionBoxArgv } from '../lib/session-launch.mjs';
+import { ROOT, SDK_11, fakeDirs, tmpfsOf, twoSdkHost } from './dotnet-fixture.mjs';
 import { readLedger } from '../lib/ledger.mjs';
 import { harnessIdentity } from '../lib/prereg-guard.mjs';
 import { openSeries, readRunMap, writeRunMap } from '../lib/run-map.mjs';
@@ -106,6 +110,13 @@ test('An_accepted_harness_is_written_to_the_run_map_and_the_ledger_once_and_the_
   const built = await buildRun({ seriesDir: w.seriesDir, map: readRunMap(w.runMapFile).value, kind: 'data', pair: 1, args: { inputsDir: w.inputs }, paid: false, seams: { repo: w.repo, home: w.home } });
   assert.equal(built.ok, true, built.reason);
   assert.equal(built.value.ctx.harnessIdentity, now, 'the identity recorded with a session is the one that ran');
+  // the context carries the pinned SDK of the inputs folder's stacks.json (E2 amendment 2026-11-19), so the box v1's plan builds from it hides every other SDK of a host that holds several
+  const pin = JSON.parse(text(path.join(w.inputs, 'stacks.json'))).pins.dotnetSdk;
+  assert.match(pin, /^\d+\.\d+\.\d+$/, 'the inputs hold a pin, so the next line does not compare two absences');
+  assert.equal(built.value.ctx.dotnetPin, pin);
+  const plan = v1Plan({ ctx: built.value.ctx, item: { layout: layoutPaths('/series/s', 'abc123'), session: { stack: 'node', phase: 'v1' } } });
+  const hidden = tmpfsOf(sessionBoxArgv({ plan, command: ['claude'], seams: fakeDirs(twoSdkHost()) }));
+  assert.ok(hidden.includes(`${ROOT}/sdk/${SDK_11.sdk}`) && hidden.includes(`${ROOT}/shared/Microsoft.NETCore.App/${SDK_11.runtime}`), `the box of a real run context hides the other SDK and its runtime: ${hidden.join(' ')}`);
   const guard = await built.value.deps.guard({ paid: true, requireSeed: false });
   assert.equal(guard.ok, true, guard.reason);
 });

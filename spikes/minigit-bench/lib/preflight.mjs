@@ -28,6 +28,14 @@ async function install(plan) {
   return ok(null);
 }
 
+/**
+ * The prefix of the probe box: the agent's box with the TypeScript toolchain, and either the pinned SDK directory (`dotnetDir`, its caller's `hide` over the distribution) or the distribution's
+ * dotnet showing only the pinned SDK's versions (`stacks.pins.dotnetSdk`, E2 amendment 2026-11-19: `agentBoxPrefix` reads the host when it is called). `seams` (`exists`, `listDir`) are the tests'.
+ */
+export const probeBoxPrefix = ({ layout, nodeDir, tsDir, dotnetDir = null, hide = [], claudeBinary, stacks, seams = {} }) => agentBoxPrefix({
+  layout, arm: 'bare', toolchains: [tsDir, ...(dotnetDir ? [dotnetDir] : [])], claudeBinary, nodeDir, dotnetPin: stacks.pins.dotnetSdk, dotnetDir, ...(hide.length > 0 ? { hide } : {}), ...seams,
+});
+
 /** Probe outputs from inside a throwaway box: `{ claude, node, dotnetSdks, tsc }` (stdout, '' when the probe failed to run). */
 async function probesInBox({ nodeDir, tsDir, dotnetDir = null, hide = [], claudeBinary, stacks }) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'mgb-preflight-'));
@@ -35,7 +43,7 @@ async function probesInBox({ nodeDir, tsDir, dotnetDir = null, hide = [], claude
     const made = sessionLayout(root, 'p');
     if (!made.ok) return made;
     const layout = made.value;
-    const prefix = agentBoxPrefix({ layout, arm: 'bare', toolchains: [tsDir, ...(dotnetDir ? [dotnetDir] : [])], claudeBinary, nodeDir, ...(hide.length > 0 ? { hide } : {}) });
+    const prefix = probeBoxPrefix({ layout, nodeDir, tsDir, dotnetDir, hide, claudeBinary, stacks });
     const env = agentEnv({ layout, dummyToken: dummyToken('preflight'), cellId: 'preflight', nodeDir, tsDir, ...(dotnetDir ? { dotnetDir } : {}) });
     const out = {};
     for (const [name, argv] of Object.entries(stacks.probes)) {

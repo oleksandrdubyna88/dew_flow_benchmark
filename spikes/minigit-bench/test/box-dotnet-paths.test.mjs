@@ -1,0 +1,113 @@
+// Every path that builds an agent box hides the other dotnet versions of a host that holds several (E2 amendment 2026-11-19, D-9; the plan gate's point 2). The argv is built over an invented
+// two-SDK listing and never run: this proves each path SENDS the tmpfs. That the tmpfs hides an SDK is the effect test's (`agent-box-dotnet.test.mjs`, the real box). No folder is made here.
+// The paths that start at a run context are in the files that hold the fake home: `bare-phase.test.mjs` (`v1Plan`) and `bare-wiring.test.mjs` (the real `buildRun`); the launcher's own wiring is in
+// `session-launch.test.mjs`, the smoke's in `smoke-run.test.mjs`, the pilot's in `spikes/lang-explore/test/box-dotnet-pin.test.mjs`.
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { bareSessionPlan } from '../lib/bare-plan.mjs';
+import { snapshotBoxArgv, snapshotBoxFields } from '../lib/cache-snapshot.mjs';
+import { DISTRIBUTION_DOTNET, otherDotnetVersions } from '../lib/dotnet-hide.mjs';
+import { probeBoxPrefix } from '../lib/preflight.mjs';
+import { agentBoxPrefix, layoutPaths } from '../lib/sandbox.mjs';
+import { sessionBoxArgv } from '../lib/session-launch.mjs';
+import { DOTNET_PIN } from './box-helpers.mjs';
+import { PIN, ROOT, SDK_11, fakeDirs, oneSdkHost, tmpfsOf, twoSdkHost } from './dotnet-fixture.mjs';
+
+const HOME = '/home/nobody';
+const layout = layoutPaths('/series/s', 'abc123');
+const twoSdks = fakeDirs(twoSdkHost());
+const oneSdk = fakeDirs(oneSdkHost());
+const OTHER_SDK = `${ROOT}/sdk/${SDK_11.sdk}`;
+const OTHER_RUNTIME = `${ROOT}/shared/Microsoft.NETCore.App/${SDK_11.runtime}`;
+const base = { layout, arm: 'bare', claudeBinary: '/x/claude', nodeDir: '/n', operatorHome: HOME };
+/** The pin of the invented host (`PIN`, the SDK its fixture calls the pinned one): these tests do not move when `inputs/stacks.json` does. */
+const stacks = { pins: { dotnetSdk: PIN } };
+
+/** What a path must send on the two-SDK host for a pin: the list of the one function, never a list typed here. */
+const expectedFor = pin => otherDotnetVersions({ pin, ...twoSdks });
+const expected = expectedFor(PIN);
+
+/** The argv of a box on the distribution's dotnet hides the other SDK, another major's runtime, and all of the one list; never the resolver. */
+function assertHidesOtherVersions(argv, path, pin = PIN) {
+  const hidden = tmpfsOf(argv);
+  assert.ok(hidden.includes(OTHER_SDK), `${path}: --tmpfs ${OTHER_SDK}`);
+  assert.ok(hidden.includes(OTHER_RUNTIME), `${path}: --tmpfs ${OTHER_RUNTIME}`);
+  assert.deepEqual(hidden.filter(p => p.startsWith(`${ROOT}/`)), [...expectedFor(pin)], `${path}: the whole list, in the function's order`);
+  assert.equal(hidden.some(p => p.startsWith(`${ROOT}/host`)), false, `${path}: host/fxr is not hidden`);
+  assert.equal(hidden.includes(ROOT), false, `${path}: the root itself stays: the box runs the distribution's dotnet`);
+}
+
+/** The argv of a box with a pinned SDK directory hides the whole distribution as before, and no version folder inside it. */
+function assertHidesWholeDistribution(argv, path) {
+  const hidden = tmpfsOf(argv);
+  for (const root of DISTRIBUTION_DOTNET.filter(twoSdks.exists)) assert.ok(hidden.includes(root), `${path}: ${root} is hidden whole`);
+  assert.deepEqual(hidden.filter(p => DISTRIBUTION_DOTNET.some(root => p.startsWith(`${root}/`))), [], `${path}: no version folder is listed under a root that is hidden whole`);
+}
+
+const neverListed = { exists: twoSdks.exists, listDir: dir => { throw new Error(`a box with a pinned SDK directory must not list ${dir}`); } };
+const pinned = { dotnetDir: '/dn', hide: DISTRIBUTION_DOTNET };
+
+test('The_box_on_the_distributions_dotnet_hides_every_other_version_as_an_empty_tmpfs_before_any_bind', () => {
+  const argv = agentBoxPrefix({ ...base, dotnetPin: PIN, ...twoSdks });
+  assertHidesOtherVersions(argv, 'agentBoxPrefix');
+  assert.ok(expected.length > 0 && expected.every(p => twoSdks.exists(p)), 'the fixture holds what is hidden: this is not the empty-list path');
+  const firstBind = argv.findIndex((a, i) => i > 2 && ['--bind', '--ro-bind'].includes(a)); // index 1 is the read-only root
+  const lastTmpfs = argv.lastIndexOf('--tmpfs');
+  assert.ok(lastTmpfs < firstBind, 'every tmpfs comes before the binds, so nothing bound is covered');
+});
+
+test('On_a_host_that_holds_only_the_pin_the_box_hides_nothing_of_the_distribution', () => {
+  const argv = agentBoxPrefix({ ...base, dotnetPin: PIN, ...oneSdk });
+  assert.deepEqual(tmpfsOf(argv).filter(p => DISTRIBUTION_DOTNET.some(root => p === root || p.startsWith(`${root}/`))), []);
+});
+
+test('A_box_with_a_pinned_sdk_directory_hides_the_whole_distribution_as_before_and_never_lists_it', () => {
+  const argv = agentBoxPrefix({ ...base, toolchains: ['/dn'], ...pinned, ...neverListed });
+  assertHidesWholeDistribution(argv, 'agentBoxPrefix');
+  const before = ['bwrap', '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc', '--tmpfs', HOME, '--tmpfs', '/usr/lib/dotnet', '--tmpfs', '/etc/dotnet'];
+  assert.deepEqual(argv.slice(0, before.length), before, 'the argv of the pinned path is what it was before the amendment (the fixture has no /mnt, /run, /tmp, /var/tmp, /usr/share/dotnet)');
+  assert.deepEqual(argv, agentBoxPrefix({ ...base, toolchains: ['/dn'], ...pinned, dotnetPin: PIN, ...neverListed }), 'a pin given beside the pinned directory changes nothing');
+});
+
+test('A_box_with_no_pinned_sdk_directory_and_no_pin_is_refused_and_the_refusal_names_the_pin', () => {
+  assert.throws(() => agentBoxPrefix({ ...base, ...twoSdks }), /dotnetPin undefined is not an SDK version/);
+  assert.throws(() => agentBoxPrefix({ ...base, ...oneSdk }), /dotnetPin undefined/, 'also on a host with one SDK: the refusal does not depend on what the host holds today');
+});
+
+test('The_preflights_probe_box_hides_the_other_versions_and_with_a_pinned_directory_the_whole_distribution', () => {
+  const given = { layout, nodeDir: '/n', tsDir: '/ts', claudeBinary: '/x/claude', stacks };
+  assertHidesOtherVersions(probeBoxPrefix({ ...given, seams: { ...twoSdks, operatorHome: HOME } }), 'preflight');
+  assertHidesWholeDistribution(probeBoxPrefix({ ...given, ...pinned, seams: { ...neverListed, operatorHome: HOME } }), 'preflight, pinned');
+});
+
+const planGiven = { layout, stack: 'csharp', phase: 'v1', claudeBinary: '/x/claude', cliVersion: '2.1.310', nodeDir: '/n', tsDir: '/ts', token: 'fake', dummy: 'dummy', prices: {}, operatorHome: HOME, harnessSources: {} };
+
+test('A_sessions_box_built_from_v1s_bare_plan_hides_the_other_versions', () => {
+  const plan = bareSessionPlan({ ...planGiven, dotnetPin: PIN });
+  assert.equal(plan.dotnetPin, PIN, 'the plan carries the pin');
+  assertHidesOtherVersions(sessionBoxArgv({ plan, command: ['claude'], seams: twoSdks }), 'session-launch');
+  assert.throws(() => sessionBoxArgv({ plan: bareSessionPlan(planGiven), command: ['claude'], seams: twoSdks }), /dotnetPin undefined/, 'a plan without the pin does not launch');
+});
+
+test('A_sessions_box_built_from_a_plan_with_a_pinned_sdk_directory_hides_the_whole_distribution', () => {
+  const plan = { ...bareSessionPlan({ ...planGiven, dotnetPin: PIN }), toolchains: ['/ts', '/dn'], ...pinned };
+  const argv = sessionBoxArgv({ plan, command: ['claude'], seams: neverListed });
+  assertHidesWholeDistribution(argv, 'session-launch, pinned');
+  assert.ok(argv.includes('/dn'), 'the pinned SDK directory is bound');
+});
+
+test('A_snapshot_steps_box_hides_the_other_versions_and_with_a_pinned_directory_the_whole_distribution', () => {
+  const given = { layout, nodeDir: '/n', command: ['dotnet', 'restore'] };
+  assertHidesOtherVersions(snapshotBoxArgv({ ...given, dotnetPin: PIN, seams: { ...twoSdks, operatorHome: HOME } }), 'cache-snapshot');
+  assertHidesWholeDistribution(snapshotBoxArgv({ ...given, toolchains: ['/dn'], ...pinned, seams: { ...neverListed, operatorHome: HOME } }), 'cache-snapshot, pinned');
+  assert.throws(() => snapshotBoxArgv({ ...given, seams: twoSdks }), /dotnetPin undefined/);
+});
+
+test('A_snapshot_made_with_no_pin_of_its_callers_is_given_v1s_and_one_with_a_pin_or_a_pinned_directory_keeps_its_own', () => {
+  const never = () => { throw new Error('the registered pin is read only when the caller gave none'); };
+  assert.deepEqual(snapshotBoxFields(), { dotnetPin: DOTNET_PIN }, 'no box options: v1\'s pin of inputs/stacks.json');
+  assert.deepEqual(snapshotBoxFields({ env: { A: '1' } }), { env: { A: '1' }, dotnetPin: DOTNET_PIN });
+  assert.deepEqual(snapshotBoxFields({ dotnetPin: '10.0.403' }, never), { dotnetPin: '10.0.403' }, 'the pilot\'s own pin is kept');
+  assert.deepEqual(snapshotBoxFields({ toolchains: ['/dn'], ...pinned }, never), { toolchains: ['/dn'], ...pinned }, 'a pinned SDK directory needs no pin: that box hides the whole distribution');
+  assertHidesOtherVersions(snapshotBoxArgv({ layout, nodeDir: '/n', command: ['true'], ...snapshotBoxFields(), seams: { ...twoSdks, operatorHome: HOME } }), 'makeSnapshot, no box options', DOTNET_PIN);
+});

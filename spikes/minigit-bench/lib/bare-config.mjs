@@ -141,7 +141,7 @@ function contextOf({ seriesDir, map, kind, pair, args, home, inputsDir, got, abo
     inputsRoot: got.fetched.root, hashes: got.fetched.entries, snapshots: Object.fromEntries(Object.entries(map.snapshotDirs).map(([st, dir]) => [st, { dir, parts: registered[st].parts }])),
     snapshotPackages: Object.values(registered).flatMap(r => r.packages ?? []), snapshotBytes: Object.values(registered).reduce((acc, r) => acc + (r.sizeBytes ?? 0), 0),
     packageRules: readJson(path.join(inputsDir, 'package-flags.json')).rules, claudeBinary: map.claude.path, cliVersion: map.pins.claude, nodeDir: path.dirname(path.dirname(process.execPath)),
-    tsDir: path.join(home, ...got.stacks.typescriptToolchainDir), token: got.token, prices: got.policy.table, table: got.policy.table, policy: got.policy.policy,
+    tsDir: path.join(home, ...got.stacks.typescriptToolchainDir), dotnetPin: got.stacks.pins.dotnetSdk, token: got.token, prices: got.policy.table, table: got.policy.table, policy: got.policy.policy,
     harnessSources: { boxInit: path.join(SPIKE, 'harness', 'box-init.mjs'), audit: path.join(SPIKE, '..', 'policy-ab-quick', 'hooks', 'audit.mjs') },
     caps: map.caps, ceilingUsd: map.ceilingUsd, bareBudgetUsd: got.budget.bareBudgetUsd, harnessIdentity: got.identity, preregTag: map.preregTag, spin: map.spin,
     runMapFile: path.join(seriesDir, 'run-map.json'), ledgerFile: path.join(seriesDir, 'ledger.ndjson'), aliasStore: aliasStore(path.join(seriesDir, 'aliases.json')),

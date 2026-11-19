@@ -11,7 +11,7 @@ import { SMOKE_ASSUMPTIONS, computeSmokeVerdicts, renderSmoke } from '../lib/smo
 import { runSmoke, smokeInputs } from '../lib/smoke-run.mjs';
 import { verdictBlockOf, renderVerdicts } from '../capture/verdicts.mjs';
 import { fakeToken, prices, sseAnswer, sseBody, chunksOf, stubUpstream } from './broker-stub.mjs';
-import { TS_DIR } from './box-helpers.mjs';
+import { DOTNET_PIN, TS_DIR } from './box-helpers.mjs';
 import { homeDir, sandboxGate, spikeDir, tmpDir } from './helpers.mjs';
 import { apiAttrs, otlpPayload } from './synth.mjs';
 
@@ -40,7 +40,7 @@ test('The_smoke_machinery_runs_stages_sanitises_and_computes_a_verdict_for_every
   const real = fakeToken();
   const root = homeDir('smk');
   const out = path.join(root, 'r1');
-  const inputs = { token: real, claudeBinary: stubBin, prices: prices(), tsDir: TS_DIR, stacks: { pins: { claude: '2.1.310' } } };
+  const inputs = { token: real, claudeBinary: stubBin, prices: prices(), tsDir: TS_DIR, stacks: { pins: { claude: '2.1.310', dotnetSdk: DOTNET_PIN } } };
   const r = await runSmoke({
     out, inputs, preflightFn: async () => ({ ok: true, value: {} }), deps: {},
     over: { upstream: upstream.upstream, settleMs: 200, tickMs: 200, sampleMs: 50, toolchains: [] },
@@ -48,6 +48,7 @@ test('The_smoke_machinery_runs_stages_sanitises_and_computes_a_verdict_for_every
   assert.equal(r.ok, true, r.reason);
   const { layout, plan, result } = r.value;
   assert.equal(result.ok, true, result.reason);
+  assert.equal(plan.dotnetPin, DOTNET_PIN, 'the smoke\'s plan carries the pinned SDK of its stacks: its box runs the distribution\'s dotnet and must show only that one (without it the launch is refused)');
   const checks = JSON.parse(readFileSync(path.join(layout.dir, 'checks.json'), 'utf8'));
   assert.equal(checks.tokenTxt.equalsDummy, true, 'the session persisted its token on purpose: token.txt holds the dummy');
   assert.deepEqual(checks.realTokenScan.hits, []);
