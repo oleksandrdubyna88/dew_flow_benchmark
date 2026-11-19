@@ -12,7 +12,7 @@ const EXIT = Object.freeze({ done: 0, red: 1, halt: 3, config: 4, failed: 5 });
 const quickTasks = explore => taskIds(explore).map(id => resolveTask(explore, id).value).filter(isQuick);
 
 /** The registry seams of a run: the files and the pins (`io.package` and `io.frozenFile` are for tests); an absent one is the committed default. */
-const registryOf = io => Object.fromEntries(Object.entries({ frozenFile: io.package?.frozenFile ?? io.frozenFile, packagesFile: io.package?.packagesFile, pinsFn: io.package?.pinsFn }).filter(([, v]) => v !== undefined));
+const registryOf = io => Object.fromEntries(Object.entries({ frozenFile: io.package?.frozenFile ?? io.frozenFile, packagesFile: io.package?.packagesFile, statesFile: io.package?.statesFile, pinsFn: io.package?.pinsFn }).filter(([, v]) => v !== undefined));
 
 /** Register the package: -> `ok({ state, identity })` | `fail`. */
 export function registerStep({ io, explore, task, record, pkg }) {

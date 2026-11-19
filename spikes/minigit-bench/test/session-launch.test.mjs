@@ -5,9 +5,10 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { killTree } from '../../policy-ab-quick/lib/proc.mjs';
 import { cellProcesses, endCell, endSurvivors, realProcApi } from '../lib/janitor.mjs';
-import { holdsPaidWork, launchSession } from '../lib/session-launch.mjs';
+import { holdsPaidWork, launchSession, sessionBoxArgv } from '../lib/session-launch.mjs';
 import { scanSessionDir } from '../lib/session-scan.mjs';
-import { sessionLayout } from '../lib/sandbox.mjs';
+import { forwarderSpecs, sessionLayout } from '../lib/sandbox.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { apiAttrs, otlpPayload } from './synth.mjs';
 import { sseAnswer, sseBody, chunksOf, stubUpstream } from './broker-stub.mjs';
 import { newSession, sleep } from './box-helpers.mjs';
@@ -295,4 +296,30 @@ test('A_directory_is_paid_work_once_the_broker_forwarded_a_request_even_before_a
   assert.equal(holdsPaidWork(layout), false, 'a refusal never reached the provider: nothing was paid');
   writeFileSync(layout.files.brokerLog, `${JSON.stringify({ seq: 1, event: 'refused', reason: 'path' })}\n${JSON.stringify({ seq: 2, event: 'forwarding' })}\n`);
   assert.equal(holdsPaidWork(layout), true, 'a forwarded request is paid (or reserved) whether or not a stream line was written');
+});
+
+const owned = ownedFor({ token: 'bench' });
+const okScript = (c, l) => { say(c, goodInit(l), RESULT); c.finish(0); };
+
+test('The_box_a_launch_spawns_is_the_one_sessionBoxArgv_builds_from_its_plan_and_argv_json_records_it', async t => {
+  const layout = newSession({ root: owned.ownedDir(t, 'launch') });
+  const fake = fakeDeps([], layout, { script: okScript });
+  const plan = planFor(layout, { settleMs: 0 });
+  const result = await launchSession(plan, fake.deps);
+  assert.equal(result.ok, true, result.reason);
+  const { argv } = fake.spawned[0];
+  const command = argv.slice(argv.indexOf(layout.files.boxInit) + forwarderSpecs(layout).length + 2); // box-init, its forwarders, `--`, then the command
+  assert.equal(command[0], plan.claudeBinary, 'the command of the box was cut out at the right place');
+  assert.deepEqual(argv, [...sessionBoxArgv({ plan, command })], 'one function builds the box of a session: the launcher has no second way to an argv that could forget the pinned SDK');
+  assert.deepEqual(JSON.parse(readFileSync(layout.files.argv, 'utf8')).bwrap, argv, 'argv.json holds the argv that was spawned');
+});
+
+test('A_launch_whose_plan_holds_no_pinned_sdk_is_refused_before_any_box_is_spawned', async t => {
+  const layout = newSession({ root: owned.ownedDir(t, 'nopin') });
+  const fake = fakeDeps([], layout, { script: okScript });
+  const result = await launchSession(planFor(layout, { settleMs: 0, dotnetPin: undefined }), fake.deps);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /dotnetPin undefined is not an SDK version/, 'the refusal names what is missing');
+  assert.equal(fake.spawned.length, 0, 'no box was spawned: a box on the distribution\'s dotnet with no pin would show every SDK of the host');
+  assert.equal(existsSync(layout.dir), false, 'nothing was paid, so the claimed directory is removed');
 });

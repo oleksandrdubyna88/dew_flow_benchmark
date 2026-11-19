@@ -496,6 +496,58 @@ showed that `model_refusal_fallback` puts a second model (`claude-opus-4-8`) int
 the pricing page on 2026-10-30, and the broker prices any unknown model at the dearest known rates, flagged, so it never
 undercounts.
 
+**Amendment 2026-11-19 (D-9: one SDK in the box on a host that holds several).** *Cause, measured.* On 2026-11-18 the owner
+installed .NET SDK 11.0.100 (`ppa:dotnet/backports`) beside the pinned 10.0.114; the move of the repositories to .NET 11 is
+parked. `/usr/lib/dotnet` now holds `sdk/10.0.114` and `sdk/11.0.100`, `shared/*/{10.0.14,11.0.0}`, `host/fxr/{10.0.14,11.0.0}`,
+`templates/{10.0.15,11.0.0}`; the muxer is `dotnet-host-11.0`'s (it replaced `dotnet-host-10.0`). The preflight's probe in the
+box (`dotnet --list-sdks`) reads two lines and refuses, rightly (`lib/host-checks.mjs:31`, "the box must hold exactly one SDK
+(2 listed)"), so every path that runs the preflight on the distribution's dotnet is red: 7 tests at benchmark `dc9c679d`
+(`test/agent-box-fs.test.mjs:103`, `test/preflight.test.mjs:19`; `spikes/lang-explore/test/e2e.test.mjs` 3,
+`test/olympiad-rehearse.test.mjs` 2). *The owner, 2026-11-19*, offered "remove SDK 11" or "keep it and change the instrument":
+"Другой путь — оставить SDK 11 и править правило инструмента". *Decision.* The RULE stays as D-9 wrote it (the box lists
+exactly one SDK, the pin): loosening it to "the pin is among them" would let an agent build with SDK 11 in a measured cell.
+The BOX changes: when it uses the distribution's dotnet (no pinned `dotnetDir`; a pinned one already hides the distribution,
+E1.S4), it hides, through the existing `hide` list (an empty tmpfs per existing path), every directory of a dotnet root in
+`DISTRIBUTION_DOTNET` that belongs to another version than the pin's: `sdk/<v>` for every `v` ≠ the pinned SDK, and
+`shared/<framework>/<v>`, `packs/<pack>/<v>`, `templates/<v>` and `sdk-manifests/<band>` whose major differs from the pin's.
+`host/fxr` is not hidden (the muxer resolves through it, and it is the host's own resolver; recorded as the one difference
+from before). So the box shows what it showed before SDK 11 came, and v2's measured cells stay comparable. One pure
+function computes the list from the pin and a directory listing of the roots (injected, as `exists` is); the preflight's
+probe box and every session box (`session-launch.mjs`, lang-explore's `plan.mjs` and `run-ctx.mjs`) take the SAME list, never
+two. *Measured before the change:* `bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /usr/lib/dotnet/sdk/11.0.100 --unshare-net
+-- /usr/bin/dotnet --list-sdks` prints `10.0.114` only; without the tmpfs, both. *Tests (RED → GREEN → RED):* the pure
+function over a fixture listing (two SDKs, two runtimes, packs and templates of both majors → exactly the other-major paths
+and the other SDK; a host with only the pin → `[]`; a root that does not exist → nothing from it); an effect test in the
+real box on this host (`sandboxGate`): `dotnet --list-sdks` one line, the pin, with the control (the same probe without the
+hide list lists both, or the test skips with that reason on a host with one SDK); the 7 tests above green at the head.
+*Not changed:* `host-checks.mjs`, `inputs/stacks.json`, the pins, any `global.json`. *Code:* Fable (the E2.S2 sandbox is a
+cornerstone, `model: fable`), gates by coai.
+*The plan gate (coai `10fb6711`, 2026-11-19, `proceed`, five findings, all accepted) adds:* (1) the list is computed WHEN THE BOX
+IS BUILT, inside `agentBoxPrefix` itself (it takes the pinned SDK and an injected listing, as it takes `exists`), never frozen
+into a plan file or a session plan: an SDK installed between a preflight and a session is hidden too, and no construction path
+can forget it; a caller with a pinned `dotnetDir` keeps hiding the whole distribution as before. (2) Each construction path —
+the preflight's probe box, minigit's `session-launch.mjs`, lang-explore's `plan.mjs`/`run-ctx.mjs`/`readback.mjs` — has a test
+over a two-SDK fixture listing that the argv it builds carries the other version's tmpfs. (3) The effect test in the real box
+also BUILDS and RUNS a minimal `net10.0` console project (no package references; restore reads only the local packs, the box
+has no network): `dotnet --version` in the project prints the pin, the program prints its `RuntimeInformation.FrameworkDescription`
+(`.NET 10.0.14`), and the control without the hide list shows two SDKs. The comparability claim is therefore: same SDK, same
+runtime, same packs and templates as before; the one difference is the muxer and `host/fxr` of 11.0.0, which resolve to the
+pinned SDK, and that is recorded in the effect test's output and here.
+*As built (2026-11-19, `a1c8228d`…`474d7e4e`, Fable), three corrections to the text above.* (a) The SCORING box too: the build
+found that `scoreBoxArgv` (`lib/bwrap.mjs`) listed both SDKs and chose `11.0.100` in a folder with no `global.json` (v1's minigit
+workspace has none), so v1's scorer would have built C# with SDK 11. By the gate's own rule (every construction path, one list)
+the scoring box takes the same decision, `boxDotnetHide` in `lib/dotnet-hide.mjs`; the pin reaches it through the run
+(`bare-series` → `score-run`'s `--dotnet-pin` → `score-session.mjs` → `score-deps`), and lang-explore's judge through
+`judgeConfig`; a scorer started by hand falls back to v1's pin read from `inputs/stacks.json` (`lib/stacks-pin.mjs`), as
+`makeSnapshot` does. More construction paths than the text named carry the pin: `cache-snapshot.mjs`, `smoke-run.mjs`, v1's
+`bare-plan`/`bare-phase`/`bare-config`, lang-explore's `prepare.mjs`; `plan.json` records `dotnetPin`. (b) "Shows what it showed
+before" holds for the SDK, the runtimes, the packs, the templates and the manifests; still shown besides `host/fxr` are the files
+`library-packs/*.11.0.0.nupkg` and `metadata/workloads/11.0.100` (one empty file). (c) Of the 7 reds, 6 are green on this branch
+alone; `test/preflight.test.mjs:19` keeps a second, independent cause on `main` (`claude` on PATH is 2.1.328, the pin 2.1.310),
+which the test-leftovers story E6.S6 fixes (its fix 3: the test probes the pinned CLI copy); with both, the preflight answers
+`ok` (`claude` 2.1.310, node 26.12.1, `dotnetSdks` `["10.0.114"]`, typescript 7.0.2). Harness files under `lib/` changed, so a live
+series needs its accept-harness step before its next paid cell.
+
 ### Test scenarios
 
 Effect tests run the real `bwrap` (`sandboxGate`, E1 `test/helpers.mjs:48`) with E1's `probe`/`withoutPair` shape: every "cannot"

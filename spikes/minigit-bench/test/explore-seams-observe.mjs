@@ -1,6 +1,8 @@
 // What v1's four optional seams (W1-W4 of the exploratory pilot, spikes/lang-explore) do TODAY with no seam value given, as plain JSON. `fixtures/explore-seams-baseline.json`
 // was written from this module BEFORE any seam existed (run `node test/explore-seams-observe.mjs --write`); `explore-seams.test.mjs` compares the code as it is now to that file,
 // so "the default stays byte-identical" is a comparison of JSON, not a memory. The module imports only what the seams touch and never a seam value.
+// Amended once since, by a change that is no seam: on 2026-11-19 v1's bare plan gained the key `dotnetPin` (E2 amendment D-9: the pinned SDK version the session's box is told), so `planKeys` of the
+// two phase entries hold it. The file was rewritten by `--write` and the diff was those two lines and nothing else.
 import './fake-home.mjs'; // first: the phase reads os.homedir()
 import { createHash } from 'node:crypto';
 import { readdirSync, writeFileSync } from 'node:fs';

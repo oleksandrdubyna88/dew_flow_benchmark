@@ -9,20 +9,12 @@ import { PINNED_TASK_SHA } from '../lib/task-repo.mjs';
 import { buildWorkspace, loadInputs } from '../lib/workspace-build.mjs';
 import { sha256 } from './support/format-fixtures.mjs';
 import { SPIKE, helloSamples, helloStatement } from './support/workspace-fixtures.mjs';
+import { realRepo } from './support/real-repo.mjs';
 import { ownedFolder } from './toolchain-fixtures.mjs';
 
 const GROUPS = Object.freeze({ A: ['01', '02', '03', '09'], B: ['04', '05', '06', '07', '08', '10'] });
 const OTHER = Object.freeze({ A: 'B', B: 'A' });
 const ENV = Object.freeze({ PATH: '/usr/bin:/bin', HOME: '/nonexistent', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' });
-
-/** The task repository's checkout named by `LANG_V2_TASK_REPO`, or null when the case skipped (under BENCH_REQUIRE_SANDBOX=1 an unset variable throws). */
-function realRepo(t) {
-  const repo = process.env.LANG_V2_TASK_REPO;
-  if (repo !== undefined && repo !== '') return repo;
-  if (process.env.BENCH_REQUIRE_SANDBOX === '1') throw new Error('BENCH_REQUIRE_SANDBOX=1 and LANG_V2_TASK_REPO does not name the task repository checkout');
-  t.skip('LANG_V2_TASK_REPO does not name the task repository checkout');
-  return null;
-}
 
 /** FORMAT's bytes at the pinned commit, as the builder reads them. */
 async function pinnedFormat(repo) {

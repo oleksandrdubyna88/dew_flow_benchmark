@@ -80,7 +80,7 @@ export async function runSmoke({ out, inputs, home = os.homedir(), signal, deps 
   for (const f of ['a.txt', 'b.txt']) writeFileSync(path.join(layout.work, f), `${f}\n`);
   const plan = {
     layout, arm: 'bare', cellId: `smoke-${Math.random().toString(36).slice(2, 10)}`, prompt: SMOKE_PROMPT, capUsd: SMOKE_CAP_USD, wallMs: SMOKE_WALL_MS, stallMs: SMOKE_STALL_MS,
-    claudeBinary: inputs.claudeBinary, cliVersion: inputs.stacks.pins.claude, nodeDir, tsDir: inputs.tsDir, toolchains: [inputs.tsDir], token: inputs.token, dummy: dummyToken(Math.random().toString(36).slice(2, 14)),
+    claudeBinary: inputs.claudeBinary, cliVersion: inputs.stacks.pins.claude, nodeDir, tsDir: inputs.tsDir, toolchains: [inputs.tsDir], dotnetPin: inputs.stacks.pins.dotnetSdk, token: inputs.token, dummy: dummyToken(Math.random().toString(36).slice(2, 14)),
     prices: inputs.prices, allow: EGRESS_HOSTS.bare, operatorHome: home,
     harnessSources: { boxInit: path.join(SPIKE, 'harness', 'box-init.mjs'), audit: path.join(SPIKE, '..', 'policy-ab-quick', 'hooks', 'audit.mjs') }, ...over,
   };

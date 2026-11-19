@@ -1,6 +1,6 @@
 # PLAN — language comparison v2, F2 stories: six validation packages and one freeze — the packages, the rulesets, the seal, the tag, the workspaces and the freeze record
 
-> Status: **plan only, 2026-11-08: F2's stories document, on the parent's epoch 10 (#181); build step 2a is merged (#182); revised for F2's plan round (`revise`, 2 of 2, nine findings accepted): the freeze's git sequence, the post-merge leak checks, the local and the superseding tag, FORMAT's bytes, atomic outputs, and the team lead's note on F2.S1 (the race witness's hangs, task 05 and the chunk decision, the atomic locked clear folder, one archive path and one registry). Nothing of F2 is built. F2 starts after build step 2b (`leakcheck` over both repositories). F2.S1's cornerstone spec is Fable's, copied in. The last plan round (`proceed`) added the archive key and the workspaces proven before the tag push.** *Before this:* 2026-11-08, revised to the epoch-10 revision; 2026-11-07, written when F2 started, against epoch 9.
+> Status: **2026-11-19: the freeze is done — the tag `spec-frozen-B-20261118` on C `502b65ad153887464c0c45ebc13e9bbef545c415` (the task repository's #11), the workspace commit W `f3d256e5fe1f774e189a9850056559b39b995a27` (#12), accepted; the bench pins of (f) are bench PR 5, `feat/lang-v2-f2s2-freeze-record` (the record `spec-states.json` says `accepted`, `PINNED_TASK_SHA` is W, the engine's six spec pins are at C, the gated hashes are read from the registered packages).** *Before this:* **plan only, 2026-11-08: F2's stories document, on the parent's epoch 10 (#181); build step 2a is merged (#182); revised for F2's plan round (`revise`, 2 of 2, nine findings accepted): the freeze's git sequence, the post-merge leak checks, the local and the superseding tag, FORMAT's bytes, atomic outputs, and the team lead's note on F2.S1 (the race witness's hangs, task 05 and the chunk decision, the atomic locked clear folder, one archive path and one registry). Nothing of F2 is built. F2 starts after build step 2b (`leakcheck` over both repositories). F2.S1's cornerstone spec is Fable's, copied in. The last plan round (`proceed`) added the archive key and the workspaces proven before the tag push.** *Before this:* 2026-11-08, revised to the epoch-10 revision; 2026-11-07, written when F2 started, against epoch 9.
 > Epic F2 of [PLAN_lang_comparison_v2.md](PLAN_lang_comparison_v2.md) (*Operative plan for epoch 9* with its epoch-10 lines,
 > *Epics in force*, F2). A stories document keeps no ledger: its changes are entries in the parent
 > (`common.plan-change-control`), and writing it when the epic starts is not a change. Read at `main` `57ccc379` (#179, epic F1)
@@ -1306,9 +1306,13 @@ only F2.S1.
       before the tag, on W″ before the push and on W before W is accepted; `workspace-diff` and the push check clean; T1 and T2
       merged by merge condition 5; both order scenarios (a failed proof stops before the push; a failure after the push leads
       to the superseding tag) red, green, red.
-- [ ] F2.S2 (f): the spec hashes in `inputs/specs.json`; the archives', clear trees' and trap tables' hashes registered; the
+- [x] F2.S2 (f): the spec hashes in `inputs/specs.json`; the archives', clear trees' and trap tables' hashes registered; the
       workspace commit named; `PINNED_TASK_SHA` at W; the engine's pins at the tag and cross-checked; FORMAT's class check reads
       B's frozen classification.
+      Done 2026-11-19 on bench PR 5 (its merge is the condition): the record `spec-states.json` says `accepted`, `PINNED_TASK_SHA` is W
+      `f3d256e`, the engine's six spec pins are at C `502b65a` and held equal to the record by `The_engine_pins_of_the_six_specs_equal_the_freeze_record`,
+      the freeze's gated hashes are read from the registered packages, a registered row of a frozen task cannot be replaced, and
+      `specs-record.mjs`, `pin-runner.mjs` and `pin-exec-layer.mjs` `--check` exit 0.
 - [ ] `leakcheck` over both repositories and the candidate publication commits clean, its planted-needle check failing as it must;
       the line scan clean on both; the private aid lists nothing uncaught (F2.S1).
 - [ ] The specs and workspaces are public at the freeze; the references and the trap coverage table are not (change 9.2).

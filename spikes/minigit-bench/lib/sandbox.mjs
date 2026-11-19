@@ -11,6 +11,7 @@ import path from 'node:path';
 import { FIXED_GIT } from '../../policy-ab-quick/lib/env.mjs';
 import { otelEnv } from './otel-receiver.mjs';
 import { bind, chdir, devProc, hiddenPaths, isolation, localeEnv, roBind, roRoot, tmpfs } from './bwrap.mjs';
+import { boxDotnetHide, boxWholeHidden, dirEntriesOf, refuseBindOverHidden } from './dotnet-hide.mjs';
 import { fail, ok } from './result.mjs';
 
 export const BOX_PROXY_PORT = 3128;
@@ -134,6 +135,9 @@ const startsBelow = (p, dir) => p.startsWith(dir === '/' ? '/' : `${dir}/`);
 /** The `{ host, box }` pairs a bwrap argv binds (the root bind, which is the whole host, and the `/dev/null` masks, which expose nothing, left out). */
 export const bindPairsOf = argv => argv.flatMap((a, i) => (BIND_FLAGS.has(a) ? [{ host: argv[i + 1], box: argv[i + 2] }] : [])).filter(b => typeof b.host === 'string' && b.host !== '/' && b.host !== '/dev/null');
 
+/** The paths a bwrap argv mounts an empty tmpfs over, in order. */
+export const hiddenPathsOf = argv => argv.flatMap((a, i) => (a === '--tmpfs' ? [argv[i + 1]] : []));
+
 /** Every proper ancestor directory of the paths, nearest last, `/` left out: `['/a/b/c']` -> `['/a', '/a/b']`. */
 const ancestorsOf = paths => paths.flatMap(p => path.dirname(p).split(path.sep).filter(Boolean).map((_, i, parts) => `/${parts.slice(0, i + 1).join('/')}`));
 
@@ -146,7 +150,7 @@ const ancestorsOf = paths => paths.flatMap(p => path.dirname(p).split(path.sep).
 export function boxView({ argv, layout, home }) {
   const protectedDirs = [layout.harness, layout.net];
   const binds = bindPairsOf(argv);
-  const hidden = argv.flatMap((a, i) => (a === '--tmpfs' ? [argv[i + 1]] : []));
+  const hidden = hiddenPathsOf(argv);
   const holdsOnlyBinds = dir => hidden.some(h => startsBelow(dir, h)) && !protectedDirs.some(p => startsBelow(p, dir)) && dir !== home && !startsBelow(home, dir);
   return Object.freeze({
     allow: Object.freeze([...new Set(binds.map(b => b.host).filter(h => !protectedDirs.includes(h)))]),
@@ -165,13 +169,17 @@ export const boxSkeleton = opts => planView(opts).skeleton;
  * The argv prefix (ending in `--`) of the agent's box: the filesystem read-only; the shared hide list replaced by empty tmpfs; then ONLY an
  * explicit list bound back in, AFTER the tmpfs so it shows. The box's `/tmp` is `box/tmp`, bound before anything else that may live under the
  * host's `/tmp`. Its own network, pid and ipc namespaces. No `--setenv`, no `--clearenv`: the environment is the spawn's `env`.
+ * `dotnetDir` is a pinned SDK directory: the box then hides the distribution's dotnet roots whole (`boxWholeHidden`) and lists no version. A bind that is, or holds, a dotnet folder the box
+ * hides is refused (`refuseBindOverHidden`): the binds come after the tmpfs, so it would show that folder again. `dotnetPin` is the pinned SDK version (required unless `dotnetDir` is given; E2 amendment 2026-11-19, D-9: `boxDotnetHide`, an SDK installed between a preflight and a
+ * session is hidden too); `listDir` lists a directory's sub-directories, injected as `exists` is.
  */
-export function agentBoxPrefix({ layout, arm, toolchains = [], claudeBinary, nodeDir, extraRo = [], extraRw = [], hide = [], operatorHome = os.homedir(), exists = existsSync }) {
-  return Object.freeze([
+export function agentBoxPrefix({ layout, arm, toolchains = [], claudeBinary, nodeDir, extraRo = [], extraRw = [], hide = [], dotnetDir = null, dotnetPin, operatorHome = os.homedir(), exists = existsSync, listDir = dirEntriesOf }) {
+  const argv = Object.freeze([
     'bwrap', ...roRoot(), ...devProc(),
     ...hiddenPaths({ operatorHome, exists }).flatMap(tmpfs),
-    // `hide` (E1.S4): host paths this box must not show, each an empty tmpfs when the host has it (a path the host lacks cannot be mounted over); the distribution's dotnet, because a pinned-toolchain program must not find it
-    ...hide.filter(p => exists(p)).flatMap(tmpfs),
+    // `hide` (E1.S4): host paths this box must not show, each an empty tmpfs when the host has it (a path the host lacks cannot be mounted over)
+    ...boxWholeHidden({ hide, dotnetDir }).filter(p => exists(p)).flatMap(tmpfs),
+    ...boxDotnetHide({ dotnetDir, dotnetPin, exists, listDir }).flatMap(tmpfs),
     ...bindPair(writableBinds(layout)[0]),
     ...[nodeDir, ...toolchains, layout.harness, layout.net, ...extraRo].flatMap(roBind),
     ...roBind(claudeBinary),
@@ -179,6 +187,8 @@ export function agentBoxPrefix({ layout, arm, toolchains = [], claudeBinary, nod
     ...(arm === 'bare' ? GH_PATHS.filter(p => exists(p)).flatMap(p => ['--ro-bind', '/dev/null', p]) : []),
     ...isolation(), '--unshare-ipc', ...chdir(layout.work), '--',
   ]);
+  refuseBindOverHidden({ hidden: hiddenPathsOf(argv), binds: bindPairsOf(argv).map(b => b.box) });
+  return argv;
 }
 
 /** The whole argv: the prefix, then `node box-init.mjs <forwarders> -- <command...>` (exe + argv, no shell inside the box either). */

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { treeHash } from '../lib/cache-snapshot.mjs';
 import { sha256Of } from '../lib/inputs.mjs';
 import { ridOf } from '../lib/bare-plan.mjs';
+import { DOTNET_PIN } from './box-helpers.mjs';
 import { tmpDir } from './helpers.mjs';
 
 export const SEED = 'mg-0123456789abcdef';
@@ -28,7 +29,7 @@ export function context() {
       csharp: { dir: csharp, parts: { nuget: treeHash(path.join(csharp, 'nuget')), dotnet: treeHash(path.join(csharp, 'dotnet')) } },
       node: { dir: node, parts: { npm: treeHash(path.join(node, 'npm')) } },
     },
-    claudeBinary: '/x/claude', cliVersion: '2.1.310', nodeDir: '/n', tsDir: '/ts', token: 'real-token-value', prices: {}, harnessSources: { boxInit: 'a', audit: 'b' }, caps: { capUsd: 6, wallMs: 1, stallMs: 1 },
+    claudeBinary: '/x/claude', cliVersion: '2.1.310', nodeDir: '/n', tsDir: '/ts', dotnetPin: DOTNET_PIN, token: 'real-token-value', prices: {}, harnessSources: { boxInit: 'a', audit: 'b' }, caps: { capUsd: 6, wallMs: 1, stallMs: 1 },
     v1WorkOf: () => { throw new Error('a v1 phase has no v1 tree'); },
   };
 }

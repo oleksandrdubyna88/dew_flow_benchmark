@@ -539,7 +539,7 @@ test('The_command_prints_the_hash_list_and_a_plan_and_exits_2_for_usage_and_3_fo
 
 // ---- a spec edited after its gate cannot be frozen ---------------------------------------------------------------------------------------------------
 
-/** A repository whose spec of task 06 holds a changed line while the engine's pin names the gated text's sha256. */
+/** A repository whose spec of task 06 holds a changed line while the registered package's `specSha256` (the pins file of the fixture) names the gated text's sha256. */
 const editedAfterGate = t => {
   const gated = baseFiles();
   const edited = baseFiles({ specs: { '06': specText('06').replace('**R2.** For n = 1', '**R2.** For n = 2') } });
@@ -550,12 +550,12 @@ test('A_spec_edited_after_its_gate_is_refused_by_plan_check_commit_and_check_tag
   const f = editedAfterGate(t);
   const planned = await f.run('plan', ['--ref', 'HEAD', '--date', '20261201']);
   assert.equal(planned.exit, 3, said(planned));
-  assert.ok(planned.stderr.includes(specPath('06-blog-api')) && /pins|pinned/.test(planned.stderr) && /gate/.test(planned.stderr), planned.stderr);
+  assert.ok(planned.stderr.includes(specPath('06-blog-api')) && /packages\.json/.test(planned.stderr) && /specSha256/.test(planned.stderr) && /gate/.test(planned.stderr), planned.stderr);
   assert.equal(planned.stdout, '');
   const { c } = freezeAndMerge(f);
   const commitCheck = await f.run('check-commit', ['--before', f.base, '--after', c]);
   assert.equal(commitCheck.exit, 1, said(commitCheck));
-  assert.ok(commitCheck.stderr.includes(specPath('06-blog-api')) && /explore\.json/.test(commitCheck.stderr), commitCheck.stderr);
+  assert.ok(commitCheck.stderr.includes(specPath('06-blog-api')) && /packages\.json/.test(commitCheck.stderr) && /specSha256/.test(commitCheck.stderr), commitCheck.stderr);
   assert.equal(commitCheck.stderr.includes(specPath('05-key-value-server')), false, 'only the edited spec is named');
   annotate(f, { at: c });
   pushTag(f);
@@ -566,16 +566,16 @@ test('A_spec_edited_after_its_gate_is_refused_by_plan_check_commit_and_check_tag
   assert.equal((await g.run('plan', ['--ref', 'HEAD', '--date', '20261201'])).exit, 0, 'the control: the pinned bytes plan');
 });
 
-test('The_pins_are_read_from_the_data_file_and_a_missing_or_unreadable_file_or_task_is_a_refusal', async t => {
+test('The_gated_hashes_are_read_from_the_registered_packages_and_a_missing_or_unreadable_file_or_task_is_a_refusal', async t => {
   const f = makeFreezeRepo(t);
   const { c } = freezeAndMerge(f);
   const run = pins => runFreeze(['check-commit', '--repo', f.repo, '--inputs', f.inputs, '--pins', pins, '--before', f.base, '--after', c], { now: () => TODAY });
   assert.equal((await run(f.pins)).exit, 0);
   assert.equal((await run(path.join(f.root, 'absent.json'))).exit, 1);
-  writeFileSync(path.join(f.root, 'no-tasks.json'), '{"tasks": {"04": {}}}');
-  const missing = await run(path.join(f.root, 'no-tasks.json'));
+  writeFileSync(path.join(f.root, 'no-package.json'), '{"04": {}}');
+  const missing = await run(path.join(f.root, 'no-package.json'));
   assert.equal(missing.exit, 1);
-  assert.match(missing.stderr, /explore\.json|pins|no-tasks/);
+  assert.match(missing.stderr, /no-package\.json.*specSha256 for task 04/);
 });
 
 // ---- the review's findings of PR 4: the guards read the record, the tag and the modes -------------------------------------------------------------------

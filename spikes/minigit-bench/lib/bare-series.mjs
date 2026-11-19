@@ -130,7 +130,7 @@ function voidOne({ ctx, deps, h, entry, result, say }) {
 async function scoreOne({ ctx, deps, h, ref, flag, say }) {
   const entry = entryOfRef(h.get(), ctx, ref);
   const layout = layoutPaths(ctx.sessionsRoot, entry.rid);
-  const r = await deps.scoreSession({ session: layout.dir, source: layout.work, stack: entry.stack, phase: entry.phase, toolchains: [ctx.tsDir, ctx.nodeDir], nugetCache: layout.nuget, npmCache: layout.npm });
+  const r = await deps.scoreSession({ session: layout.dir, source: layout.work, stack: entry.stack, phase: entry.phase, toolchains: [ctx.tsDir, ctx.nodeDir], dotnetPin: ctx.dotnetPin, nugetCache: layout.nuget, npmCache: layout.npm });
   if (r.kind === 'void') return voidOne({ ctx, deps, h, entry, result: r, say });
   const problem = scorerProblem(entry, r);
   if (problem) return problem;
