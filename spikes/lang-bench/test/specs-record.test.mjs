@@ -12,6 +12,7 @@ import { entryDifferences, renderRecord, writeAtomicFile } from '../lib/conforma
 import { runSpecsRecord } from '../lib/specs-record-cli.mjs';
 import { edit, FORMAT_TEXT, sha256 } from './support/format-fixtures.mjs';
 import { owned } from './support/owned.mjs';
+import { realRepo } from './support/real-repo.mjs';
 import { formatRow, git } from './support/workspace-fixtures.mjs';
 
 const spikeDir = fileURLToPath(new URL('..', import.meta.url));
@@ -179,15 +180,6 @@ test('The_B_entry_is_computed_from_FORMATs_bytes_and_a_typed_value_is_refused_by
     rewrite(inputs, edited => ({ ...edited, B: record.B }));
   }
 });
-
-/** The task repository's checkout named by `LANG_V2_TASK_REPO`, or null when the case skipped (under BENCH_REQUIRE_SANDBOX=1 an unset variable throws). The writer reads the pinned commit, never the checkout's files. */
-function realRepo(t) {
-  const repo = process.env.LANG_V2_TASK_REPO;
-  if (repo !== undefined && repo !== '') return repo;
-  if (process.env.BENCH_REQUIRE_SANDBOX === '1') throw new Error('BENCH_REQUIRE_SANDBOX=1 and LANG_V2_TASK_REPO does not name the task repository checkout');
-  t.skip('LANG_V2_TASK_REPO does not name the task repository checkout');
-  return null;
-}
 
 test('The_committed_B_entry_is_what_the_writer_computes_from_the_task_repository', async t => {
   if (realRepo(t) === null) return;

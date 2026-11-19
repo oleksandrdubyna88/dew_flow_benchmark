@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { runFreeze } from '../lib/freeze-cli.mjs';
 import { DEFAULT_PINS, gatedProblems, loadSpecPins } from '../lib/freeze-pins.mjs';
 import { git } from './support/push-fixtures.mjs';
+import { realRepo } from './support/real-repo.mjs';
 import { ownedFolder } from './toolchain-fixtures.mjs';
 
 const EXPLORE = fileURLToPath(new URL('../../lang-explore/inputs/explore.json', import.meta.url));
@@ -65,16 +66,6 @@ test('A_task_with_no_registered_package_has_no_gated_bytes_and_its_spec_is_refus
 });
 
 // ---- the real freeze commit --------------------------------------------------------------------------------------------------------------------------
-
-/** The task repository checkout of the real-repository cases: `null` (the case skipped) when `LANG_V2_TASK_REPO` is unset, a throw under BENCH_REQUIRE_SANDBOX=1. */
-function realRepo(t) {
-  const repo = process.env.LANG_V2_TASK_REPO;
-  if (repo !== undefined && repo !== '') return repo;
-  const why = 'LANG_V2_TASK_REPO does not name the task repository checkout';
-  if (process.env.BENCH_REQUIRE_SANDBOX === '1') throw new Error(`BENCH_REQUIRE_SANDBOX=1 and ${why}`);
-  t.skip(why);
-  return null;
-}
 
 test('The_real_freeze_commit_passes_check_commit_with_the_default_gated_hashes_and_not_with_the_engines_frozen_pins', async t => {
   const repo = realRepo(t);

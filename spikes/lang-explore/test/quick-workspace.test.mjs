@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
+import { realRepo } from '../../lang-bench/test/support/real-repo.mjs';
 import { resolveCommit } from '../lib/leak-git.mjs';
 import { quickExplore } from '../lib/quick.mjs';
 import { packagesInputs, quickWorkspaceFiles } from '../lib/workspace-quick.mjs';
@@ -87,16 +88,6 @@ test('The_engine_pins_of_the_six_specs_equal_the_freeze_record', () => {
     assert.equal(engine[id].draft, false, `task ${id}: a frozen spec is not a draft`);
   }
 });
-
-/** The task repository checkout of the real-repository cases: `null` (the case skipped) when `LANG_V2_TASK_REPO` is unset, a throw under BENCH_REQUIRE_SANDBOX=1. */
-function realRepo(t) {
-  const repo = process.env.LANG_V2_TASK_REPO;
-  if (repo !== undefined && repo !== '') return repo;
-  const why = 'LANG_V2_TASK_REPO does not name the task repository checkout';
-  if (process.env.BENCH_REQUIRE_SANDBOX === '1') throw new Error(`BENCH_REQUIRE_SANDBOX=1 and ${why}`);
-  t.skip(why);
-  return null;
-}
 
 test('The_frozen_spec_blobs_at_the_freeze_commit_hash_to_the_record_and_to_the_engine_pins', async t => {
   const repo = realRepo(t);
