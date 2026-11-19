@@ -12,8 +12,9 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { checkDestination, lstatOrNull, writeAtomically } from './workspace-destination.mjs';
 
-/** The commit of the task repository's `main` that `inputs/hashes-lang.txt` describes (FORMAT v2 with its second amendment, gated). */
-export const PINNED_TASK_SHA = 'c204726280c945c48c885d390e483f31583f25d4';
+/** The commit of the task repository's `main` that `inputs/hashes-lang.txt` describes: the WORKSPACE commit W of the freeze `spec-frozen-B-20261118` (F2.S2 (f), D67 (3): the bare harness fetches at W, never at the tag; the tag's commit C is
+ * `502b65ad153887464c0c45ebc13e9bbef545c415`, W's only parent). Until 2026-11-19 this was `c204726280c9`, FORMAT's second amendment. */
+export const PINNED_TASK_SHA = 'f3d256e5fe1f774e189a9850056559b39b995a27';
 export const HASHES_PATH = fileURLToPath(new URL('../inputs/hashes-lang.txt', import.meta.url));
 export const defaultCacheDir = () => path.join(os.homedir(), '.cache', 'lang-v2');
 
