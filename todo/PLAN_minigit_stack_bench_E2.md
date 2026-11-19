@@ -518,6 +518,17 @@ real box on this host (`sandboxGate`): `dotnet --list-sdks` one line, the pin, w
 hide list lists both, or the test skips with that reason on a host with one SDK); the 7 tests above green at the head.
 *Not changed:* `host-checks.mjs`, `inputs/stacks.json`, the pins, any `global.json`. *Code:* Fable (the E2.S2 sandbox is a
 cornerstone, `model: fable`), gates by coai.
+*The plan gate (coai `10fb6711`, 2026-11-19, `proceed`, five findings, all accepted) adds:* (1) the list is computed WHEN THE BOX
+IS BUILT, inside `agentBoxPrefix` itself (it takes the pinned SDK and an injected listing, as it takes `exists`), never frozen
+into a plan file or a session plan: an SDK installed between a preflight and a session is hidden too, and no construction path
+can forget it; a caller with a pinned `dotnetDir` keeps hiding the whole distribution as before. (2) Each construction path —
+the preflight's probe box, minigit's `session-launch.mjs`, lang-explore's `plan.mjs`/`run-ctx.mjs`/`readback.mjs` — has a test
+over a two-SDK fixture listing that the argv it builds carries the other version's tmpfs. (3) The effect test in the real box
+also BUILDS and RUNS a minimal `net10.0` console project (no package references; restore reads only the local packs, the box
+has no network): `dotnet --version` in the project prints the pin, the program prints its `RuntimeInformation.FrameworkDescription`
+(`.NET 10.0.14`), and the control without the hide list shows two SDKs. The comparability claim is therefore: same SDK, same
+runtime, same packs and templates as before; the one difference is the muxer and `host/fxr` of 11.0.0, which resolve to the
+pinned SDK, and that is recorded in the effect test's output and here.
 
 ### Test scenarios
 
