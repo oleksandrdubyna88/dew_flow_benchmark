@@ -1,6 +1,7 @@
 // The world of the Stage 1 guard tests (F3.S1 (a), PR 4): a run-map of kind `data` from a script, a series folder over it with session folders that hold the three cache folders and a few records, and a private backup folder.
 // Nothing real is read or written: every folder is an owned temporary one (`common.test-leftovers`), every byte is invented, and no held-out case, trap name or case id exists here. Not a test file.
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { chmodSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { openSeries, planSession, transition, writeRunMap } from '../../minigit-bench/lib/run-map.mjs';
@@ -76,3 +77,28 @@ export function withPilot(map, { skip = [], tasks = PILOT } = {}) {
     return transition(transition(transition(planned, rid, 'launching', {}).value, rid, 'ran', { class: 'completed', data: true }).value, rid, 'scored', {}).value;
   }, map);
 }
+
+// ---- helpers of the archive tests ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+/** The sha256 of a file or text, written here on purpose: the tests do not use the module's own hash. */
+export const sha256Text = text => createHash('sha256').update(text).digest('hex');
+
+/** `{ 'rel/path': 'sha256' | 'link:<sha256 of the target>' }` of every file and link under `dir`, by the test's own walk (never following a link). */
+export function snapshotOf(dir, { skip = [] } = {}) {
+  const found = {};
+  const walk = rel => {
+    for (const name of readdirSync(path.join(dir, rel)).sort()) {
+      const child = rel === '' ? name : `${rel}/${name}`;
+      if (skip.includes(child)) continue;
+      const st = lstatSync(path.join(dir, child));
+      if (st.isDirectory()) walk(child);
+      else found[child] = st.isSymbolicLink() ? `link:${sha256Text(readlinkSync(path.join(dir, child)))}` : sha256Text(readFileSync(path.join(dir, child)));
+    }
+  };
+  walk('');
+  return found;
+}
+
+/** The three cache folders of a session folder, as files: the paths a recovery may free (relative to the series). */
+export const cacheFilesOf = rid => ['box/nuget/pkg-a/a.nupkg', 'box/nuget/pkg-a/b.dll', 'box/npm/_cacache/c.tgz', 'box/home/.dotnet/d.dat'].map(rel => `s/${rid}/${rel}`);

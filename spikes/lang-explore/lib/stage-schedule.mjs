@@ -467,3 +467,13 @@ function firstStep(steps) {
   }
   return ok(null);
 }
+
+/**
+ * The read-back slots whose sessions that count still have no dated line: `[{ slot, rids }]` (empty when every one is read). A slot of this list is no finished slot for `stage-free` (F3.S1 PR 4): the judge's reading comes first. A `refuted` line
+ * is applied as `nextSlot` applies it, so a refuted session is a void and its slot is not finished either. `slots` are `slotsOf`'s, `readbackLines` the parsed dated lines (anything else is no lines).
+ */
+export function unreadReadbackSlots({ map, slots, readbackLines }) {
+  const lines = verdictLines(readbackLines);
+  const seen = withRefuted({ map, slots, lines });
+  return slots.filter(s => s.readback).map(slot => ({ slot: slot.slot, rids: unreadRids({ map: seen, slot, lines }) })).filter(row => row.rids.length > 0);
+}
