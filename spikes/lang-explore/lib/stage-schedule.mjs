@@ -3,7 +3,7 @@
 // A slot's number is the run-map's `pair`, so v1's pair files and every reader of `pair` work unchanged.
 import { sha256Of } from '../../minigit-bench/lib/inputs.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
-import { MAX_ATTEMPTS, MASKS, STACK_ORDER, openSessions, pairComplete, sessionsOf, stackState } from './series.mjs';
+import { MAX_ATTEMPTS, MASKS, STACK_ORDER, isOpenSession, pairComplete, sessionsOf, stackState, stateOfSessions } from './series.mjs';
 import { FREEZE_TASKS } from './workspaces-sources.mjs';
 
 /** The kind of each task of Stage 1 (`inputs/explore.json` pins it; a test holds this table equal to the pins). The read-back picks one daemon task and one web task. */
@@ -182,33 +182,39 @@ const sessionOf = ({ slot, stack, attempt, label }) => ({ rid: slot.rids[stack][
 /** The stacks of a slot in launch order: the one that leads first. */
 const launchOrder = slot => [slot.first, ...STACK_ORDER.filter(stack => stack !== slot.first)];
 
-const offer = (slot, action, extra) => ok({ ...slot, action, ...extra });
+const offer = (slot, action, extra) => ok({ ...slot, ...extra, action });
 
-/** A stack that ended with a stop: the series' launches end for good (v1's and the engine's rule), so the schedule offers nothing. */
-function stoppedProblem({ map, slot }) {
-  const stopped = STACK_ORDER.find(stack => stackState(map, slot.slot, stack, DATA_KIND) === 'stopped');
-  return stopped === undefined ? null : `${describe(slot)} ${stopped} ended with a stop (${sessionsOf(map, slot.slot, stopped, DATA_KIND).at(-1).class}): a stopped series is never run again`;
+const stateLineOf = ({ order, states }) => order.map(stack => `${stack}: ${states[stack]}`).join(', ');
+
+/** A unit with sessions of one stack only: the schedule plans the two stacks of a slot or a pair together. */
+function fresh({ name, order, states, planned }) {
+  if (order.every(stack => states[stack] === 'none')) return ok({ action: 'plan', sessions: planned() });
+  if (order.some(stack => states[stack] === 'none')) return fail(`${name} holds sessions of one stack only (${stateLineOf({ order, states })}): the schedule plans both stacks together`);
+  return ok(null);
 }
 
-/** What to do with the first unfinished slot: refuse a stop, resume what a halt left open, re-run a void once alone, or plan the slot. */
+/**
+ * What to do with the sessions of ONE unit, a slot or a pilot pair (the one rule of both): refuse a stop (the series' launches end for good, v1's and the engine's rule), resume what a halt left open, re-run a void once and alone, or plan
+ * the unit; `ok(null)` when it is finished. `of(stack)` is the unit's sessions of a stack in attempt order, `planned()` the entries of both stacks and `rerunOf(stack)` the entry of one stack's re-run.
+ */
+function unitStep({ name, order, of, planned, rerunOf }) {
+  const states = Object.fromEntries(order.map(stack => [stack, stateOfSessions(of(stack))]));
+  const stopped = order.find(stack => states[stack] === 'stopped');
+  if (stopped) return fail(`${name} ${stopped} ended with a stop (${of(stopped).at(-1).class}): a stopped series is never run again`);
+  const open = order.flatMap(stack => of(stack).filter(isOpenSession));
+  if (open.length > 0) return ok({ action: 'resume', resumed: open.map(x => x.rid) });
+  const voided = order.find(stack => states[stack] === 'void-rerunnable');
+  return voided ? ok({ action: 'rerun', rerun: voided, attempt: 2, sessions: [rerunOf(voided)] }) : fresh({ name, order, states, planned });
+}
+
+/** What to do with the first unfinished slot. */
 function offerFor({ map, slot }) {
-  const stopped = stoppedProblem({ map, slot });
-  return stopped ? fail(stopped) : openOffer({ map, slot });
-}
-
-function openOffer({ map, slot }) {
-  const open = openSessions(map, slot.slot, DATA_KIND);
-  return open.length > 0 ? offer(slot, 'resume', { resumed: open.map(x => x.rid) }) : voidOffer({ map, slot });
-}
-
-function voidOffer({ map, slot }) {
-  const stack = launchOrder(slot).find(x => voidStacks(map, slot.slot).includes(x));
-  return stack === undefined ? planOffer({ map, slot }) : offer(slot, 'rerun', { rerun: stack, attempt: 2, sessions: [sessionOf({ slot, stack, attempt: 2, label: 'ran unpaired' })] });
-}
-
-function planOffer({ map, slot }) {
-  if (sessionsOf(map, slot.slot, undefined, DATA_KIND).length > 0) return fail(`${describe(slot)} holds sessions of one stack only (${stateLine(map, slot.slot)}): the schedule plans both stacks of a slot together`);
-  return offer(slot, 'plan', { sessions: launchOrder(slot).map(stack => sessionOf({ slot, stack, attempt: 1, label: 'paired' })) });
+  const order = launchOrder(slot);
+  const step = unitStep({
+    name: describe(slot), order, of: stack => sessionsOf(map, slot.slot, stack, DATA_KIND),
+    planned: () => order.map(stack => sessionOf({ slot, stack, attempt: 1, label: 'paired' })), rerunOf: stack => sessionOf({ slot, stack, attempt: 2, label: 'ran unpaired' }),
+  });
+  return step.ok && step.value ? offer(slot, step.value.action, step.value) : step;
 }
 
 /**
@@ -223,4 +229,114 @@ export function nextSlot({ map, slots, pilotGo, seedRevealed, readbackLines = []
   if (slot === undefined) return ok(null);
   const waiting = linesProblem({ map: seen, slots, target: slot, lines: readbackLines });
   return waiting ? fail(waiting) : offerFor({ map: seen, slot });
+}
+
+// ---- the pilot's plan: the A/A and the two pilot pairs (F3.S2 (a), step P) ---------------------------------------------------------------------------------------------------------------------------------------
+// The pilot runs before the seed is revealed, so its sessions carry no data rid: the caller draws a `pilotRid` for each entry when it plans it. A session is told apart by what the run-map entry carries: `kind` (`aa` or `pilot`),
+// `task`, `stack`, `attempt`, and for an A/A twin its `twin` (`a` on mask A, `b` on mask B).
+
+/** The tasks G-16 needs on real pilot trees: it checks each driver on the tree of the task that exercises it (stories document, open point 2). */
+export const G16_TASKS = Object.freeze(['04', '05', '10']);
+const PILOT_KIND = 'pilot';
+const AA_KIND = 'aa';
+const otherMask = mask => (mask === MASKS.low ? MASKS.high : MASKS.low);
+/** In the daemon pair C# is on mask A, in the web pair on mask B. */
+const PAIR_CSHARP_MASK = Object.freeze({ daemon: MASKS.low, web: MASKS.high });
+
+const unknownTaskOf = pilot => [['the A/A', pilot?.aa?.task], ['the daemon pair', pilot?.daemon], ['the web pair', pilot?.web]].find(([, task]) => !FREEZE_TASKS.includes(task));
+const wrongKindOf = pilot => [['daemon', pilot.daemon], ['web', pilot.web]].find(([kind, task]) => TASK_KINDS[task] !== kind);
+
+/** The sentence for a task or a stack the answer names that does not exist, or null. */
+function namesProblem(pilot) {
+  const unknown = unknownTaskOf(pilot);
+  if (unknown) return `${unknown[0]}'s task ${unknown[1]} is not one of ${FREEZE_TASKS.join(', ')}`;
+  return STACK_ORDER.includes(pilot.aa.stack) ? null : `the A/A's stack ${pilot.aa.stack} is not one of ${STACK_ORDER.join(', ')}`;
+}
+
+function kindProblem(pilot) {
+  const wrong = wrongKindOf(pilot);
+  return wrong ? `the ${wrong[0]} pair's task ${wrong[1]} is a ${TASK_KINDS[wrong[1]]} task` : null;
+}
+
+function coverProblem(pilot) {
+  const covered = new Set([pilot.aa.task, pilot.daemon, pilot.web]);
+  const missing = G16_TASKS.filter(task => !covered.has(task));
+  return missing.length === 0 ? null : `the pilot's trees cover tasks ${[...covered].sort().join(', ')}, not ${missing.join(', ')}: G-16 needs a real pilot tree of each of ${G16_TASKS.join(', ')}`;
+}
+
+/** The sentence refusing the pre-registration's answer for the pilot (which task is the daemon pair's, the web pair's and the A/A's, and the A/A's stack), or null. */
+const pilotProblem = pilot => namesProblem(pilot) ?? kindProblem(pilot) ?? coverProblem(pilot);
+
+const aaSessions = ({ aa, attempt }) => [['a', MASKS.low], ['b', MASKS.high]].map(([twin, mask]) => ({ kind: AA_KIND, task: aa.task, stack: aa.stack, twin, mask, attempt, label: attempt === 1 ? `twin ${twin}` : `twin ${twin}, A/A again` }));
+
+const pairSessionOf = ({ kind, task, stack, attempt, label }) => ({ kind: PILOT_KIND, task, stack, mask: stack === 'csharp' ? PAIR_CSHARP_MASK[kind] : otherMask(PAIR_CSHARP_MASK[kind]), attempt, label });
+
+const pairOf = (kind, task) => ({
+  what: `pilot:${task}`, kind, task,
+  sessions: STACK_ORDER.map(stack => pairSessionOf({ kind, task, stack, attempt: 1, label: 'paired' })),
+});
+
+/**
+ * The pilot's plan: `ok({ aa: { what: 'aa', task, stack, sessions: [twin a on mask A, twin b on mask B] }, pairs: [daemon pair, web pair] })`, each session an entry without a rid. `pilot` is the pre-registration's answer
+ * `{ aa: { task, stack }, daemon: <task>, web: <task> }`; an answer that leaves a G-16 task without a pilot tree, or a task of the wrong kind, is refused.
+ */
+export function pilotPlan({ pilot }) {
+  const problem = pilotProblem(pilot ?? {});
+  if (problem) return fail(problem);
+  return ok({ aa: { what: 'aa', task: pilot.aa.task, stack: pilot.aa.stack, sessions: aaSessions({ aa: pilot.aa, attempt: 1 }) }, pairs: [pairOf('daemon', pilot.daemon), pairOf('web', pilot.web)] });
+}
+
+const pilotSessionsOf = ({ map, kind, task, stack }) => Object.values(map.sessions).filter(s => s.kind === kind && s.task === task && (stack === undefined || s.stack === stack)).sort((a, b) => a.attempt - b.attempt);
+
+/** A pilot pair: the same unit rule as a slot (a stop ends it, a halt is resumed, a void is re-run once and alone). */
+function pairStep({ map, pair }) {
+  const step = unitStep({
+    name: `pilot pair of task ${pair.task}`, order: STACK_ORDER, of: stack => pilotSessionsOf({ map, kind: PILOT_KIND, task: pair.task, stack }),
+    planned: () => pair.sessions, rerunOf: stack => pairSessionOf({ kind: pair.kind, task: pair.task, stack, attempt: 2, label: 'ran unpaired' }),
+  });
+  return step.ok && step.value ? ok({ what: pair.what, ...step.value }) : step;
+}
+
+const isVoidSession = s => stateOfSessions([s]) === 'void-rerunnable';
+
+/** The A/A run again: both twins, attempt 2, because one twin measures no spread. */
+const aaAgain = aa => ok({ what: 'aa', action: 'again', sessions: aaSessions({ aa, attempt: 2 }) });
+
+const voidedAt = (sessions, attempt) => sessions.some(s => s.attempt === attempt && isVoidSession(s));
+
+const AFTER_REPEAT = 'the A/A has a void twin after its one repeat: the pilot cannot measure a spread; an instrument fix and a new go come before another run';
+
+/** The A/A after its sessions ran: finished when no twin is void; a void twin makes it run again once, both twins; a void after that ends it. */
+function aaSettled({ sessions, aa }) {
+  if (!voidedAt(sessions, 1)) return ok(null);
+  return sessions.every(s => s.attempt === 1) ? aaAgain(aa) : (voidedAt(sessions, 2) ? fail(AFTER_REPEAT) : ok(null));
+}
+
+/** The A/A: two sessions of one task and one stack, one on each mask; a halt is resumed, a stop ends the pilot. */
+function aaStep({ map, plan }) {
+  const sessions = pilotSessionsOf({ map, kind: AA_KIND, task: plan.task });
+  const stopped = sessions.find(s => stateOfSessions([s]) === 'stopped');
+  if (stopped) return fail(`the A/A ${stopped.twin} ended with a stop (${stopped.class}): a stopped series is never run again`);
+  const open = sessions.filter(isOpenSession);
+  if (open.length > 0) return ok({ what: 'aa', action: 'resume', resumed: open.map(x => x.rid) });
+  return sessions.length === 0 ? ok({ what: 'aa', action: 'plan', sessions: plan.sessions }) : aaSettled({ sessions, aa: plan });
+}
+
+/**
+ * The next step of the pilot, in the order of step P: the A/A, the daemon pair, the web pair, each finished before the next. `ok({ what: 'aa' | 'pilot:<NN>', action: 'plan' | 'resume' | 'rerun' | 'again', sessions | resumed })`,
+ * `ok(null)` when nothing more is to run, `fail(sentence)`. A void pilot session is re-run once, alone; a void twin makes the A/A run again once, both twins, so the pilot is at most twelve sessions.
+ */
+export function pilotStep({ map, pilot }) {
+  const plan = pilotPlan({ pilot });
+  if (!plan.ok) return plan;
+  return firstStep([() => aaStep({ map, plan: plan.value.aa }), ...plan.value.pairs.map(pair => () => pairStep({ map, pair }))]);
+}
+
+/** The first of the lazy steps that has something to say: a refusal or something to run; `ok(null)` when every one is finished. */
+function firstStep(steps) {
+  for (const step of steps) {
+    const result = step();
+    if (!result.ok || result.value !== null) return result;
+  }
+  return ok(null);
 }

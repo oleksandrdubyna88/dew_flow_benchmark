@@ -6,7 +6,7 @@ import { sha256Of } from '../../minigit-bench/lib/inputs.mjs';
 import { openSeries, planSession, transition } from '../../minigit-bench/lib/run-map.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
 import { MASKS, VOID_UNSCORED, maskOf, pairComplete, stackState } from '../lib/series.mjs';
-import { STAGE_ROUNDS, TASK_KINDS, firstStackOfSlot, maskOfSlot, nextSlot, readbackSlots, ridOfSlot, seedProblem, slotProblem, slotsOf } from '../lib/stage-schedule.mjs';
+import { STAGE_ROUNDS, TASK_KINDS, firstStackOfSlot, maskOfSlot, nextSlot, pilotPlan, pilotStep, readbackSlots, ridOfSlot, seedProblem, slotProblem, slotsOf } from '../lib/stage-schedule.mjs';
 
 const COLLIDING_SEED = 'lv2-collide-2902';
 const TASKS = ['04', '05', '06', '07', '08', '10'];
@@ -327,4 +327,84 @@ test('Round_3_is_refused_until_the_read_back_lines_of_rounds_1_and_2_exist', () 
   assert.equal(slotProblem({ map: mapWith(handMade), slots: SLOTS, slot: 13, ...GATES, readbackLines: [] }).includes('round 3 never starts'), true);
   const all = [first, second].flatMap(p => [holds(p.slot, 'csharp'), holds(p.slot, 'node')]);
   assert.equal(asked(handMade, all).value.slot, 13);
+});
+
+// ---- the pilot's plan --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/** The pre-registration's answer (open point 2), as a fixture: the web pair is task 04, the daemon pair and the A/A take 05 and 10 between them. */
+const PILOT = { aa: { task: '10', stack: 'csharp' }, daemon: '05', web: '04' };
+
+/** A run-map of the pilot's sessions from `[kind, task, stack, attempt, end]` (kind `aa` or `pilot`; the twin is the mask, so `aa` entries carry `twin`). */
+function pilotMap(script) {
+  let map = openSeries({ seriesId: 'x-test', caps: {} });
+  script.forEach(([kind, task, stack, attempt, end, twin], i) => {
+    const rid = `p${String(i).padStart(5, '0')}`;
+    const mask = twin === 'b' || (kind === 'pilot' && (task === '04') === (stack === 'csharp')) ? MASKS.high : MASKS.low;
+    map = planSession(map, { rid, stack, phase: 'v1', attempt, kind, task, mask, twin, label: 'test' }).value;
+    if (end === 'planned') return;
+    map = transition(map, rid, 'launching', {}).value;
+    map = transition(map, rid, 'ran', { class: end.class, data: end.data }).value;
+    if (end.scored) map = transition(map, rid, 'scored', {}).value;
+  });
+  return map;
+}
+
+const AA_DONE = [['aa', '10', 'csharp', 1, GOOD, 'a'], ['aa', '10', 'csharp', 1, GOOD, 'b']];
+const pairDone = (task, attempt = 1) => [['pilot', task, 'csharp', attempt, GOOD], ['pilot', task, 'node', attempt, GOOD]];
+const stepOfPilot = script => pilotStep({ map: pilotMap(script), pilot: PILOT });
+
+test('The_pilot_plan_holds_the_A_A_twins_on_the_two_masks_and_one_pair_per_kind_and_no_data_rid', () => {
+  const plan = pilotPlan({ pilot: PILOT });
+  assert.equal(plan.ok, true, plan.reason);
+  const { aa, pairs } = plan.value;
+  assert.deepEqual(aa.sessions.map(x => [x.kind, x.task, x.stack, x.twin, x.mask, x.attempt]), [['aa', '10', 'csharp', 'a', MASKS.low, 1], ['aa', '10', 'csharp', 'b', MASKS.high, 1]], 'one task, one stack, the twins on the two masks');
+  assert.deepEqual(pairs.map(p => [p.what, p.kind, p.task]), [['pilot:05', 'daemon', '05'], ['pilot:04', 'web', '04']], 'one pair per kind');
+  assert.deepEqual(pairs[0].sessions.map(x => [x.kind, x.stack, x.mask]), [['pilot', 'csharp', MASKS.low], ['pilot', 'node', MASKS.high]], 'in the daemon pair C# is on mask A');
+  assert.deepEqual(pairs[1].sessions.map(x => [x.kind, x.stack, x.mask]), [['pilot', 'csharp', MASKS.high], ['pilot', 'node', MASKS.low]], 'in the web pair C# is on mask B');
+  assert.equal(JSON.stringify(plan.value).includes('rid'), false, 'no rid: the pilot runs before the seed is revealed, its sessions take `pilotRid` at planning and never a data rid');
+  for (const bad of [{ ...PILOT, daemon: '04' }, { ...PILOT, web: '05' }, { ...PILOT, aa: { task: '10', stack: 'rust' } }, { ...PILOT, web: '06' }, { ...PILOT, daemon: '99' }, { daemon: '05', web: '04' }]) assert.equal(pilotPlan({ pilot: bad }).ok, false, JSON.stringify(bad));
+  assert.match(pilotPlan({ pilot: { ...PILOT, web: '06' } }).reason, /the pilot's trees cover tasks 05, 06, 10, not 04/, 'G-16 needs tasks 04, 05 and 10 on real pilot trees');
+  assert.match(pilotPlan({ pilot: { ...PILOT, daemon: '04' } }).reason, /the daemon pair's task 04 is a web task/);
+});
+
+test('The_pilot_runs_the_A_A_then_the_daemon_pair_then_the_web_pair_and_each_must_be_finished_first', () => {
+  const first = stepOfPilot([]).value;
+  assert.deepEqual([first.what, first.action, first.sessions.map(x => x.twin)], ['aa', 'plan', ['a', 'b']]);
+  const second = stepOfPilot(AA_DONE).value;
+  assert.deepEqual([second.what, second.action, second.sessions.map(x => x.stack)], ['pilot:05', 'plan', ['csharp', 'node']]);
+  assert.equal(stepOfPilot([...AA_DONE, ...pairDone('05')]).value.what, 'pilot:04');
+  assert.equal(stepOfPilot([...AA_DONE, ...pairDone('05'), ...pairDone('04')]).value, null, 'nothing more to run: the GO table judges');
+  const halted = stepOfPilot([['aa', '10', 'csharp', 1, GOOD, 'a'], ['aa', '10', 'csharp', 1, 'planned', 'b']]).value;
+  assert.deepEqual([halted.what, halted.action, halted.resumed.length], ['aa', 'resume', 1], 'a halt leaves the twin planned: it is resumed, never planned twice');
+});
+
+test('A_void_pilot_session_is_re_run_once_alone_and_a_void_twin_runs_the_A_A_again_once_with_both_twins', () => {
+  const rerun = stepOfPilot([...AA_DONE, ['pilot', '05', 'csharp', 1, GOOD], ['pilot', '05', 'node', 1, VOID]]).value;
+  assert.deepEqual([rerun.what, rerun.action, rerun.rerun, rerun.attempt, rerun.sessions.map(x => [x.stack, x.attempt, x.mask, x.label])], ['pilot:05', 'rerun', 'node', 2, [['node', 2, MASKS.high, 'ran unpaired']]]);
+  const again = stepOfPilot([['aa', '10', 'csharp', 1, GOOD, 'a'], ['aa', '10', 'csharp', 1, VOID, 'b']]).value;
+  assert.deepEqual([again.what, again.action, again.sessions.map(x => [x.twin, x.attempt, x.mask])], ['aa', 'again', [['a', 2, MASKS.low], ['b', 2, MASKS.high]]], 'both twins run again, the good one too: one twin measures no spread');
+  const afterAgain = [['aa', '10', 'csharp', 1, GOOD, 'a'], ['aa', '10', 'csharp', 1, VOID, 'b'], ['aa', '10', 'csharp', 2, GOOD, 'a'], ['aa', '10', 'csharp', 2, GOOD, 'b']];
+  assert.equal(stepOfPilot(afterAgain).value.what, 'pilot:05', 'the second run of the twins settles the A/A');
+  const second = stepOfPilot([...afterAgain.slice(0, 3), ['aa', '10', 'csharp', 2, VOID, 'b']]);
+  assert.match(second.reason, /the A\/A has a void twin after its one repeat/, 'the A/A is run again once and never twice');
+});
+
+test('The_pilot_is_at_most_twelve_sessions_even_when_every_pilot_session_and_one_twin_voids_once', () => {
+  let script = [];
+  for (let i = 0; i < 40; i += 1) {
+    const step = stepOfPilot(script);
+    assert.equal(step.ok, true, step.reason);
+    if (step.value === null) break;
+    const voidFirst = x => (x.attempt === 1 && (x.kind === 'pilot' || x.twin === 'b') ? VOID : GOOD);
+    script = [...script, ...step.value.sessions.map(x => [x.kind, x.task, x.stack, x.attempt, voidFirst(x), x.twin])];
+  }
+  assert.equal(script.length, 12, 'A/A: four, daemon pair: four, web pair: four');
+  assert.equal(stepOfPilot(script).value, null);
+});
+
+test('A_pilot_stop_is_never_re_run_and_a_pair_holding_one_stack_only_is_refused', () => {
+  const stop = { class: 'stop: T1 breach', data: false, scored: false };
+  assert.match(stepOfPilot([...AA_DONE, ['pilot', '05', 'csharp', 1, GOOD], ['pilot', '05', 'node', 1, stop]]).reason, /^pilot pair of task 05 node ended with a stop \(stop: T1 breach\): a stopped series is never run again/);
+  assert.match(stepOfPilot([...AA_DONE, ['pilot', '05', 'csharp', 1, GOOD]]).reason, /holds sessions of one stack only/);
+  assert.match(stepOfPilot([['aa', '10', 'csharp', 1, GOOD, 'a'], ['aa', '10', 'csharp', 1, stop, 'b']]).reason, /^the A\/A b ended with a stop \(stop: T1 breach\): a stopped series is never run again/);
 });

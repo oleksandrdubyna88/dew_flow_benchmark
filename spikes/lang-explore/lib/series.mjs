@@ -36,8 +36,11 @@ export const sessionsOf = (map, pair, stack, kind = 'pilot') => Object.values(ma
 const isVoid = s => s.status === 'ran' && s.data === false && String(s.class).startsWith('void');
 const isStopped = s => s.status === 'ran' && s.data === false;
 
+/** A session a halt or a failure left open: planned, launching (a crash), or ended with data and not yet scored. */
+export const isOpenSession = s => s.status === 'planned' || s.status === 'launching' || (s.status === 'ran' && s.data === true);
+
 /** The sessions of a pair that a halt or a failure left open: planned, launching (a crash), or ended with data and not yet scored. A resume launches, settles and scores these; it plans no new session. */
-export const openSessions = (map, pair, kind = 'pilot') => sessionsOf(map, pair, undefined, kind).filter(s => s.status === 'planned' || s.status === 'launching' || (s.status === 'ran' && s.data === true));
+export const openSessions = (map, pair, kind = 'pilot') => sessionsOf(map, pair, undefined, kind).filter(isOpenSession);
 
 const voidState = attempts => (attempts >= MAX_ATTEMPTS ? 'void-final' : 'void-rerunnable');
 
