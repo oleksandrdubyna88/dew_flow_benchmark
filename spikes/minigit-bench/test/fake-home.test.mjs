@@ -9,6 +9,9 @@ import { TOKEN_FILE_PARTS } from '../capture/capture-env.mjs';
 import { readSecretFile } from '../lib/secrets.mjs';
 import { fakeHome, realHome } from './fake-home.mjs';
 import { spikeDir } from './helpers.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 
 const TEST_DIR = path.join(spikeDir, 'test');
 /** The modules a runner test drives: importing one of them is what makes a file a runner test. */
@@ -30,7 +33,7 @@ test('The_helper_gives_the_process_a_fake_HOME_and_XDG_CONFIG_HOME_that_hold_no_
   assert.equal(os.homedir(), fakeHome);
   assert.equal(process.env.HOME, fakeHome);
   assert.equal(process.env.XDG_CONFIG_HOME.startsWith(fakeHome + path.sep), true);
-  assert.match(path.basename(fakeHome), /^testsToDelete-/, 'common.test-leftovers');
+  assert.notEqual(owned.classifyName(path.basename(fakeHome)).form, 'none', 'common.test-leftovers: the fake home is a prefixed folder');
   assert.equal(existsSync(path.join(fakeHome, ...TOKEN_FILE_PARTS)), false, 'no token file in the fake home');
   assert.equal(readSecretFile({ home: os.homedir(), parts: TOKEN_FILE_PARTS, label: 'token' }).ok, false, 'a runner that asks for the token of its HOME finds none, and is not refused');
   assert.equal(readdirSync(path.join(fakeHome, '.config')).length, 0, 'an empty config directory');

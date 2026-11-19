@@ -135,7 +135,7 @@ function killedProbeTestLeftovers(root) {
 test('What_a_killed_probe_test_really_leaves_a_private_root_with_runs_inside_is_retired_by_the_sweep', t => {
   const root = owned.ownedDir(t, 'sweepprivate');
   const left = killedProbeTestLeftovers(root);
-  assert.match(path.basename(left), /^testsToDelete-u\d+-bench-private-/);
+  assert.ok(path.basename(left).startsWith(owned.ownedPrefix('private')), `the private root is in the owner form: ${left}`);
   const report = sweepLeftovers({ repo: REPO, tmp: root, token: 'bench' });
   assert.deepEqual(report.removed.map(dir => path.basename(dir)), [path.basename(left)]);
   assert.equal(existsSync(left), false, 'the private root and everything inside it');

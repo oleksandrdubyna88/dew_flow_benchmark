@@ -16,7 +16,7 @@ test('A_parent_that_cannot_be_swept_later_is_refused_naming_the_rule', t => {
   const open = path.join(dir, 'open');
   mkdirSync(open);
   chmodSync(open, 0o777);
-  for (const [parent, why] of [['relative/dir', /absolute/], [path.join(dir, 'missing'), /exist/], [file, /directory/], [open, /writable by others/], [os.tmpdir(), /the caller's|writable by others/], ['/usr', /the caller's/]]) {
+  for (const [parent, why] of [['relative/dir', /absolute/], [path.join(dir, 'missing'), /exist/], [file, /directory/], [open, /writable by others/], [owned.tempRoot(), /the caller's|writable by others/], ['/usr', /the caller's/]]) {
     const verdict = checkParent(parent);
     assert.equal(verdict.ok, false, parent);
     assert.match(verdict.reason, why, parent);
@@ -34,7 +34,7 @@ test('The_callers_own_private_folder_is_a_parent_and_so_is_the_stable_one', t =>
 });
 
 test('openRun_refuses_a_parent_before_it_makes_anything', async t => {
-  const refused = await openRun(layerOptions(t, { parent: os.tmpdir() }));
+  const refused = await openRun(layerOptions(t, { parent: owned.tempRoot() }));
   assert.equal(refused.ok, false);
   assert.match(refused.reason, /stable/);
 });

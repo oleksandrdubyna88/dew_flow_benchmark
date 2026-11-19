@@ -2,7 +2,8 @@
 // toolchain the box binds read-only and the session's own box dirs are no reach; a partner's dir, the operator's other files, another series and the harness's own dirs stay one.
 import './fake-home.mjs'; // first: the scan reads os.homedir() as the protected home
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { appendFileSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -28,7 +29,7 @@ const PLAN = { token: 'sk-ant-oat01-REALREALREALREALREAL0123456789', dummy: 'sk-
 /** A series under the fake home, where the real ones live: `<home>/rsd/minigit/<series>/s` (outside-path is high only under the home, a partner's dir, or the harness's). */
 function series() {
   mkdirSync(path.join(home, 'rsd', 'minigit'), { recursive: true });
-  const root = path.join(mkdtempSync(path.join(home, 'rsd', 'minigit', 'testsToDelete-series-')), 's');
+  const root = path.join(home, 'rsd', 'minigit', `series-${randomUUID()}`, 's'); // inside the fake home, which fake-home.mjs removes
   mkdirSync(root, { recursive: true });
   return root;
 }

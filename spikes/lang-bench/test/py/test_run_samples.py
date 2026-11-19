@@ -12,6 +12,7 @@ import sys
 import tempfile
 import time
 import unittest
+import uuid
 
 import runner_path  # noqa: F401
 import rs_exec as ex
@@ -57,6 +58,12 @@ class Box:
         for d in (self.ws, self.samples, self.out):
             os.mkdir(d)
         self._fill(statement(kind), run_sh, build_sh, DEFAULT_PAIRS if pairs is None else pairs)
+
+    def tmp(self):
+        """A fresh `tmp-<8 hex>` folder inside the box's own root (which dies with the box): the TMPDIR of a child run."""
+        path = os.path.join(self.root, f"tmp-{uuid.uuid4().hex[:8]}")
+        os.mkdir(path)
+        return path
 
     def _fill(self, statement_text, run_sh, build_sh, pairs):
         for name, data in (("STATEMENT.md", statement_text), ("run.sh", run_sh), ("build.sh", build_sh), ("answer.bin", ANSWER)):
@@ -171,7 +178,7 @@ class ProgressTests(unittest.TestCase):
         box = Box(self, run_sh="sleep 3\ncat answer.bin\n")
         box.write(box.root, "limits.json", '{"timeS": 30}')
         proc = subprocess.Popen([sys.executable, "-I", "-B", ENTRY, "--limits", os.path.join(box.root, "limits.json"), box.samples], cwd=box.ws,
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={"PATH": os.environ["PATH"], "TMPDIR": tempfile.mkdtemp(dir=box.root)})
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={"PATH": os.environ["PATH"], "TMPDIR": box.tmp()})
         self.addCleanup(lambda: proc.poll() is None and proc.kill())
         first, second, empty_before, empty_after, third = (proc.stderr.readline() for _ in range(5))
         self.assertEqual(first, b"run_samples: build started\n")
@@ -189,7 +196,7 @@ class InterruptTests(unittest.TestCase):
     def start(self, box, marker, seconds):
         box.write(box.ws, "run.sh", f"touch {marker}\nexec sleep {seconds}\n")
         box.write(box.root, "limits.json", '{"timeS": 120}')
-        tmp = tempfile.mkdtemp(dir=box.root)
+        tmp = box.tmp()
         self.tmp = tmp
         proc = subprocess.Popen([sys.executable, "-I", "-B", ENTRY, "--limits", os.path.join(box.root, "limits.json"), box.samples],
                                 cwd=box.ws, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={"PATH": os.environ["PATH"], "TMPDIR": tmp})
@@ -238,7 +245,7 @@ class InterruptTests(unittest.TestCase):
         seconds = "67.%d" % (os.getpid() % 1000 + 1000)
         box.write(box.ws, "build.sh", f"touch {marker}\nexec sleep {seconds}\n")
         proc = subprocess.Popen([sys.executable, "-I", "-B", ENTRY, box.samples], cwd=box.ws, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                env={"PATH": os.environ["PATH"], "TMPDIR": tempfile.mkdtemp(dir=box.root)})
+                                env={"PATH": os.environ["PATH"], "TMPDIR": box.tmp()})
         self.addCleanup(lambda: proc.poll() is None and proc.kill())
         deadline = time.monotonic() + 15
         while not os.path.exists(marker) and time.monotonic() < deadline:
@@ -431,7 +438,7 @@ class TemporaryFolderTests(unittest.TestCase):
     """The runner makes a folder for its bytecode prefix (and one for the run): whichever way a run ends normally, none is left behind."""
 
     def leftovers(self, box, *args):
-        tmp = tempfile.mkdtemp(dir=box.root)
+        tmp = box.tmp()
         box.cli(*args, env={"TMPDIR": tmp})
         return sorted(os.listdir(tmp))
 
@@ -446,7 +453,7 @@ class TemporaryFolderTests(unittest.TestCase):
 
     def test_The_prefix_folder_is_removed_by_the_runner_when_the_interpreter_exits(self):
         probe = subprocess.run([sys.executable, "-I", "-B", "-c", "import sys, tempfile, os; sys.path.insert(0, sys.argv[1]); import run_samples; "
-                                "print(sys.pycache_prefix)", runner_path.RUNNER_DIR], capture_output=True, text=True, env={"TMPDIR": tempfile.mkdtemp(dir=Box(self).root)})
+                                "print(sys.pycache_prefix)", runner_path.RUNNER_DIR], capture_output=True, text=True, env={"TMPDIR": Box(self).tmp()})
         self.assertFalse(os.path.exists(probe.stdout.strip()), "the prefix folder outlived the interpreter")
 
 

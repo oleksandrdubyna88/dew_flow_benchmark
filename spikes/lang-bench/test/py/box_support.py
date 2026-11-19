@@ -99,6 +99,19 @@ def fake_cgroup(ws, name="cg", files=None, final=None):
     return path
 
 
+def scratch_dir(test):
+    """A fresh `scratch-<12 hex>` folder inside the unit's own TMPDIR, removed when the test ends. The Node launcher gives every unit file an owned TMPDIR
+    (`test/support/py-units.mjs`), so what is made there dies with it. A unit run outside its launcher has none: it fails here, naming TMPDIR, and
+    never makes a folder in the system temp root."""
+    base = os.environ.get("TMPDIR")
+    if not base:
+        test.fail("TMPDIR is not set: a unit makes its folders inside the owned TMPDIR its Node launcher gives it (test/support/py-units.mjs), never in the system temp root")
+    path = os.path.join(base, f"scratch-{uuid.uuid4().hex[:12]}")
+    os.mkdir(path, 0o700)
+    test.addCleanup(shutil.rmtree, path, True)
+    return path
+
+
 def fake_box(test):
     """A COPY of bash named `bwrap` in an owned folder: the stand-in for the box binary. It is a bwrap process by identity (device and
     inode of the file the prefix names), which a second copy of bash named bwrap in a workspace is not."""
@@ -184,11 +197,12 @@ def _bwrap_argv(workspace_dir, new_session, status_fd):
 
 
 class Scope:
-    """One transient user scope named in the owner form (`testsToDelete-u<uid>-bench-scope-<id>`); the test stops it when it ends."""
+    """One transient user scope named in the owner form (the prefix, `u<uid>`, `bench`, `scope`, an id); the test stops it when it ends."""
 
     def __init__(self, test):
         base = require_scope(test)
         require_bwrap(test)
+        # testsToDelete-exempt: legacy-name — the owner segment u<uid> of this unit name is built at run time from os.getuid()
         self.unit = f"testsToDelete-u{os.getuid()}-bench-scope-{uuid.uuid4().hex[:10]}"
         self.cgroup = f"{base}/{self.unit}.scope"
         test.addCleanup(self.stop)

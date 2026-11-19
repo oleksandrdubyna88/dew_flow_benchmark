@@ -88,6 +88,10 @@ E1's §3 holds unchanged (plain ESM, Node 26, no dependency, values not throws, 
   module under test (E2.S1 touches `env.mjs`, so its fixture is fixed there).
 - Leftovers a test creates on disk keep E1's `testsToDelete-mgb-…` names (the pinned rule's form — §2: the release has no
   owner segment).
+  *2026-11-18 (E6.S6, the test-leftovers rollout; the old text above is kept):* the tests E6.S6 changed (`spikes/policy-ab-quick/test/`, and the files of
+  `spikes/minigit-bench/test/` and `spikes/lang-explore/test/` it names) make owner-form names, `testsToDelete-u<uid>-bench-…`, through the mount's shipped
+  helper (`.agents/conventions/tools/lib/owned.mjs`); `test/helpers.mjs` and `test/fake-home.mjs` still make `testsToDelete-mgb-…` names until the followups
+  plan's S2 (`todo/PLAN_bench_test_leftovers_followups.md`); the line's reason ("the release has no owner segment") no longer holds at the mount `b1746499`.
 
 ---
 

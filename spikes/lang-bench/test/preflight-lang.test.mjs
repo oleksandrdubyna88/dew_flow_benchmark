@@ -11,6 +11,7 @@ import { apphostRootProblems, runApphostProbe } from '../lib/apphost-probe.mjs';
 import { boxArgv, judgeDotnetHits, judgeProbeExecutable, judgeProbes, preflightLang, probeArgvFor, resolveProbeExecutables, scanDotnetInBox } from '../lib/preflight-lang.mjs';
 import { loadStacksLang } from '../lib/toolchain-pins.mjs';
 import { sealTree, treeRecord, unsealTree } from '../lib/toolchain-store.mjs';
+import { owned } from './support/owned.mjs';
 import { ownedApi, ownedFolder, writeTree } from './toolchain-fixtures.mjs';
 
 const stacks = loadStacksLang(JSON.parse(readFileSync(fileURLToPath(new URL('../inputs/stacks-lang.json', import.meta.url)), 'utf8'))).value;
@@ -324,7 +325,7 @@ test('The_apphost_probes_scratch_folder_carries_an_owner_claim_while_it_exists_a
   const result = await runApphostProbe({ stacks, dirs, boxPath: [dirs.dotnetSdk], onWorkFolder: dir => seen.push({ dir, name: path.basename(dir), claim: existsSync(`${dir}.owner`), claimText: existsSync(`${dir}.owner`) ? readFileSync(`${dir}.owner`, 'utf8') : '' }) });
   assert.deepEqual(result.problems, []);
   assert.equal(seen.length, 1);
-  assert.match(seen[0].name, /^testsToDelete-u\d+-bench-apphost-/i, 'named as the owned-name helper names it');
+  assert.ok(seen[0].name.startsWith(owned.ownedPrefix('apphost')), `named as the owned-name helper names it: ${seen[0].name}`);
   assert.equal(seen[0].claim, true, 'a claim sits beside the folder, so a killed run leaves something the next start-of-run sweep may collect');
   assert.match(seen[0].claimText, new RegExp(`^u${process.getuid()}:`));
   assert.equal(existsSync(seen[0].dir), false, 'the folder is gone after the probe');

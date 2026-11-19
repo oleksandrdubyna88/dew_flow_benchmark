@@ -13,12 +13,15 @@ import { main } from '../explore.mjs';
 import { backupProblem, makeBackup } from '../lib/heldout-key.mjs';
 import { closeClearFolder, openClearFolder, sweepClearFolder } from '../lib/package-seal.mjs';
 import { sealedClosed, world } from './quick-heldout-fixture.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 
 const fsWith = over => ({ ...Object.fromEntries(Object.entries(nodeFs).filter(([, v]) => typeof v === 'function')), ...over });
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const stampOf = w => path.join(w.heldoutDir, '.open');
-const removingOf = w => readdirSync(w.heldoutDir).filter(n => /^testsToDelete-.*-bench-removing-/.test(n) && !n.endsWith('.owner'));
-const claimsOf = w => readdirSync(w.heldoutDir).filter(n => /^testsToDelete-.*-bench-removing-.*\.owner$/.test(n));
+const removingOf = w => readdirSync(w.heldoutDir).filter(n => n.startsWith(owned.ownedPrefix('removing')) && !n.endsWith('.owner'));
+const claimsOf = w => readdirSync(w.heldoutDir).filter(n => n.startsWith(owned.ownedPrefix('removing')) && n.endsWith('.owner'));
 
 // ---- 1: crash-safe removal ---------------------------------------------------------------------------------------------------------------------------------------------------
 

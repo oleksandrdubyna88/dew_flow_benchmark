@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { hiddenPaths, isolation, scoreBoxArgv, tmpfs } from '../lib/bwrap.mjs';
 import { runBounded } from '../lib/run.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 import {
   AGENT_ENV_KEYS, BOX_API_PORT, BOX_OTEL_PORT, BOX_PROXY_PORT, SOCKET_PATH_MAX_BYTES, agentBoxArgv, agentBoxPrefix, agentEnv, dummyToken, layoutPaths, sessionLayout,
 } from '../lib/sandbox.mjs';
@@ -199,7 +201,7 @@ test('The_agent_box_cannot_see_the_session_bus_or_the_user_manager', async t => 
   const runDir = `/run/user/${uid}`;
   if (!existsSync(runDir)) return hostLacks(t, `${runDir} does not exist on this host`);
   const layout = newSession();
-  const sock = path.join(runDir, `testsToDelete-mgb-agent-${process.pid}.sock`);
+  const sock = path.join(runDir, `${owned.ownedName('agentsock')}.sock`);
   const server = net.createServer().unref();
   await new Promise((resolve, reject) => server.once('error', reject).listen(sock, resolve));
   try {
@@ -228,21 +230,16 @@ function withoutPair2(argv, p) {
 test('The_agent_box_sees_only_its_own_tmp', async t => {
   if (!sandboxGate(t)) return;
   const layout = newSession();
-  const decoys = [path.join(os.tmpdir(), `testsToDelete-mgb-adecoy-${process.pid}`), `/var/tmp/mgb-adecoy-${process.pid}`];
-  decoys.forEach(d => writeFileSync(d, 'x'));
+  const decoys = [owned.ownedDir(t, 'adecoy'), owned.ownedDir(t, 'vadecoy', { parent: '/var/tmp' })]; // in the host's temp root and /var/tmp on purpose: the test proves the box hides them
   writeFileSync(path.join(layout.tmp, 'mine'), 'y');
-  try {
-    const own = await probe(layout, `ls -A ${os.tmpdir()}`);
-    assert.deepEqual(own.out.split('\n').filter(Boolean), ['mine'], 'only box/tmp\'s content (control: it IS listed)');
-    const varTmp = await probe(layout, 'ls -A /var/tmp');
-    assert.equal(varTmp.out.includes(path.basename(decoys[1])), false);
-    const argv = agentBoxPrefix(boxOptions(layout));
-    const open = withoutBind(withoutPair2(argv, os.tmpdir()), '--bind', layout.tmp);
-    assert.ok((await probeArgv(open, `ls -A ${os.tmpdir()}`, envFor(layout))).out.includes(path.basename(decoys[0])), 'control: without the tmpfs and the bind the host decoy is listed');
-    assert.ok((await probeArgv(withoutPair2(argv, '/var/tmp'), 'ls -A /var/tmp', envFor(layout))).out.includes(path.basename(decoys[1])), 'control: and /var/tmp shows its decoy');
-  } finally {
-    decoys.forEach(d => (async () => (await import('node:fs')).rmSync(d, { force: true }))());
-  }
+  const own = await probe(layout, `ls -A ${owned.tempRoot()}`);
+  assert.deepEqual(own.out.split('\n').filter(Boolean), ['mine'], 'only box/tmp\'s content (control: it IS listed)');
+  const varTmp = await probe(layout, 'ls -A /var/tmp');
+  assert.equal(varTmp.out.includes(path.basename(decoys[1])), false);
+  const argv = agentBoxPrefix(boxOptions(layout));
+  const open = withoutBind(withoutPair2(argv, owned.tempRoot()), '--bind', layout.tmp);
+  assert.ok((await probeArgv(open, `ls -A ${owned.tempRoot()}`, envFor(layout))).out.includes(path.basename(decoys[0])), 'control: without the tmpfs and the bind the host decoy is listed');
+  assert.ok((await probeArgv(withoutPair2(argv, '/var/tmp'), 'ls -A /var/tmp', envFor(layout))).out.includes(path.basename(decoys[1])), 'control: and /var/tmp shows its decoy');
 });
 
 test('The_toolchain_is_probed_inside_the_box_node_and_a_box_dir_is_writable_where_it_must', async t => {

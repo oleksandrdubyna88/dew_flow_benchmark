@@ -6,7 +6,6 @@ import shutil
 import signal
 import subprocess
 import sys
-import tempfile
 import time
 import unittest
 from unittest import mock
@@ -18,7 +17,7 @@ import rs_launch as rl
 import rs_olympiad as ro
 import rs_stop
 import rs_scope
-from box_support import ANSWER, STATUS_FD, Workspace, box_prefix, case, fake_box, fake_cgroup, sleepers, wait_until
+from box_support import ANSWER, STATUS_FD, Workspace, box_prefix, case, fake_box, fake_cgroup, scratch_dir, sleepers, wait_until
 
 FILES = {"answer.bin": ANSWER}
 
@@ -149,7 +148,7 @@ class StopSignalTests(unittest.TestCase):
         self.assertTrue(all(signal.getsignal(sig) == signal.SIG_IGN for sig in rl.STOPPING_SIGNALS), "and they are still ignored")
 
     def test_Two_stopping_signals_sent_back_to_back_run_the_teardown_once(self):
-        note = os.path.join(tempfile.mkdtemp(dir=os.environ.get("TMPDIR")), "teardowns")
+        note = os.path.join(scratch_dir(self), "teardowns")
         script = (
             "import os, sys, time\n"
             f"sys.path.insert(0, {os.path.dirname(os.path.abspath(rs_stop.__file__))!r})\n"

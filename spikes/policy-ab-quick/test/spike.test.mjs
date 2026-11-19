@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
@@ -17,6 +16,9 @@ import { parseStruck, strikeTargets } from '../lib/strike.mjs';
 import { parseNdjson, summarize } from '../lib/summary.mjs';
 import { scrub } from '../lib/scrub.mjs';
 import { auditRecord } from '../hooks/audit.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fx = name => fs.readFileSync(path.join(here, 'fixtures', name), 'utf8');
@@ -126,45 +128,37 @@ test('audit record summarises inputs and hashes instruction files', () => {
   assert.equal(auditRecord({ hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_input: { model: 'sonnet', effort: 'high' } }, 'T', () => '').input.model, 'sonnet');
 });
 
-test('audit hook runs as a process and appends under its own .git', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pab-hook-'));
-  try {
-    fs.mkdirSync(path.join(tmp, '.git'));
-    fs.mkdirSync(path.join(tmp, '.claude', 'hooks'), { recursive: true });
-    for (const n of ['audit.mjs']) fs.copyFileSync(path.join(here, '..', 'hooks', n), path.join(tmp, '.claude', 'hooks', n));
-    const input = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls' }, effort: { level: 'high' } });
-    const a = spawnSync(process.execPath, [path.join(tmp, '.claude', 'hooks', 'audit.mjs')], { input, cwd: os.tmpdir() });
-    assert.equal(a.status, 0);
-    assert.equal(a.stdout.length, 0);
-    const line = JSON.parse(fs.readFileSync(path.join(tmp, '.git', 'audit.ndjson'), 'utf8').trim());
-    assert.equal(line.input.command, 'ls');
-    const bad = spawnSync(process.execPath, [path.join(tmp, '.claude', 'hooks', 'audit.mjs')], { input: 'not json' });
-    assert.equal(bad.status, 0);
-  } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
-  }
+test('audit hook runs as a process and appends under its own .git', t => {
+  const tmp = owned.ownedDir(t, 'pabhook');
+  fs.mkdirSync(path.join(tmp, '.git'));
+  fs.mkdirSync(path.join(tmp, '.claude', 'hooks'), { recursive: true });
+  for (const n of ['audit.mjs']) fs.copyFileSync(path.join(here, '..', 'hooks', n), path.join(tmp, '.claude', 'hooks', n));
+  const input = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls' }, effort: { level: 'high' } });
+  const a = spawnSync(process.execPath, [path.join(tmp, '.claude', 'hooks', 'audit.mjs')], { input, cwd: owned.tempRoot() });
+  assert.equal(a.status, 0);
+  assert.equal(a.stdout.length, 0);
+  const line = JSON.parse(fs.readFileSync(path.join(tmp, '.git', 'audit.ndjson'), 'utf8').trim());
+  assert.equal(line.input.command, 'ls');
+  const bad = spawnSync(process.execPath, [path.join(tmp, '.claude', 'hooks', 'audit.mjs')], { input: 'not json' });
+  assert.equal(bad.status, 0);
 });
 
-test('canaries: manifest first, skip missing folders, unplant removes exactly the manifest', () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pab-home-'));
-  try {
-    const dir = path.join(home, '.claude', 'projects', 'D--rsd-dew-flow-creds-for-devs');
-    fs.mkdirSync(dir, { recursive: true });
-    const bystander = path.join(dir, 'keep.md');
-    fs.writeFileSync(bystander, 'keep');
-    const manifest = path.join(home, 'canaries.json');
-    const rows = plant(manifest, home);
-    assert.deepEqual(rows.map(r => r.status), ['planted', 'skipped-no-folder', 'skipped-no-folder']);
-    assert.equal(JSON.parse(fs.readFileSync(manifest, 'utf8')).planted.length, 3);
-    const res = unplant(manifest, home);
-    assert.deepEqual(res.map(r => r.status), ['removed', 'absent', 'absent']);
-    assert.ok(fs.existsSync(bystander));
-    assert.equal(isDeletable(bystander, home), false);
-    assert.equal(isDeletable(path.join(home, 'elsewhere', 'policy-ab-canary-1.md'), home), false);
-    assert.equal(canaryTargets(home).length, 3);
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
+test('canaries: manifest first, skip missing folders, unplant removes exactly the manifest', t => {
+  const home = owned.ownedDir(t, 'pabhome');
+  const dir = path.join(home, '.claude', 'projects', 'D--rsd-dew-flow-creds-for-devs');
+  fs.mkdirSync(dir, { recursive: true });
+  const bystander = path.join(dir, 'keep.md');
+  fs.writeFileSync(bystander, 'keep');
+  const manifest = path.join(home, 'canaries.json');
+  const rows = plant(manifest, home);
+  assert.deepEqual(rows.map(r => r.status), ['planted', 'skipped-no-folder', 'skipped-no-folder']);
+  assert.equal(JSON.parse(fs.readFileSync(manifest, 'utf8')).planted.length, 3);
+  const res = unplant(manifest, home);
+  assert.deepEqual(res.map(r => r.status), ['removed', 'absent', 'absent']);
+  assert.ok(fs.existsSync(bystander));
+  assert.equal(isDeletable(bystander, home), false);
+  assert.equal(isDeletable(path.join(home, 'elsewhere', 'policy-ab-canary-1.md'), home), false);
+  assert.equal(canaryTargets(home).length, 3);
 });
 
 test('holdout, commands, gitlink, scrub helpers', () => {

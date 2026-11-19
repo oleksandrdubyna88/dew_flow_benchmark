@@ -11,6 +11,9 @@ import { DEFAULT_LIMITS } from '../lib/limits.mjs';
 import { assertWorkRoot, heldoutScore, makeHeldoutDep, runSuite, sweepLeftovers, withClearSuite } from '../lib/heldout-run.mjs';
 import { homeDir, pythonGate, sandboxGate, tmpDir } from './helpers.mjs';
 import { writeToySuite } from './toy-suite.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 
 /** A toy suite on disk, sealed with a throwaway key. */
 function sealedToy() {
@@ -80,8 +83,8 @@ test('An_unreadable_or_empty_result_is_unknown_never_zero', () => {
 });
 
 test('The_work_root_must_be_under_the_home_and_never_under_the_temp_directory', () => {
-  assert.equal(assertWorkRoot(path.join(os.tmpdir(), 'x')).ok, false);
-  assert.match(assertWorkRoot(path.join(os.tmpdir(), 'x')).reason, /temp/i);
+  assert.equal(assertWorkRoot(path.join(owned.tempRoot(), 'x')).ok, false);
+  assert.match(assertWorkRoot(path.join(owned.tempRoot(), 'x')).reason, /temp/i);
   assert.equal(assertWorkRoot('/var/lib/x').ok, false);
   assert.equal(assertWorkRoot('relative/path').ok, false);
   assert.equal(assertWorkRoot(os.homedir()).ok, false, 'the home itself is too wide');
@@ -100,7 +103,7 @@ test('A_work_root_inside_a_git_worktree_is_refused', () => {
 
 test('A_link_from_the_home_to_the_temp_directory_does_not_pass_as_under_the_home', () => {
   const link = path.join(homeDir('linkroot'), 'to-tmp');
-  symlinkSync(os.tmpdir(), link);
+  symlinkSync(owned.tempRoot(), link);
   const r = assertWorkRoot(path.join(link, 'sub'));
   assert.equal(r.ok, false);
   assert.match(r.reason, /temp/i);
@@ -108,9 +111,9 @@ test('A_link_from_the_home_to_the_temp_directory_does_not_pass_as_under_the_home
 
 test('The_clear_suite_is_decrypted_only_under_the_home_and_removed_after_scoring', async () => {
   const { suiteEnc, keyFile } = sealedToy();
-  const refused = await withClearSuite({ suiteEnc, keyFile, workRoot: path.join(os.tmpdir(), 'mgb-clear') }, () => assert.fail('must not run'));
+  const refused = await withClearSuite({ suiteEnc, keyFile, workRoot: path.join(owned.tempRoot(), 'mgb-clear') }, () => assert.fail('must not run'));
   assert.equal(refused.ok, false);
-  assert.equal(existsSync(path.join(os.tmpdir(), 'mgb-clear')), false, 'nothing created under the temp directory');
+  assert.equal(existsSync(path.join(owned.tempRoot(), 'mgb-clear')), false, 'nothing created under the temp directory');
 
   const workRoot = homeDir('clear');
   let seen;
@@ -137,28 +140,30 @@ test('A_wrong_key_or_a_missing_suite_is_a_value_and_leaves_no_directory', async 
   assert.deepEqual(readdirSync(path.join(workRoot, 'score-tmp')), []);
 });
 
-test('Sweep_lists_every_score_tmp_entry_and_the_testsToDelete_root_entries_and_removes_nothing_by_age', () => {
+test('Sweep_lists_every_score_tmp_entry_and_the_prefixed_root_entries_and_removes_nothing_by_age', () => {
   const workRoot = homeDir('sweep');
+  const leftOver = owned.ownedName('leftover'); // the fixtures are in the owner form: the one test about prefixed names takes owner-form fixtures
+  const inScore = owned.ownedName('inscore');
   const base = path.join(workRoot, 'score-tmp');
   for (const name of ['old-1', 'young-2']) mkdirSync(path.join(base, name), { recursive: true, mode: 0o700 });
   writeFileSync(path.join(base, 'old-1', 'leftover'), 'x');
   const longAgo = new Date(Date.now() - 25 * 3600 * 1000);
   utimesSync(path.join(base, 'old-1'), longAgo, longAgo);
-  mkdirSync(path.join(workRoot, 'testsToDelete-left-over'), { mode: 0o700 });
+  mkdirSync(path.join(workRoot, leftOver), { mode: 0o700 });
   mkdirSync(path.join(workRoot, 'unrelated-keep'), { mode: 0o700 });
-  utimesSync(path.join(workRoot, 'testsToDelete-left-over'), longAgo, longAgo);
+  utimesSync(path.join(workRoot, leftOver), longAgo, longAgo);
   utimesSync(path.join(workRoot, 'unrelated-keep'), longAgo, longAgo);
-  mkdirSync(path.join(base, 'testsToDelete-in-score'), { mode: 0o700 });
-  utimesSync(path.join(base, 'testsToDelete-in-score'), longAgo, longAgo);
+  mkdirSync(path.join(base, inScore), { mode: 0o700 });
+  utimesSync(path.join(base, inScore), longAgo, longAgo);
   const swept = sweepLeftovers({ workRoot, nowMs: Date.now() });
   assert.deepEqual(Object.keys(swept), ['listed'], 'it only lists: nothing is removed, kept or failed');
-  assert.deepEqual(swept.listed.map(l => l.entry), ['score-tmp/old-1', 'score-tmp/testsToDelete-in-score', 'score-tmp/young-2', 'testsToDelete-left-over']);
+  assert.deepEqual(swept.listed.map(l => l.entry), ['score-tmp/old-1', `score-tmp/${inScore}`, 'score-tmp/young-2', leftOver]);
   assert.deepEqual(swept.listed.map(l => l.prefixed), [false, true, false, true], 'prefixed says which entries are testsToDelete names, at the root or under score-tmp');
   const age = Object.fromEntries(swept.listed.map(l => [l.entry, l.ageHours]));
-  assert.ok(age['score-tmp/old-1'] >= 25 && age['score-tmp/testsToDelete-in-score'] >= 25 && age['testsToDelete-left-over'] >= 25, JSON.stringify(age));
+  assert.ok(age['score-tmp/old-1'] >= 25 && age[`score-tmp/${inScore}`] >= 25 && age[leftOver] >= 25, JSON.stringify(age));
   assert.ok(age['score-tmp/young-2'] >= 0 && age['score-tmp/young-2'] < 1, JSON.stringify(age));
-  for (const p of [path.join(base, 'old-1', 'leftover'), path.join(base, 'young-2'), path.join(base, 'testsToDelete-in-score'),
-    path.join(workRoot, 'testsToDelete-left-over'), path.join(workRoot, 'unrelated-keep')]) assert.equal(existsSync(p), true, `${p} still exists: age authorises no removal`);
+  for (const p of [path.join(base, 'old-1', 'leftover'), path.join(base, 'young-2'), path.join(base, inScore),
+    path.join(workRoot, leftOver), path.join(workRoot, 'unrelated-keep')]) assert.equal(existsSync(p), true, `${p} still exists: age authorises no removal`);
 });
 
 test('Sweep_of_an_absent_work_root_or_an_absent_score_tmp_lists_nothing_and_does_not_throw', () => {

@@ -13,6 +13,9 @@ import { casesTreeHash } from '../lib/heldout-quick.mjs';
 import { closeClearFolder, openClearFolder, sweepClearFolder } from '../lib/package-seal.mjs';
 import { seriesLockProblem } from '../lib/pass-locks.mjs';
 import { sealedClosed } from './quick-heldout-fixture.mjs';
+import { classifyName, ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 const NAME = '.clear.lock';
 const DEAD = 2 ** 22 - 1;
 const alive = (...pids) => pid => pids.includes(pid);
@@ -163,7 +166,7 @@ test('Two_opens_at_once_make_one_cases_folder', async () => {
   assert.equal(late.ok, false, 'the second ran while the first held the lock: it is refused with the holder named, never a second folder');
   assert.match(late.reason, new RegExp(`pid ${process.pid}`));
   assert.equal(casesTreeHash(w.casesDir).ok, true);
-  assert.deepEqual(readdirSync(w.heldoutDir).filter(n => /^testsToDelete-/.test(n)), [], 'no temporary folder is left');
+  assert.deepEqual(readdirSync(w.heldoutDir).filter(n => classifyName(n).form !== 'none'), [], 'no temporary folder is left');
   const unsealed = w.spies.unseal;
   const third = await openClearFolder(w.args);
   assert.equal(third.ok, true, third.reason);
