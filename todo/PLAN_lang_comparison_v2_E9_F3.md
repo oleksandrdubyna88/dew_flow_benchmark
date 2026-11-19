@@ -260,14 +260,36 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
   not used for a Stage 1 series.
 - **The rids** of data sessions are the parent's §4.4 form without a group: the first six hex digits of the sha256 of
   `<seed>:bare:t<task>:<stack>:r<round>:a<attempt>`. A seed whose 120 possible rids (six tasks, two stacks, five rounds, two
-  attempts) are not all distinct is refused when the seed is drawn, before its hash is committed, and another is drawn. The
-  A/A's and the pilot's sessions keep `pilotRid` (they run before the seed is revealed).
+  attempts) are not all distinct is refused when the seed is drawn, before its hash is committed, and another is drawn.
+  **`seedProblem` is pure in PR 2 and no command calls it yet. Its wiring into the real draw-and-commit path is PR 5's seed
+  verb and a prerequisite of it:** `explore.mjs seed-commit` asks `seedProblem` of each drawn seed and draws another before
+  it writes the seed file or the hash (PR 5's scenario 65a). Until PR 5 merges no seed is committed. The A/A's and the
+  pilot's sessions keep `pilotRid` (they run before the seed is revealed).
 - **Which stack is launched and scored first** in a slot is a seeded bit, as v1's `firstStack` (`bare-plan.mjs:35`), with the
   task and the round in its text.
 - **The barrier and the round rule.** A slot is offered only when every earlier slot is finished (`pairComplete`: both stacks
   scored, or void after the one re-run). A void is re-run once, alone, as `ran unpaired`, before the next slot (the barrier as
   `lib/series.mjs` has it; the parent's §4.4 words it differently and the operative part holds: §11, closed point 1). Round r + 1 therefore never starts while a
   pair of round r is unscored; the module also states that as its own check, so a later change to the barrier cannot lose it.
+- **What `nextSlot` says: the slot and exactly what is still to run** (plan round 2, finding 2). `ok(...)` is never the slot
+  alone: it carries `action` (`plan`, `resume` or `rerun`) and `todo`, the sessions still to run, each with its `stack`,
+  `attempt`, `rid` and `step`, so a caller can neither repeat a scored attempt nor launch both stacks when one is done. The
+  decision per session state, the same for a slot and for a pilot pair:
+
+  | The stack's last session | `todo` |
+  |---|---|
+  | none (absent) in both stacks | both stacks, attempt 1, step `plan`, the leading stack first |
+  | none in one stack and a session in the other | a refusal naming the unit (`holds sessions of one stack only`): the two stacks are planned together |
+  | `planned`, never started | that session, step `launch` |
+  | `launching` (a crash or a halt cut the launch short) | that session, step `settle` (v1's reconcile settles it; it is neither launched again nor charged twice) |
+  | ended with data, not scored (a killed or crashed session is a data attempt) | that session, step `score` |
+  | scored | nothing: a scored attempt is never repeated |
+  | void at attempt 1 | that stack alone, attempt 2, its own rid, step `plan` (`rerun`) |
+  | void at attempt 2 | nothing: the cell ends `missing` |
+  | a stop | a refusal: the series' launches end for good |
+
+  Anything open (`launch`, `settle`, `score`) is finished before a void is re-run. So after a restart with the first stack
+  scored and the second not started only the second is offered, and after a void only that stack's re-run.
 - **What is never re-run.** A session whose scoring is decided (`accepted`, `rejected`, `intermittently incorrect`) is a data
   attempt and is finished. Only a void is offered a re-run: an `unscored: environment` session (`VOID_UNSCORED`) and v1's void
   classes. A killed or crashed session is a data attempt (§9).
@@ -276,6 +298,15 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
   (§3, condition 2). The module takes both facts as arguments.
 - **The read-back pairs.** One slot of round 1 and one of round 2, one of a daemon task and one of a web task, named from the
   seed, so they are not picked after a result is seen.
+- **Read-back lines are keyed by the attempt's rid** (plan round 2, findings 1, 4 and 6). Rids differ per attempt by
+  construction (`...:a<attempt>`), so a line about attempt 1 is never a line about attempt 2. (1) **Reconciliation:** a
+  dated `G-1 | refuted` line whose rid is a scored session of a read-back slot makes that attempt `void: harness` for the
+  schedule, even when the run-map still says scored (the harness applies the same line when it rescores, PR 3); `nextSlot`
+  then offers that stack's re-run, attempt 2, under its rid. A line whose rid is no session of a read-back slot, a line
+  of another row (`G-1` only) and a verdict word other than `holds` and `refuted` reconcile nothing and satisfy nothing.
+  (2) **Who counts:** only a scored, non-void attempt of a read-back slot counts and needs its own `holds` line; a void
+  attempt needs none (its re-run is the next step and needs its own line), and the line of the original attempt, `holds` or
+  `refuted`, neither releases nor fails the re-run.
 - **The read-back gate: nothing runs past an unread read-back slot** (plan round 1, finding 2). When a read-back slot is
   scored, no later slot is offered until each of its two sessions that counts has its dated read-back line on `main`
   (`holds` or `refuted`). A `refuted` line makes that session `void: harness`; its one re-run is then the schedule's next
@@ -291,7 +322,11 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
   The two pilot pairs are kind `pilot`; in the daemon pair C# is on mask A, in the web pair on mask B. A pilot session that
   ends as a void is re-run once, alone; a void twin makes the A/A run again once, both twins, because one twin measures no
   spread. So the pilot is at most twelve sessions. The trees must cover the tasks 04, 05 and 10 (G-16); which of 05 and 10
-  is the daemon pair's and which the A/A's, and the A/A's stack, are data the pre-registration names (open point 2).
+  is the daemon pair's and which the A/A's, and the A/A's stack, are data the pre-registration names (open point 2, which
+  stays open: PR 2 only validates, the registered values come from PR 6). **The argument of `pilotPlan` and `pilotStep`** is
+  `{ aa: { task, stack }, daemon, web }`, every field required; `aa.task` and `daemon` are two distinct tasks of 05 and 10
+  in either order, `web` is 04, `aa.stack` is one of the two stacks, and the three trees therefore cover 04, 05 and 10. Anything
+  else is a refusal whose sentence starts with the field's path (`pilot.aa.stack: ...`).
 
 **Scenarios** (`test/stage-schedule.test.mjs`, pure):
 
@@ -312,6 +347,10 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
 12. `A_session_with_a_functional_failure_in_a_completed_pass_is_never_offered_a_re_run` — `rejected` and
     `intermittently incorrect` entries; the terminal rule of D71 at the schedule's level.
 13. `An_unscored_environment_session_is_a_void_and_is_offered_its_one_re_run`
+    - 13a. `The_offer_names_the_stack_the_attempt_the_rid_and_the_step_still_to_run_and_never_the_slot_alone` — the table of
+      the decision per session state: absent, planned, launching, killed with data, scored, void, re-run planned, one stack
+      only; a restart after the first stack was scored and before the second started offers only the second, a restart after a
+      void only that stack's re-run.
 14. `No_data_slot_is_offered_before_the_pilot_is_GO_and_the_seed_is_revealed`
 15. `Round_3_is_refused_until_the_read_back_lines_of_rounds_1_and_2_exist` — kept as the parent's own rule, with a map built
     by hand in which the gate of 15a was skipped.
@@ -323,18 +362,25 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
       any second void; nothing loops.
     - 15e. `A_read_back_line_for_a_slot_that_is_no_read_back_slot_opens_nothing_and_closes_nothing` — a line about another
       slot's rid neither satisfies the gate nor reopens a finished slot.
+    - 15f. `A_scored_attempt_with_a_refuted_line_becomes_its_re_run_through_nextSlot_by_the_attempts_rid` — the same map
+      with and without the line: the next slot, then only that stack's re-run, attempt 2, under its rid.
+    - 15g. `A_line_of_the_original_attempt_never_releases_the_re_run_and_each_attempt_has_its_own_rid`
+    - 15h. `A_void_attempt_needs_no_line_and_its_re_run_does`
 16. `The_read_back_pairs_are_named_by_the_seed_one_of_each_kind_in_rounds_1_and_2`
 17. `The_pilot_plan_holds_the_A_A_twins_on_the_two_masks_and_one_pair_per_kind_and_no_data_rid`
     - 17a. `A_void_pilot_session_is_re_run_once_alone_and_a_void_twin_runs_the_A_A_again_once_with_both_twins`
+    - 17b. `The_pilot_plans_argument_is_validated_field_by_field_and_each_refusal_names_its_field` — the control, 05 and 10 in
+      either order, and a refusal for each required field, each stack, each wrong task and the duplicate.
 
 **Brief (Sonnet coder).** Branch `feat/lang-v2-f3s1-schedule`. One new file and its test; `lib/series.mjs` gains nothing but
 an export of what the module needs (`pairComplete`, `stackState`, `MASKS`, `STACK_ORDER` are exported already). Functions under
 50 lines, complexity at most 4; the mask table is computed, never a literal list. The functions: `slotsOf({ seed })`,
 `maskOfSlot({ round, task, stack })`, `ridOfSlot(...)`, `firstStackOfSlot(...)`, `seedProblem(seed)`,
-`nextSlot({ map, slots, pilotGo, seedRevealed, readbackLines })` → `ok(slot)` | `fail(sentence)` | `ok(null)` when the series is
-done, `readbackSlots({ seed })`, `pilotPlan({ pilot })`. No command changes in this pull request.
+`nextSlot({ map, slots, pilotGo, seedRevealed, readbackLines })` → `ok(slot + { action, todo })` | `fail(sentence)` | `ok(null)` when the series is
+done, `slotProblem(...)` (the barrier and the round rule as a sentence), `readbackSlots({ seed })`, `pilotPlan({ pilot })`, `pilotStep({ map, pilot })`.
+`series.mjs` also gains an optional run-map kind on four functions (default `pilot`) and two exports (`stateOfSessions`, `isOpenSession`). No command changes in this pull request.
 
-**Done when:** the seventeen scenarios, 15a to 15e and 17a went red, green, red; §8's row for PR 2.
+**Done when:** the seventeen scenarios, 13a, 15a to 15h, 17a and 17b went red, green, red; §8's row for PR 2.
 
 ### (a) the series over six tasks — PR 3
 
@@ -706,7 +752,9 @@ fixes):
 4. **The seed.** `explore.mjs seed-commit` and `seed-reveal` over v1's `commitSeed` and `revealSeed`
    (`spikes/minigit-bench/lib/seed.mjs:29`, `:54`), which gain the prefix (`lv2-`), the list of files that must be in place
    first, and a check of the drawn seed (`seedProblem` of PR 2). The seed lives in `~/rsd/lang-v2/seeds/stage1.seed`, mode 600,
-   outside git; only its hash is in the tree until the reveal.
+   outside git; only its hash is in the tree until the reveal. **`seed-commit` asks PR 2's `seedProblem` of each drawn seed and
+   draws another when it refuses, before it writes the seed file or the hash** (a prerequisite carried from PR 2, where the
+   function is pure and no command calls it); no colliding seed is ever committed.
 5. **The CLI pin.** `prereg/pin-cli.mjs` copies the then-current CLI release into `~/rsd/lang-v2/toolchains/claude-<version>`
    (mode 0555) with v1's copy step (`bare-init.mjs`, extracted if it is private there), and writes the version, the path and
    the sha256 into `inputs/explore.json` `cli` (D8's re-pin, taken once: D47). The olympiad series are closed, so nothing else
@@ -725,6 +773,9 @@ v1's `test/prereg-fixtures.mjs`; v1's `prereg-guard.test.mjs` and `seed.test.mjs
 63. `The_registered_prompt_of_a_task_and_stack_is_the_text_the_engine_sends`
 64. `The_registered_statement_hashes_are_the_published_workspaces`
 65. `The_seed_is_in_the_tree_as_a_hash_only_until_it_is_revealed_and_a_seed_at_the_tag_is_refused`
+    - 65a. `The_real_draw_path_refuses_a_colliding_seed_and_draws_another_before_anything_is_committed` — the draw is given a
+      random source whose first seed collides (PR 2's fixture seed): the file and the hash written are the second seed's, and
+      nothing of the first is ever written.
 66. `No_registered_file_holds_a_case_id_a_trap_name_or_a_case_line` — the leak check's tiers over the folder, on fixtures.
 67. `The_contract_states_the_claims_limit_the_outcome_classes_and_the_void_line_in_the_parents_words`
 68. `The_schedule_file_is_refused_without_the_pilots_tasks_and_the_A_As_task_and_stack`

@@ -173,14 +173,14 @@ test('A_void_is_re_run_once_alone_before_the_next_slot_and_a_second_void_ends_th
   const voided = [[1, 'csharp', 1, VOID], [1, 'node', 1, GOOD]];
   const offer = next(voided).value;
   assert.deepEqual([offer.slot, offer.action, offer.rerun, offer.attempt], [1, 'rerun', 'csharp', 2]);
-  assert.deepEqual(offer.sessions.map(x => [x.rid, x.pair, x.stack, x.attempt, x.label, x.mask, x.kind]), [[SLOTS[0].rids.csharp[1], 1, 'csharp', 2, 'ran unpaired', SLOTS[0].masks.csharp, 'data']], 'one session, alone, under its own rid and the slot\'s mask');
+  assert.deepEqual(offer.todo.map(x => [x.rid, x.pair, x.stack, x.attempt, x.label, x.mask, x.kind]), [[SLOTS[0].rids.csharp[1], 1, 'csharp', 2, 'ran unpaired', SLOTS[0].masks.csharp, 'data']], 'one session, alone, under its own rid and the slot\'s mask');
   assert.match(slotProblem({ map: mapWith(voided), slots: SLOTS, slot: 2, ...GATES }), /a void is re-run once, alone, before the next slot: stage-run --what next/);
   assert.equal(next([...voided, [1, 'csharp', 2, GOOD]]).value.slot, 2, 'after the re-run the next slot is offered');
   const second = next([...voided, [1, 'csharp', 2, VOID]]).value;
   assert.deepEqual([second.slot, second.action], [2, 'plan'], 'a second void ends the cell: nothing loops, the next slot is offered');
   assert.equal(next([[1, 'csharp', 1, VOID], [1, 'node', 1, VOID]]).value.rerun, SLOTS[0].first, 'both stacks void: each is re-run alone, the stack that led first');
   const planned = next([...voided, [1, 'csharp', 2, 'planned']]).value;
-  assert.deepEqual([planned.action, planned.resumed], ['resume', [SLOTS[0].rids.csharp[1]]], 'a re-run a halt left planned is resumed, never planned twice');
+  assert.deepEqual([planned.action, planned.todo.map(x => [x.rid, x.step])], ['resume', [[SLOTS[0].rids.csharp[1], 'launch']]], 'a re-run a halt left planned is resumed, never planned twice');
 });
 
 test('A_session_with_a_functional_failure_in_a_completed_pass_is_never_offered_a_re_run', () => {
@@ -191,7 +191,7 @@ test('A_session_with_a_functional_failure_in_a_completed_pass_is_never_offered_a
     for (const failed of ['csharp', 'node']) {
       const other = failed === 'csharp' ? 'node' : 'csharp';
       const mixed = next([[1, failed, 1, data], [1, other, 1, VOID]]).value;
-      assert.deepEqual([mixed.action, mixed.rerun, mixed.sessions.length], ['rerun', other, 1], `${cls} on ${failed}: only the void ${other} is re-run, never the data attempt`);
+      assert.deepEqual([mixed.action, mixed.rerun, mixed.todo.length], ['rerun', other, 1], `${cls} on ${failed}: only the void ${other} is re-run, never the data attempt`);
     }
   }
 });
@@ -225,8 +225,8 @@ test('A_new_slot_plans_both_stacks_in_the_seeded_order_each_under_its_rid_and_ma
     const slot = SLOTS.find(s => s.slot > 1 && s.first === lead);
     const offer = next(finished(slot.slot - 1)).value;
     assert.deepEqual([offer.slot, offer.action, offer.round, offer.task], [slot.slot, 'plan', slot.round, slot.task]);
-    assert.deepEqual(offer.sessions.map(x => x.stack), lead === 'csharp' ? ['csharp', 'node'] : ['node', 'csharp'], `${lead} leads: it is launched first`);
-    assert.deepEqual(offer.sessions.map(x => [x.rid, x.attempt, x.label, x.mask, x.pair, x.kind, x.task, x.round]), offer.sessions.map(x => [slot.rids[x.stack][0], 1, 'paired', slot.masks[x.stack], slot.slot, 'data', slot.task, slot.round]));
+    assert.deepEqual(offer.todo.map(x => x.stack), lead === 'csharp' ? ['csharp', 'node'] : ['node', 'csharp'], `${lead} leads: it is launched first`);
+    assert.deepEqual(offer.todo.map(x => [x.rid, x.attempt, x.label, x.mask, x.pair, x.kind, x.task, x.round]), offer.todo.map(x => [slot.rids[x.stack][0], 1, 'paired', slot.masks[x.stack], slot.slot, 'data', slot.task, slot.round]));
   }
 });
 
@@ -276,7 +276,7 @@ test('A_refuted_read_back_makes_the_session_a_void_and_its_re_run_is_the_next_st
     const other = stack === 'csharp' ? 'node' : 'csharp';
     const step = asked(finished(rb.slot), [refuted(rb.slot, stack), holds(rb.slot, other)]).value;
     assert.deepEqual([step.slot, step.action, step.rerun, step.attempt], [rb.slot, 'rerun', stack, 2], `${stack} refuted`);
-    assert.equal(step.sessions[0].rid, rid(rb.slot, stack, 2));
+    assert.equal(step.todo[0].rid, rid(rb.slot, stack, 2));
   }
   const map = mapWith([...finished(rb.slot - 1), [rb.slot, 'csharp', 1, { class: 'void: harness', data: false, scored: false }], [rb.slot, 'node', 1, GOOD]]);
   assert.equal(nextSlot({ map, slots: SLOTS, ...GATES, readbackLines: [refuted(rb.slot, 'csharp'), holds(rb.slot, 'node')] }).value.rerun, 'csharp', 'the same step when the harness already wrote the void into the run-map');
@@ -362,27 +362,25 @@ test('The_pilot_plan_holds_the_A_A_twins_on_the_two_masks_and_one_pair_per_kind_
   assert.deepEqual(pairs[0].sessions.map(x => [x.kind, x.stack, x.mask]), [['pilot', 'csharp', MASKS.low], ['pilot', 'node', MASKS.high]], 'in the daemon pair C# is on mask A');
   assert.deepEqual(pairs[1].sessions.map(x => [x.kind, x.stack, x.mask]), [['pilot', 'csharp', MASKS.high], ['pilot', 'node', MASKS.low]], 'in the web pair C# is on mask B');
   assert.equal(JSON.stringify(plan.value).includes('rid'), false, 'no rid: the pilot runs before the seed is revealed, its sessions take `pilotRid` at planning and never a data rid');
-  for (const bad of [{ ...PILOT, daemon: '04' }, { ...PILOT, web: '05' }, { ...PILOT, aa: { task: '10', stack: 'rust' } }, { ...PILOT, web: '06' }, { ...PILOT, daemon: '99' }, { daemon: '05', web: '04' }]) assert.equal(pilotPlan({ pilot: bad }).ok, false, JSON.stringify(bad));
-  assert.match(pilotPlan({ pilot: { ...PILOT, web: '06' } }).reason, /the pilot's trees cover tasks 05, 06, 10, not 04/, 'G-16 needs tasks 04, 05 and 10 on real pilot trees');
-  assert.match(pilotPlan({ pilot: { ...PILOT, daemon: '04' } }).reason, /the daemon pair's task 04 is a web task/);
 });
 
 test('The_pilot_runs_the_A_A_then_the_daemon_pair_then_the_web_pair_and_each_must_be_finished_first', () => {
   const first = stepOfPilot([]).value;
-  assert.deepEqual([first.what, first.action, first.sessions.map(x => x.twin)], ['aa', 'plan', ['a', 'b']]);
+  assert.deepEqual([first.what, first.action, first.todo.map(x => x.twin)], ['aa', 'plan', ['a', 'b']]);
+  assert.deepEqual(first.todo.map(x => x.step), ['plan', 'plan']);
   const second = stepOfPilot(AA_DONE).value;
-  assert.deepEqual([second.what, second.action, second.sessions.map(x => x.stack)], ['pilot:05', 'plan', ['csharp', 'node']]);
+  assert.deepEqual([second.what, second.action, second.todo.map(x => x.stack)], ['pilot:05', 'plan', ['csharp', 'node']]);
   assert.equal(stepOfPilot([...AA_DONE, ...pairDone('05')]).value.what, 'pilot:04');
   assert.equal(stepOfPilot([...AA_DONE, ...pairDone('05'), ...pairDone('04')]).value, null, 'nothing more to run: the GO table judges');
   const halted = stepOfPilot([['aa', '10', 'csharp', 1, GOOD, 'a'], ['aa', '10', 'csharp', 1, 'planned', 'b']]).value;
-  assert.deepEqual([halted.what, halted.action, halted.resumed.length], ['aa', 'resume', 1], 'a halt leaves the twin planned: it is resumed, never planned twice');
+  assert.deepEqual([halted.what, halted.action, halted.todo.length], ['aa', 'resume', 1], 'a halt leaves the twin planned: it is resumed, never planned twice');
 });
 
 test('A_void_pilot_session_is_re_run_once_alone_and_a_void_twin_runs_the_A_A_again_once_with_both_twins', () => {
   const rerun = stepOfPilot([...AA_DONE, ['pilot', '05', 'csharp', 1, GOOD], ['pilot', '05', 'node', 1, VOID]]).value;
-  assert.deepEqual([rerun.what, rerun.action, rerun.rerun, rerun.attempt, rerun.sessions.map(x => [x.stack, x.attempt, x.mask, x.label])], ['pilot:05', 'rerun', 'node', 2, [['node', 2, MASKS.high, 'ran unpaired']]]);
+  assert.deepEqual([rerun.what, rerun.action, rerun.rerun, rerun.attempt, rerun.todo.map(x => [x.stack, x.attempt, x.mask, x.label])], ['pilot:05', 'rerun', 'node', 2, [['node', 2, MASKS.high, 'ran unpaired']]]);
   const again = stepOfPilot([['aa', '10', 'csharp', 1, GOOD, 'a'], ['aa', '10', 'csharp', 1, VOID, 'b']]).value;
-  assert.deepEqual([again.what, again.action, again.sessions.map(x => [x.twin, x.attempt, x.mask])], ['aa', 'again', [['a', 2, MASKS.low], ['b', 2, MASKS.high]]], 'both twins run again, the good one too: one twin measures no spread');
+  assert.deepEqual([again.what, again.action, again.todo.map(x => [x.twin, x.attempt, x.mask])], ['aa', 'again', [['a', 2, MASKS.low], ['b', 2, MASKS.high]]], 'both twins run again, the good one too: one twin measures no spread');
   const afterAgain = [['aa', '10', 'csharp', 1, GOOD, 'a'], ['aa', '10', 'csharp', 1, VOID, 'b'], ['aa', '10', 'csharp', 2, GOOD, 'a'], ['aa', '10', 'csharp', 2, GOOD, 'b']];
   assert.equal(stepOfPilot(afterAgain).value.what, 'pilot:05', 'the second run of the twins settles the A/A');
   const second = stepOfPilot([...afterAgain.slice(0, 3), ['aa', '10', 'csharp', 2, VOID, 'b']]);
@@ -396,7 +394,7 @@ test('The_pilot_is_at_most_twelve_sessions_even_when_every_pilot_session_and_one
     assert.equal(step.ok, true, step.reason);
     if (step.value === null) break;
     const voidFirst = x => (x.attempt === 1 && (x.kind === 'pilot' || x.twin === 'b') ? VOID : GOOD);
-    script = [...script, ...step.value.sessions.map(x => [x.kind, x.task, x.stack, x.attempt, voidFirst(x), x.twin])];
+    script = [...script, ...step.value.todo.map(x => [x.kind, x.task, x.stack, x.attempt, voidFirst(x), x.twin])];
   }
   assert.equal(script.length, 12, 'A/A: four, daemon pair: four, web pair: four');
   assert.equal(stepOfPilot(script).value, null);
@@ -407,4 +405,86 @@ test('A_pilot_stop_is_never_re_run_and_a_pair_holding_one_stack_only_is_refused'
   assert.match(stepOfPilot([...AA_DONE, ['pilot', '05', 'csharp', 1, GOOD], ['pilot', '05', 'node', 1, stop]]).reason, /^pilot pair of task 05 node ended with a stop \(stop: T1 breach\): a stopped series is never run again/);
   assert.match(stepOfPilot([...AA_DONE, ['pilot', '05', 'csharp', 1, GOOD]]).reason, /holds sessions of one stack only/);
   assert.match(stepOfPilot([['aa', '10', 'csharp', 1, GOOD, 'a'], ['aa', '10', 'csharp', 1, stop, 'b']]).reason, /^the A\/A b ended with a stop \(stop: T1 breach\): a stopped series is never run again/);
+});
+
+// ---- what the offer says: the stack, the attempt, the rid and the step ----------------------------------------------------------------------------------------------------------------------------------------
+
+const shape = offer => [offer.slot, offer.action, offer.todo.map(x => [x.stack, x.attempt, x.rid, x.step])];
+
+test('A_scored_attempt_with_a_refuted_line_becomes_its_re_run_through_nextSlot_by_the_attempts_rid', () => {
+  const [rb] = RB;
+  const script = finished(rb.slot);
+  const before = asked(script, [holds(rb.slot, 'csharp'), holds(rb.slot, 'node')]).value;
+  assert.deepEqual([before.slot, before.action], [rb.slot + 1, 'plan'], 'both attempts scored and read: the next slot');
+  const after = asked(script, [refuted(rb.slot, 'csharp'), holds(rb.slot, 'node')]).value;
+  assert.deepEqual(shape(after), [rb.slot, 'rerun', [['csharp', 2, rid(rb.slot, 'csharp', 2), 'plan']]], 'the same map, the line added: the scored attempt is void: harness and only its re-run is offered');
+  const strayRid = asked(script, [{ ...refuted(rb.slot, 'csharp'), rid: 'ffffff' }, holds(rb.slot, 'csharp'), holds(rb.slot, 'node')]).value;
+  assert.equal(strayRid.slot, rb.slot + 1, 'a refuted line whose rid is no session of the slot reconciles nothing');
+});
+
+test('The_offer_names_the_stack_the_attempt_the_rid_and_the_step_still_to_run_and_never_the_slot_alone', () => {
+  const [c1, n1] = [rid(1, 'csharp'), rid(1, 'node')];
+  const lead = SLOTS[0].first;
+  const order = stacks => (lead === 'csharp' ? stacks : [...stacks].reverse());
+  assert.deepEqual(shape(next([]).value), [1, 'plan', order([['csharp', 1, c1, 'plan'], ['node', 1, n1, 'plan']])], 'absent: both stacks are planned together, the leading one first');
+  assert.deepEqual(shape(next([[1, 'csharp', 1, GOOD], [1, 'node', 1, 'planned']]).value), [1, 'resume', [['node', 1, n1, 'launch']]], 'a restart after the first stack was scored and before the second started: only the second');
+  assert.deepEqual(shape(next([[1, 'node', 1, GOOD], [1, 'csharp', 1, 'launching']]).value), [1, 'resume', [['csharp', 1, c1, 'settle']]], 'launching (interrupted): settled, not launched again');
+  assert.deepEqual(shape(next([[1, 'csharp', 1, GOOD], [1, 'node', 1, { class: 'killed: cap', data: true, scored: false }]]).value), [1, 'resume', [['node', 1, n1, 'score']]], 'a killed or crashed session is a data attempt: it is scored, not re-run');
+  assert.deepEqual(shape(next([[1, 'csharp', 1, GOOD], [1, 'node', 1, GOOD]]).value).slice(0, 2), [2, 'plan'], 'scored: nothing of slot 1 is offered again');
+  assert.deepEqual(shape(next([[1, 'csharp', 1, VOID], [1, 'node', 1, GOOD]]).value), [1, 'rerun', [['csharp', 2, rid(1, 'csharp', 2), 'plan']]], 'a restart after a void: only that stack\'s re-run, never the scored stack');
+  assert.deepEqual(shape(next([[1, 'csharp', 1, VOID], [1, 'node', 1, 'planned']]).value), [1, 'resume', [['node', 1, n1, 'launch']]], 'what a halt left open is finished before the void is re-run');
+  assert.deepEqual(shape(next([[1, 'csharp', 1, VOID], [1, 'csharp', 2, 'planned'], [1, 'node', 1, GOOD]]).value), [1, 'resume', [['csharp', 2, rid(1, 'csharp', 2), 'launch']]], 'a re-run left planned is launched, not planned again');
+  assert.match(next([[1, 'csharp', 1, GOOD]]).reason, /holds sessions of one stack only/, 'a stack with no session beside one with sessions is a refusal, whatever the other one is');
+  assert.match(next([[1, 'csharp', 1, 'planned']]).reason, /holds sessions of one stack only/);
+});
+
+test('A_line_of_the_original_attempt_never_releases_the_re_run_and_each_attempt_has_its_own_rid', () => {
+  const [rb] = RB;
+  assert.notEqual(rid(rb.slot, 'csharp', 1), rid(rb.slot, 'csharp', 2), 'the rids differ per attempt by construction');
+  const script = [...finished(rb.slot - 1), [rb.slot, 'csharp', 1, VOID], [rb.slot, 'node', 1, GOOD], [rb.slot, 'csharp', 2, GOOD]];
+  const strayFirst = asked(script, [holds(rb.slot, 'csharp', 1), holds(rb.slot, 'node')]);
+  assert.equal(strayFirst.ok, false, 'the line of attempt 1 does not release attempt 2');
+  assert.ok(strayFirst.reason.includes(rid(rb.slot, 'csharp', 2)) && !strayFirst.reason.includes(rid(rb.slot, 'csharp', 1)), strayFirst.reason);
+  assert.equal(asked(script, [holds(rb.slot, 'csharp', 2), holds(rb.slot, 'node')]).value.slot, rb.slot + 1, 'its own line releases it');
+  const scored = [...finished(rb.slot), [rb.slot, 'csharp', 2, GOOD]];
+  const refutedFirst = asked(scored, [refuted(rb.slot, 'csharp', 1), holds(rb.slot, 'node')]);
+  assert.equal(refutedFirst.ok, false, 'the refuted line of attempt 1 is not a line of attempt 2');
+  assert.ok(refutedFirst.reason.includes(rid(rb.slot, 'csharp', 2)), refutedFirst.reason);
+  assert.equal(asked(scored, [refuted(rb.slot, 'csharp', 1), holds(rb.slot, 'csharp', 2), holds(rb.slot, 'node')]).value.slot, rb.slot + 1, 'and attempt 2\'s holds is not undone by attempt 1\'s refuted');
+});
+
+test('A_void_attempt_needs_no_line_and_its_re_run_does', () => {
+  const [rb] = RB;
+  const open = [...finished(rb.slot - 1), [rb.slot, 'csharp', 1, VOID], [rb.slot, 'node', 1, GOOD]];
+  assert.deepEqual(shape(asked(open, [holds(rb.slot, 'node')]).value), [rb.slot, 'rerun', [['csharp', 2, rid(rb.slot, 'csharp', 2), 'plan']]], 'the void attempt has no line to wait for: its re-run is the next step');
+  const final = [...open, [rb.slot, 'csharp', 2, VOID]];
+  assert.equal(asked(final, [holds(rb.slot, 'node')]).value.slot, rb.slot + 1, 'a void attempt after its re-run (the cell is missing) needs no line either');
+  const unread = asked([...open, [rb.slot, 'csharp', 2, GOOD]], [holds(rb.slot, 'node')]);
+  assert.ok(unread.ok === false && unread.reason.includes(rid(rb.slot, 'csharp', 2)) && !unread.reason.includes(rid(rb.slot, 'node')), `the scored re-run waits for its own line: ${unread.reason}`);
+});
+
+test('The_pilot_plans_argument_is_validated_field_by_field_and_each_refusal_names_its_field', () => {
+  const refused = (pilot, field) => {
+    const r = pilotPlan({ pilot });
+    assert.equal(r.ok, false, JSON.stringify(pilot));
+    assert.ok(r.reason.startsWith(`${field}: `), `${field}: ${r.reason}`);
+  };
+  assert.equal(pilotPlan({ pilot: PILOT }).ok, true, 'the control');
+  assert.equal(pilotPlan({ pilot: { aa: { task: '05', stack: 'node' }, daemon: '10', web: '04' } }).ok, true, 'the A/A and the daemon pair take 05 and 10 in either order, and the A/A either stack');
+  refused(undefined, 'pilot');
+  refused({ daemon: '05', web: '04' }, 'pilot.aa');
+  refused({ ...PILOT, aa: { stack: 'csharp' } }, 'pilot.aa.task');
+  refused({ ...PILOT, aa: { task: '10' } }, 'pilot.aa.stack');
+  refused({ ...PILOT, daemon: undefined }, 'pilot.daemon');
+  refused({ ...PILOT, web: undefined }, 'pilot.web');
+  refused({ ...PILOT, aa: { task: '10', stack: 'rust' } }, 'pilot.aa.stack');
+  refused({ ...PILOT, aa: { task: '04', stack: 'csharp' } }, 'pilot.aa.task');
+  refused({ ...PILOT, aa: { task: '99', stack: 'csharp' } }, 'pilot.aa.task');
+  refused({ ...PILOT, daemon: '04' }, 'pilot.daemon');
+  refused({ ...PILOT, daemon: '06' }, 'pilot.daemon');
+  refused({ ...PILOT, web: '05' }, 'pilot.web');
+  refused({ ...PILOT, web: '06' }, 'pilot.web');
+  refused({ ...PILOT, daemon: '10' }, 'pilot.daemon');
+  assert.match(pilotPlan({ pilot: { ...PILOT, daemon: '10' } }).reason, /distinct/, 'the A/A and the daemon pair are two different tasks');
+  assert.match(pilotPlan({ pilot: { ...PILOT, web: '06' } }).reason, /G-16/, 'the web pair is task 04 because G-16 needs its real pilot tree');
 });
