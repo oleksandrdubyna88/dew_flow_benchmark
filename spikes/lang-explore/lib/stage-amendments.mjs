@@ -24,11 +24,17 @@ const WORDS = 'an owner-go line needs the owner\'s words';
 const fieldsOf = line => (line.endsWith(' |') ? `${line} ` : line).split(' | ').map(x => x.trim());
 
 /** The scope of an `owner-go` line: `'pilot'` or `{ from, to }` of `rounds:<a>-<b>`; null when it is neither. */
+const roundsOf = text => {
+  const m = /^rounds:(\d+)-(\d+)$/.exec(text ?? '');
+  return m === null ? { from: 0, to: 0 } : { from: Number(m[1]), to: Number(m[2]) };
+};
+
+const legalRounds = ({ from, to }) => from >= 1 && from <= to && to <= STAGE_ROUNDS;
+
 function scopeOf(text) {
   if (text === 'pilot') return 'pilot';
-  const m = /^rounds:(\d+)-(\d+)$/.exec(text ?? '');
-  const [from, to] = m === null ? [0, 0] : [Number(m[1]), Number(m[2])];
-  return m !== null && from >= 1 && from <= to && to <= STAGE_ROUNDS ? { from, to } : null;
+  const rounds = roundsOf(text);
+  return legalRounds(rounds) ? rounds : null;
 }
 
 const SCOPE_SENTENCE = `the scope is pilot or rounds:<a>-<b> with 1 <= a <= b <= ${STAGE_ROUNDS}`;
@@ -90,10 +96,11 @@ const GO_FORMS = '`YYYY-MM-DD | owner-go | pilot | <the owner\'s words>` or `YYY
 /** What a launch's scope is, as the sentence names it. */
 const nameOf = scope => (scope.pilot === true ? 'the pilot' : `round ${scope.round}`);
 
+const roundProblem = round => (round >= 1 && round <= STAGE_ROUNDS ? null : `round ${round}: the rounds are 1 to ${STAGE_ROUNDS}`);
+
 function scopeProblem(scope) {
   if (scope?.pilot === true) return null;
-  if (!Number.isInteger(scope?.round)) return 'the scope of a launch is { pilot: true } or { round: n }';
-  return scope.round >= 1 && scope.round <= STAGE_ROUNDS ? null : `round ${scope.round}: the rounds are 1 to ${STAGE_ROUNDS}`;
+  return Number.isInteger(scope?.round) ? roundProblem(scope.round) : 'the scope of a launch is { pilot: true } or { round: n }';
 }
 
 /**
