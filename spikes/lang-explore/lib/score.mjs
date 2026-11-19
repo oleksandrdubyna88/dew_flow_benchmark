@@ -4,7 +4,8 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { makeWritable } from '../../minigit-bench/lib/cache-snapshot.mjs';
-import { scoreBoxArgv, scoreEnv } from '../../minigit-bench/lib/bwrap.mjs';
+import { scoreEnv } from '../../minigit-bench/lib/bwrap.mjs';
+import { scoringBoxArgv, scoringToolchains } from '../../minigit-bench/lib/score-box.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { excludedDirs, nodeFs } from '../../minigit-bench/lib/score-deps.mjs';
@@ -37,16 +38,29 @@ function isValueOf(argv, overrides, i) {
 /**
  * The two scoring box argvs the judge fills in per case: `buildBox` (the tree, a home and a tmp, and the cache copies, read-write) and `runBox` (the tree, a home and a tmp, no cache). Both carry
  * the locale (W3), the pilot's extra environment keys and `tsc` on PATH; neither binds the cases. Both are told the pinned SDK (`dotnetPin`, the pilot's `dotnet.sdk`): v1's scoring box hides every
- * other dotnet version of the host, as the session's box did (v1 E2 amendment 2026-11-19), and refuses a box with no pin. `exists` and `listDir` are the tests' seams.
+ * other dotnet version of the host, as the session's box did (v1 E2 amendment 2026-11-19), and refuses a box with no pin. With a pinned SDK directory (`dotnetDir`: a profile whose SDK is not the
+ * distribution's) the boxes bind it read-only, put it on PATH and hide the distribution's dotnet whole, as that session's box did; `DOTNET_ROOT` comes with the profile's `envExtra`, as it does for
+ * the session. The boxes are built by v1's `scoringBoxArgv` (`minigit-bench/lib/score-box.mjs`), never by `scoreBoxArgv` itself. `exists` and `listDir` are the tests' seams.
  */
-export function boxArgvs({ toolchainDirs, tsDir, nugetCache, npmCache, locale, envExtra, dotnetPin, operatorHome, exists, listDir }) {
+export function boxArgvs({ toolchainDirs, tsDir, nugetCache, npmCache, locale, envExtra, dotnetPin, dotnetDir = null, operatorHome, exists, listDir }) {
   const seams = { ...(exists ? { exists } : {}), ...(listDir ? { listDir } : {}) };
-  const common = { copyDir: PLACE.tree, home: PLACE.home, tmp: PLACE.tmp, toolchainDirs, cwd: PLACE.tree, locale, dotnetPin, ...(operatorHome ? { operatorHome } : {}), ...seams };
-  const env = { ...envExtra, PATH: `${scoreEnv({ ...common, toolchainDirs }).PATH}:${tsDir}/node_modules/.bin` };
+  const common = { copyDir: PLACE.tree, home: PLACE.home, tmp: PLACE.tmp, toolchainDirs, cwd: PLACE.tree, locale, dotnetPin, dotnetDir, ...(operatorHome ? { operatorHome } : {}), ...seams };
+  const env = { ...envExtra, PATH: `${scoreEnv({ ...common, toolchainDirs: scoringToolchains({ toolchainDirs, dotnetDir }) }).PATH}:${tsDir}/node_modules/.bin` };
   return {
-    buildBox: withEnv(scoreBoxArgv({ ...common, nugetCache, npmCache }), env),
-    runBox: withEnv(scoreBoxArgv(common), env),
+    buildBox: withEnv(scoringBoxArgv({ ...common, nugetCache, npmCache }), env),
+    runBox: withEnv(scoringBoxArgv(common), env),
   };
+}
+
+/**
+ * The SDK the judge's boxes are told: the profile's pin, and its pinned SDK directory when the world has one (`toolchains.dotnetDir`). A QUICK profile pins an SDK that is in no distribution root
+ * (`quick.dotnet`: it lives only in its pinned directory), so without that directory the box would hide every SDK of the host and hold none: refused here, naming the profile, before a build fails
+ * in a way that reads as the submission's. (Today a quick session is judged by lang-bench's execution layer and never reaches this judge; the refusal keeps it so, or makes it right.)
+ */
+export function judgeDotnet({ explore, toolchains }) {
+  const dotnetDir = toolchains.dotnetDir ?? null;
+  if (explore.quickProfile === true && dotnetDir === null) throw new Error(`the quick profile pins SDK ${explore.dotnet.sdk}, which is only in its pinned directory: the judge needs toolchains.dotnetDir, or its scoring box would hide every SDK of the host and hold none`);
+  return { dotnetPin: explore.dotnet.sdk, dotnetDir };
 }
 
 /** The pristine copy of a session's workspace: the agent's tree without the build output of the stack, with every frozen file put back as it was (the changes are reported, not silently repaired). */
@@ -183,7 +197,7 @@ export function judgeConfig({ explore, files, sets, limits, toolchains, caches, 
   const npmCache = copyCache(caches.npm, path.join(area, 'cache-npm'));
   const visibleDir = path.join(area, 'visible');
   writeSamples({ files, dir: visibleDir });
-  const boxes = boxArgvs({ toolchainDirs: toolchains.dirs, tsDir: toolchains.tsDir, nugetCache, npmCache, locale: explore.locale, envExtra: explore.envExtra, dotnetPin: explore.dotnet.sdk, operatorHome });
+  const boxes = boxArgvs({ toolchainDirs: toolchains.dirs, tsDir: toolchains.tsDir, nugetCache, npmCache, locale: explore.locale, envExtra: explore.envExtra, ...judgeDotnet({ explore, toolchains }), operatorHome });
   return { work: path.join(area, 'run'), tree: path.join(area, 'tree'), out: path.join(area, 'result.json'), limits, placeholders: PLACE, buildBox: boxes.buildBox, runBox: boxes.runBox, sets: [{ name: 'visible', dir: visibleDir }, ...sets] };
 }
 

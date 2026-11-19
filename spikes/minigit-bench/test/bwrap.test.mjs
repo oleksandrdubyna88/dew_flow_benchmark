@@ -7,7 +7,6 @@ import { test } from 'node:test';
 import { bind, devProc, isolation, roBind, roRoot, scoreBoxArgv, scoreEnv, setenvAll, tmpfs } from '../lib/bwrap.mjs';
 import { runBounded } from '../lib/run.mjs';
 import { installShim } from '../lib/visible.mjs';
-import { DOTNET_PIN } from './box-helpers.mjs';
 import { hostLacks, sandboxGate, stubTrees, tmpDir } from './helpers.mjs';
 
 const nodeToolchain = path.dirname(path.dirname(process.execPath));
@@ -18,7 +17,7 @@ function boxDirs(extra = {}) {
   const base = tmpDir('box');
   const dirs = { copyDir: path.join(base, 'copy'), casesDir: path.join(base, 'cases'), home: path.join(base, 'home'), tmp: path.join(base, 'tmp') };
   for (const d of Object.values(dirs)) mkdirSync(d, { recursive: true });
-  return { base, ...dirs, toolchainDirs: [], dotnetPin: DOTNET_PIN, ...extra };
+  return { base, ...dirs, toolchainDirs: [], ...extra };
 }
 
 /** Run `command` in the box. Every probe ends in a sentinel, so a box that failed to start can never look like a passing probe. */
@@ -62,7 +61,7 @@ function at(argv, ...frag) {
 
 test('The_box_hides_the_home_run_tmp_before_it_binds_what_lives_under_them_and_ends_at_the_double_dash', () => {
   const opts = { copyDir: '/work/copy', casesDir: '/work/cases', home: '/work/home', tmp: '/work/tmp', toolchainDirs: [`${os.homedir()}/.nvm/node`],
-    nugetCache: '/work/cache-nuget', npmCache: '/work/cache-npm', roFiles: ['/work/copy/test-v1.sh'], dotnetPin: DOTNET_PIN, exists: () => true, listDir: () => [] };
+    nugetCache: '/work/cache-nuget', npmCache: '/work/cache-npm', roFiles: ['/work/copy/test-v1.sh'], exists: () => true };
   const argv = scoreBoxArgv(opts);
   assert.equal(argv[0], 'bwrap');
   assert.equal(argv.at(-1), '--');
@@ -81,7 +80,7 @@ test('The_box_hides_the_home_run_tmp_before_it_binds_what_lives_under_them_and_e
 });
 
 test('Cases_are_bound_only_when_asked_for', () => {
-  const base = { copyDir: '/w/copy', home: '/w/home', tmp: '/w/tmp', dotnetPin: DOTNET_PIN };
+  const base = { copyDir: '/w/copy', home: '/w/home', tmp: '/w/tmp' };
   assert.equal(scoreBoxArgv({ ...base, exists: () => false }).includes('/w/cases'), false);
   assert.ok(at(scoreBoxArgv({ ...base, casesDir: '/w/cases', exists: () => false }), '--bind', '/w/cases', '/w/cases') > 0);
 });
@@ -91,7 +90,7 @@ test('The_score_env_is_the_allow_list_not_the_parents', () => {
   process.env.CLAUDE_CODE_OAUTH_TOKEN = 'sk-ant-parent-secret';
   try {
     const given = { home: '/w/home', tmp: '/w/tmp', toolchainDirs: ['/opt/t'], nugetCache: '/w/nuget', npmCache: '/w/npm' };
-    const argv = scoreBoxArgv({ copyDir: '/w/copy', casesDir: '/w/cases', ...given, dotnetPin: DOTNET_PIN, exists: () => false });
+    const argv = scoreBoxArgv({ copyDir: '/w/copy', casesDir: '/w/cases', ...given, exists: () => false });
     const pairs = [];
     argv.forEach((a, i) => { if (a === '--setenv') pairs.push([argv[i + 1], argv[i + 2]]); });
     const keys = pairs.map(([k]) => k);

@@ -1,6 +1,6 @@
 // Inside the boxes (plan T-X4 and D38): the locale reaches both boxes for both stacks (`LANG` / `LC_ALL` `de_DE.UTF-8`, .NET `CurrentCulture` `de-DE`, Node's `Intl` locale `de...`), and the process
 // `run.sh` starts is `dotnet` or `node`, not `bash`. The workspaces are the pilot's templates with a four-line program; the spec text is a stand-in with one readable sample (the workspace refuses a spec whose samples table it cannot read), so no task repository is read.
-import '../../minigit-bench/test/fake-home.mjs';
+import { realHome } from '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -11,7 +11,10 @@ import { runBounded } from '../../minigit-bench/lib/run.mjs';
 import { agentBoxPrefix, agentEnv, dummyToken, sessionLayout } from '../../minigit-bench/lib/sandbox.mjs';
 import { nodeDir, probeArgv } from '../../minigit-bench/test/box-helpers.mjs';
 import { hostLacks, sandboxGate, tmpDir } from '../../minigit-bench/test/helpers.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
+import { quickExplore, quickPaths } from '../lib/quick.mjs';
+import { PLACE, boxArgvs, judgeDotnet } from '../lib/score.mjs';
 import { fillWorkspace, workspaceFiles } from '../lib/workspace.mjs';
 
 const EXPLORE = loadExplore().value;
@@ -59,7 +62,7 @@ test('The_scoring_box_gives_both_stacks_the_locale_too', async t => {
     const dirs = Object.fromEntries(['copy', 'home', 'tmp'].map(n => [n, path.join(base, n)]));
     for (const d of Object.values(dirs)) mkdirSync(d, { recursive: true });
     workspace(stack, dirs.copy);
-    const argv = scoreBoxArgv({ copyDir: dirs.copy, home: dirs.home, tmp: dirs.tmp, toolchainDirs: [nodeDir], cwd: dirs.copy, locale: EXPLORE.locale, dotnetPin: EXPLORE.dotnet.sdk });
+    const argv = scoreBoxArgv({ copyDir: dirs.copy, home: dirs.home, tmp: dirs.tmp, toolchainDirs: [nodeDir], cwd: dirs.copy, locale: EXPLORE.locale });
     const r = await probeArgv(argv, COMMANDS[stack], undefined, { timeoutMs: 180_000 });
     check(stack, r.out);
   }
@@ -71,7 +74,7 @@ test('Without_the_locale_seam_the_same_programs_see_the_C_locale_so_the_probe_ca
   const dirs = Object.fromEntries(['copy', 'home', 'tmp'].map(n => [n, path.join(base, n)]));
   for (const d of Object.values(dirs)) mkdirSync(d, { recursive: true });
   workspace('node', dirs.copy);
-  const r = await probeArgv(scoreBoxArgv({ copyDir: dirs.copy, home: dirs.home, tmp: dirs.tmp, toolchainDirs: [nodeDir], cwd: dirs.copy, dotnetPin: EXPLORE.dotnet.sdk }), COMMANDS.node, undefined, { timeoutMs: 60_000 });
+  const r = await probeArgv(scoreBoxArgv({ copyDir: dirs.copy, home: dirs.home, tmp: dirs.tmp, toolchainDirs: [nodeDir], cwd: dirs.copy }), COMMANDS.node, undefined, { timeoutMs: 60_000 });
   assert.match(r.out.trim(), /\|C\.UTF-8\|undefined$/);
 });
 
@@ -105,4 +108,23 @@ test('The_process_run_sh_starts_is_the_program_itself_dotnet_or_node_and_not_bas
   workspace('node', nd);
   writeFileSync(path.join(nd, 'src', 'main.ts'), 'setTimeout(() => {}, 8000);\n');
   assert.match(await commOfRunSh(nd, env), /^node/, 'Node names its main thread node-MainThread');
+});
+
+test('The_judges_box_for_the_quick_profile_lists_exactly_the_profiles_sdk_from_its_pinned_directory', async t => {
+  if (!sandboxGate(t)) return;
+  const explore = quickExplore(EXPLORE, realHome);
+  const { dotnetDir } = quickPaths(EXPLORE, realHome);
+  const pin = EXPLORE.quick.dotnet.sdk;
+  if (!existsSync(path.join(dotnetDir, 'sdk', pin))) return hostLacks(t, `the quick profile's pinned SDK directory ${dotnetDir} (SDK ${pin}) is not on this host`);
+  const root = ownedFor({ token: 'bench' }).ownedDir(t, 'judge');
+  const dirs = { [PLACE.tree]: path.join(root, 'tree'), [PLACE.home]: path.join(root, 'home'), [PLACE.tmp]: path.join(root, 'tmp') };
+  for (const d of Object.values(dirs)) mkdirSync(d);
+  // the judge's own boxes for this profile (boxArgvs, with what judgeConfig hands it); the judge fills the three placeholders per case, here the test does
+  const { buildBox } = boxArgvs({ toolchainDirs: [nodeDir], tsDir: '/ts', locale: explore.locale, envExtra: explore.envExtra, ...judgeDotnet({ explore, toolchains: { dotnetDir } }), operatorHome: realHome }); // the REAL home is hidden, as in a run (this file's own HOME is a fake one): the directory shows only because it is bound
+  const box = buildBox.map(word => Object.entries(dirs).reduce((text, [place, dir]) => text.replaceAll(place, dir), word));
+  const r = await probeArgv(box, 'dotnet --list-sdks; echo "root=$DOTNET_ROOT"; ls /usr/lib/dotnet 2>/dev/null | wc -l', undefined, { timeoutMs: 60_000 });
+  t.diagnostic(`judge box, quick profile: ${JSON.stringify(r.out.trim().split('\n'))}`);
+  assert.deepEqual(r.out.trim().split('\n'), [`${pin} [${dotnetDir}/sdk]`, `root=${dotnetDir}`, '0'], 'one SDK, the profile\'s, from its pinned directory; DOTNET_ROOT is that directory; the distribution\'s dotnet is an empty folder');
+  // control: the same profile WITHOUT its pinned directory would get a box that hides every SDK of the host, which is why the judge refuses it
+  assert.throws(() => judgeDotnet({ explore, toolchains: {} }), /the quick profile pins SDK/);
 });

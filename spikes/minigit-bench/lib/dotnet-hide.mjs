@@ -60,9 +60,32 @@ export function otherDotnetVersions({ pin, roots = DISTRIBUTION_DOTNET, exists =
 }
 
 /**
- * The dotnet version folders ONE box hides, read from the host NOW, when the box is built: the same decision for the agent's box (`agentBoxPrefix`) and the scoring box (`scoreBoxArgv`), so the two
- * cannot drift and no caller can hold a stale list. A box with a pinned SDK directory (`dotnetDir`: the agent's box only, the scoring box has no such switch) gets nothing here (`agentBoxPrefix` hides the distribution's roots whole for it, by itself); every
+ * The dotnet version folders ONE box hides, read from the host NOW, when the box is built: the same decision for the agent's box (`agentBoxPrefix`) and the scoring box (`scoringBoxArgv` of `score-box.mjs`), so the two
+ * cannot drift and no caller can hold a stale list. A box with a pinned SDK directory (`dotnetDir`) gets nothing here (its builder hides the distribution's roots whole for it, `boxWholeHidden`); every
  * other box runs the distribution's dotnet and shows only `dotnetPin`'s versions. No pin and no pinned directory is refused (`otherDotnetVersions` throws, naming the shape): skipping would show
  * every SDK of the host, and a tree could be built, or scored, with another one.
  */
 export const boxDotnetHide = ({ dotnetDir, dotnetPin, exists, listDir }) => (dotnetDir ? [] : otherDotnetVersions({ pin: dotnetPin, exists, listDir }));
+
+/**
+ * The paths ONE box hides whole, besides the shared list: the caller's `hide`, in its order, then, for a box with a pinned SDK directory, every distribution dotnet root the caller did not name. The box
+ * derives the roots ITSELF (a pinned-toolchain program must not find the distribution's dotnet, and the apphost reads it when DOTNET_ROOT is unset): a caller that hands over `dotnetDir` and no `hide`
+ * must not get every SDK of the distribution beside the pinned one. Each path once, so a caller that names the roots too gets the argv it always got. The same for the agent's box and the scoring box.
+ */
+export const boxWholeHidden = ({ hide = [], dotnetDir }) => [...new Set([...hide, ...(dotnetDir ? DISTRIBUTION_DOTNET : [])])];
+
+const isDotnetPath = p => DISTRIBUTION_DOTNET.some(root => p === root || p.startsWith(`${root}/`));
+const holds = (bound, p) => p === bound || p.startsWith(`${bound.replace(/\/$/, '')}/`);
+
+/**
+ * Refuses a box in which a bind is, or holds, a dotnet folder the box hides (`hidden`: every path it mounts a tmpfs over; `binds`: every path it binds, the read-only root left out). A box binds
+ * AFTER it hides, so that what is bound back shows: a toolchain at `/usr/lib/dotnet`, or at `/usr/lib`, would bring the hidden versions back. The error names both paths. A bind BELOW a hidden
+ * folder shows only itself and is not refused.
+ */
+export function refuseBindOverHidden({ hidden, binds }) {
+  const dotnet = hidden.filter(isDotnetPath);
+  for (const bound of binds) {
+    const shown = dotnet.find(p => holds(bound, p));
+    if (shown !== undefined) throw new Error(`the bind ${bound} ${shown === bound ? 'is' : 'holds'} ${shown}, a dotnet folder this box hides: bound after the tmpfs, it would show that folder again, and the box is not built. Bind the toolchain's own directory, not a parent of the distribution's dotnet`);
+  }
+}

@@ -7,7 +7,6 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { scoreBoxArgv } from '../lib/bwrap.mjs';
 import { heldoutScore, runSuite, withClearSuite } from '../lib/heldout-run.mjs';
-import { DOTNET_PIN } from './box-helpers.mjs';
 import { homeDir, keyGate, pythonGate, sandboxGate, tmpDir } from './helpers.mjs';
 
 const SECRET = 'HOST-SECRET-must-never-reach-a-result';
@@ -22,7 +21,7 @@ async function runHostile(t, body, { phase = 'v1', timeoutS = 5, binaryOverride 
     chmodSync(binary, 0o755);
   }
   const work = homeDir('hostile-cases');
-  const box = [...scoreBoxArgv({ copyDir: dir, casesDir: work, home: tmpDir('hostile-home'), tmp: tmpDir('hostile-tmp'), roFiles: [], dotnetPin: DOTNET_PIN })];
+  const box = [...scoreBoxArgv({ copyDir: dir, casesDir: work, home: tmpDir('hostile-home'), tmp: tmpDir('hostile-tmp'), roFiles: [] })];
   const outPath = path.join(tmpDir('hostile-out'), 'result.json');
   const started = Date.now();
   const ran = await withClearSuite({ workRoot: homeDir('hostile'), rid: 'hostile' }, suiteDir =>
@@ -140,7 +139,7 @@ async function runBrokenCommand(t, command) {
   if (!keyGate(t) || !pythonGate(t) || !sandboxGate(t)) return null;
   const dir = tmpDir('broken-copy');
   const work = homeDir('broken-cases');
-  const box = [...scoreBoxArgv({ copyDir: dir, casesDir: work, home: tmpDir('broken-home'), tmp: tmpDir('broken-tmp'), dotnetPin: DOTNET_PIN })];
+  const box = [...scoreBoxArgv({ copyDir: dir, casesDir: work, home: tmpDir('broken-home'), tmp: tmpDir('broken-tmp') })];
   const binary = path.join(dir, 'minigit');
   const ran = await withClearSuite({ workRoot: homeDir('broken'), rid: 'broken' }, async suiteDir => {
     cpSync(path.join(suiteDir, 'refs', 'a', 'minigit'), path.join(dir, 'real'));

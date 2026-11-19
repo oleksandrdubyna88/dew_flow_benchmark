@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { bareSessionPlan } from '../lib/bare-plan.mjs';
 import { scoreBoxArgv } from '../lib/bwrap.mjs';
+import { scoringBoxArgv, scoringToolchains } from '../lib/score-box.mjs';
 import { snapshotBoxArgv, snapshotBoxFields } from '../lib/cache-snapshot.mjs';
 import { DISTRIBUTION_DOTNET, otherDotnetVersions } from '../lib/dotnet-hide.mjs';
 import { probeBoxPrefix } from '../lib/preflight.mjs';
@@ -138,27 +139,76 @@ test('A_snapshot_made_with_no_pin_of_its_callers_is_given_v1s_and_one_with_a_pin
 const score = { copyDir: '/w/copy', casesDir: '/w/cases', home: '/w/home', tmp: '/w/tmp', toolchainDirs: ['/t/node'], nugetCache: '/w/nuget', npmCache: '/w/npm', cwd: '/w/copy', operatorHome: HOME };
 
 test('The_scoring_box_hides_every_other_version_before_any_bind_and_it_is_the_agent_boxs_list', () => {
-  const argv = scoreBoxArgv({ ...score, dotnetPin: PIN, ...twoSdks });
-  assertHidesOtherVersions(argv, 'scoreBoxArgv');
+  const argv = scoringBoxArgv({ ...score, dotnetPin: PIN, ...twoSdks });
+  assertHidesOtherVersions(argv, 'scoringBoxArgv');
   const firstBind = argv.findIndex((a, i) => i > 2 && ['--bind', '--ro-bind'].includes(a)); // index 1 is the read-only root
   assert.ok(argv.lastIndexOf('--tmpfs') < firstBind, 'every tmpfs comes before the binds');
   const underRoots = a => tmpfsOf(a).filter(p => DISTRIBUTION_DOTNET.some(root => p.startsWith(`${root}/`)));
   assert.deepEqual(underRoots(argv), underRoots(agentBoxPrefix({ ...base, dotnetPin: PIN, ...twoSdks })), 'the two boxes hide the same folders: a tree is scored by the SDK it was built with');
+  // the box is scoreBoxArgv's own argv with the list put in, and nothing else touched: taking the list out again gives the primitive's argv word for word
+  const primitive = scoreBoxArgv({ ...score, exists: twoSdks.exists });
+  assert.deepEqual(argv.filter((a, i) => !(a === '--tmpfs' && expected.includes(argv[i + 1])) && !(argv[i - 1] === '--tmpfs' && expected.includes(a))), [...primitive]);
+  assert.equal(argv.indexOf(expected[0]) - 1, primitive.findIndex((a, i) => i > 2 && ['--bind', '--ro-bind'].includes(a)), 'the list sits exactly where the primitive\'s first bind was');
 });
 
-test('The_scoring_box_hides_nothing_of_dotnet_on_a_host_with_only_the_pin_and_its_argv_is_then_what_it_was', () => {
-  const now = scoreBoxArgv({ ...score, dotnetPin: PIN, ...oneSdk });
+test('The_scoring_box_hides_nothing_of_dotnet_on_a_host_with_only_the_pin_and_its_argv_is_then_the_primitives', () => {
+  const now = scoringBoxArgv({ ...score, dotnetPin: PIN, ...oneSdk });
   assert.deepEqual(tmpfsOf(now), [HOME], 'the fixture has no /mnt, /run, /tmp, /var/tmp: the operator\'s home, and no dotnet folder');
-  assert.deepEqual(now.slice(0, 10), ['bwrap', '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc', '--tmpfs', HOME]);
-  assert.deepEqual(now.slice(10, 13), ['--ro-bind', '/t/node', '/t/node'], 'the binds follow the tmpfs directly, as before');
+  assert.deepEqual(now, scoreBoxArgv({ ...score, exists: oneSdk.exists }), 'byte for byte what lib/bwrap.mjs builds: that file is pinned and is not changed');
 });
 
-test('The_scoring_box_always_takes_the_version_list_it_has_no_pinned_directory_switch_and_none_without_a_pin', () => {
-  // the scoring box binds no SDK of its own and never hid the distribution: a `dotnetDir` there would only have switched the list OFF, so it has none
-  assertHidesOtherVersions(scoreBoxArgv({ ...score, dotnetPin: PIN, dotnetDir: '/dn', ...twoSdks }), 'scoreBoxArgv, a dotnetDir given');
-  assert.throws(() => scoreBoxArgv({ ...score, dotnetDir: '/dn', ...twoSdks }), /dotnetPin undefined is not an SDK version/, 'a directory is no substitute for the pin');
-  assert.throws(() => scoreBoxArgv({ ...score, ...twoSdks }), /dotnetPin undefined is not an SDK version/);
-  assert.throws(() => scoreBoxArgv({ ...score, ...oneSdk }), /dotnetPin undefined/, 'also on a host with one SDK');
+test('A_scoring_box_with_a_pinned_sdk_directory_binds_it_read_only_hides_every_distribution_root_itself_and_lists_nothing', () => {
+  const argv = scoringBoxArgv({ ...score, dotnetDir: '/dn', ...neverListed });
+  assertHidesWholeDistribution(argv, 'scoringBoxArgv, dotnetDir');
+  const at = (flag, a, b) => argv.findIndex((x, i) => x === flag && argv[i + 1] === a && argv[i + 2] === b);
+  assert.ok(at('--ro-bind', '/dn', '/dn') > argv.lastIndexOf('--tmpfs'), 'the pinned directory is bound read-only, after every tmpfs');
+  assert.equal(argv.filter((x, i) => x === '--ro-bind' && argv[i + 1] === '/dn').length, 1, 'once');
+  const path_ = argv[argv.findIndex((x, i) => x === '--setenv' && argv[i + 1] === 'PATH') + 2];
+  assert.equal(path_, '/t/node/bin:/t/node:/dn/bin:/dn:/usr/bin:/bin', 'and it is on PATH with the other toolchains');
+  assert.deepEqual(scoringBoxArgv({ ...score, toolchainDirs: ['/t/node', '/dn'], dotnetDir: '/dn', ...neverListed }), argv, 'a caller that lists the directory among its toolchains too gets the same argv');
+  assert.deepEqual([...scoringToolchains({ toolchainDirs: ['/t/node'], dotnetDir: '/dn' })], ['/t/node', '/dn']);
+  assert.deepEqual(scoringBoxArgv({ ...score, dotnetDir: '/dn', dotnetPin: PIN, ...neverListed }), argv, 'a pin given beside the pinned directory changes nothing');
+});
+
+test('A_scoring_box_with_no_pinned_directory_and_no_pin_is_refused_and_the_refusal_names_the_pin', () => {
+  assert.throws(() => scoringBoxArgv({ ...score, ...twoSdks }), /dotnetPin undefined is not an SDK version/);
+  assert.throws(() => scoringBoxArgv({ ...score, ...oneSdk }), /dotnetPin undefined/, 'also on a host with one SDK');
+});
+
+test('The_place_of_the_scoring_boxs_dotnet_tmpfs_is_asserted_on_the_argv_it_is_given_never_guessed', () => {
+  const given = { ...score, dotnetPin: PIN, ...twoSdks };
+  const shaped = argv => () => scoringBoxArgv({ ...given, scoreBox: () => argv });
+  assert.throws(shaped(['bwrap', '--dev', '/dev', '--bind', '/w', '/w', '--']), /does not open with its program and --ro-bind \/ \//);
+  assert.throws(shaped(['bwrap', '--ro-bind', '/', '/', '--dev', '/dev', '--']), /binds nothing after its root/);
+  assert.throws(shaped(['bwrap', '--ro-bind', '/', '/', '--bind', '/w', '/w', '--tmpfs', '/late', '--']), /holds a tmpfs \(\/late\) after its first bind \(\/w\)/);
+  assert.doesNotThrow(shaped(['bwrap', '--ro-bind', '/', '/', '--tmpfs', '/early', '--bind', '/w', '/w', '--']));
+});
+
+/** A bind that is, or holds, a dotnet folder the box hides: on the distribution's dotnet (version folders) and with a pinned directory (the roots). */
+const OVER = [['/usr/lib/dotnet', 'holds'], ['/usr/lib', 'holds'], ['/usr', 'holds'], [`${ROOT}/sdk/${SDK_11.sdk}`, 'is']];
+const refusalOf = (bound, word, hidden) => e => e.message.startsWith(`the bind ${bound} ${word} ${hidden}, a dotnet folder this box hides`);
+
+test('The_agents_box_refuses_a_bind_that_is_or_holds_a_dotnet_folder_it_hides_naming_both_paths', () => {
+  for (const [bound, word] of OVER) {
+    const hidden = expected.find(p => p === bound || p.startsWith(`${bound}/`));
+    assert.throws(() => agentBoxPrefix({ ...base, toolchains: [bound], dotnetPin: PIN, ...twoSdks }), refusalOf(bound, word, hidden), `toolchains: ${bound}`);
+  }
+  assert.throws(() => agentBoxPrefix({ ...base, extraRw: ['/usr/lib'], dotnetPin: PIN, ...twoSdks }), refusalOf('/usr/lib', 'holds', expected[0]), 'any bind, a writable one too');
+  assert.throws(() => agentBoxPrefix({ ...base, toolchains: ['/usr/lib/dotnet'], dotnetDir: '/dn', ...neverListed }), refusalOf('/usr/lib/dotnet', 'is', '/usr/lib/dotnet'), 'with a pinned directory the hidden folder is the root itself');
+  assert.throws(() => agentBoxPrefix({ ...base, toolchains: ['/usr/lib'], dotnetDir: '/usr/lib/dotnet', ...neverListed }), /the bind \/usr\/lib holds \/usr\/lib\/dotnet/, 'the distribution\'s own folder cannot be "pinned" beside itself');
+  for (const fine of ['/usr/lib/node', '/usr/lib/dotnet-tools', `${ROOT}/sdk/${PIN}`, `${ROOT}/sdk/${SDK_11.sdk}/inner`]) assert.doesNotThrow(() => agentBoxPrefix({ ...base, toolchains: [fine], dotnetPin: PIN, ...twoSdks }), `control: ${fine} holds no hidden folder`);
+  assert.doesNotThrow(() => agentBoxPrefix({ ...base, toolchains: ['/usr/lib'], dotnetPin: PIN, ...oneSdk }), 'control: on a host with only the pin nothing is hidden, so nothing can be shown again');
+});
+
+test('The_scoring_box_refuses_a_bind_that_is_or_holds_a_dotnet_folder_it_hides_naming_both_paths', () => {
+  for (const [bound, word] of OVER) {
+    const hidden = expected.find(p => p === bound || p.startsWith(`${bound}/`));
+    assert.throws(() => scoringBoxArgv({ ...score, toolchainDirs: [bound], dotnetPin: PIN, ...twoSdks }), refusalOf(bound, word, hidden), `toolchainDirs: ${bound}`);
+  }
+  assert.throws(() => scoringBoxArgv({ ...score, roFiles: ['/usr/lib'], dotnetPin: PIN, ...twoSdks }), refusalOf('/usr/lib', 'holds', expected[0]), 'any bind, a read-only file or folder too');
+  assert.throws(() => scoringBoxArgv({ ...score, toolchainDirs: ['/usr/lib/dotnet'], dotnetDir: '/dn', ...neverListed }), refusalOf('/usr/lib/dotnet', 'is', '/usr/lib/dotnet'));
+  for (const fine of ['/usr/lib/node', `${ROOT}/sdk/${PIN}`]) assert.doesNotThrow(() => scoringBoxArgv({ ...score, toolchainDirs: [fine], dotnetPin: PIN, ...twoSdks }), `control: ${fine}`);
+  assert.doesNotThrow(() => scoringBoxArgv({ ...score, toolchainDirs: ['/usr/lib'], dotnetPin: PIN, ...oneSdk }), 'control: nothing hidden, nothing to show again');
 });
 
 test('Both_boxes_refuse_to_be_built_on_a_host_where_a_version_folder_they_must_hide_is_a_link', () => {
@@ -166,7 +216,7 @@ test('Both_boxes_refuse_to_be_built_on_a_host_where_a_version_folder_they_must_h
   const host = fakeDirs(twoSdkHost(), { links: [link] });
   const refusal = e => e.message.startsWith(`${link} is a symbolic link`);
   assert.throws(() => agentBoxPrefix({ ...base, dotnetPin: PIN, ...host }), refusal, 'the agent\'s box');
-  assert.throws(() => scoreBoxArgv({ ...score, dotnetPin: PIN, ...host }), refusal, 'the scoring box');
+  assert.throws(() => scoringBoxArgv({ ...score, dotnetPin: PIN, ...host }), refusal, 'the scoring box');
   assert.doesNotThrow(() => agentBoxPrefix({ ...base, toolchains: ['/dn'], ...pinned, exists: host.exists, listDir: neverListed.listDir }), 'a box with a pinned SDK directory hides the roots whole and never looks');
 });
 

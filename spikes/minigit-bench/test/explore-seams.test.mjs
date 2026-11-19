@@ -14,7 +14,6 @@ import { launchSession } from '../lib/session-launch.mjs';
 import { AGENT_ENV_KEYS, agentEnv, dummyToken, layoutPaths, sessionLayout } from '../lib/sandbox.mjs';
 import { ok } from '../lib/result.mjs';
 import { context, items } from './bare-ctx.mjs';
-import { DOTNET_PIN } from './box-helpers.mjs';
 import { sandboxGate, spikeDir, tmpDir } from './helpers.mjs';
 import { RESULT, fakeDeps, goodInit, planFor, say } from './launch-fakes.mjs';
 import { observeAll, observeCells } from './explore-seams-observe.mjs';
@@ -125,7 +124,7 @@ test('W2_the_locale_of_the_plan_reaches_the_environment_the_box_is_spawned_with'
 
 // ---- W3: the scoring box's locale -----------------------------------------------------------------------------------------------------
 
-const SCORE_OPTS = { copyDir: '/w/copy', casesDir: '/w/cases', home: '/w/hm', tmp: '/w/tmp', toolchainDirs: ['/t/a'], nugetCache: '/w/nuget', npmCache: '/w/npm', cwd: '/w/copy', operatorHome: '/opt/operator-home', dotnetPin: DOTNET_PIN, exists: () => true, listDir: () => [] };
+const SCORE_OPTS = { copyDir: '/w/copy', casesDir: '/w/cases', home: '/w/hm', tmp: '/w/tmp', toolchainDirs: ['/t/a'], nugetCache: '/w/nuget', npmCache: '/w/npm', cwd: '/w/copy', operatorHome: '/opt/operator-home', exists: () => true };
 
 /** The `--setenv` pairs of a bwrap argv as an object. */
 const setenvOf = argv => Object.fromEntries(argv.flatMap((a, i) => (a === '--setenv' ? [[argv[i + 1], argv[i + 2]]] : [])));
@@ -154,7 +153,7 @@ test('W3_a_scoring_box_built_with_a_locale_runs_a_process_that_sees_it', async t
   const base = tmpDir('w3');
   const dirs = Object.fromEntries(['copy', 'cases', 'home', 'tmp'].map(n => [n, path.join(base, n)]));
   for (const d of Object.values(dirs)) mkdirSync(d, { recursive: true });
-  const argv = scoreBoxArgv({ copyDir: dirs.copy, casesDir: dirs.cases, home: dirs.home, tmp: dirs.tmp, toolchainDirs: [], locale: LOCALE, dotnetPin: DOTNET_PIN });
+  const argv = scoreBoxArgv({ copyDir: dirs.copy, casesDir: dirs.cases, home: dirs.home, tmp: dirs.tmp, toolchainDirs: [], locale: LOCALE });
   const r = await runBounded(argv[0], [...argv.slice(1), '/usr/bin/env'], { timeoutMs: 20_000 });
   assert.equal(r.ok, true, r.reason);
   const lines = r.value.stdout.split('\n');

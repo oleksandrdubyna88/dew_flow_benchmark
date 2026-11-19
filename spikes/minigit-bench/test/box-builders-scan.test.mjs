@@ -3,7 +3,9 @@
 // scan reads every production `.mjs` of `spikes/minigit-bench` and `spikes/lang-explore` (comments stripped, lines kept) and fails, naming file and line, when
 //   - anything that composes a bwrap argv (the word `bwrap` opening an argv or handed to a spawn, a bwrap flag written as a literal, a primitive of `lib/bwrap.mjs` called) sits in a file that is not
 //     in the table below, or a second argv is opened anywhere, the table's files included;
-//   - one of the two toolchain builders (`agentBoxPrefix`, `scoreBoxArgv`) no longer spreads `boxDotnetHide(...)` into its tmpfs list, or the list is computed anywhere else.
+//   - one of the two toolchain builders (`agentBoxPrefix`, `scoringBoxArgv`) no longer spreads `boxDotnetHide(...)` into its tmpfs list, or the list is computed anywhere else;
+//   - `scoreBoxArgv`, the scoring box WITHOUT the list (`lib/bwrap.mjs` is pinned by the language comparison's frozen spec and cannot carry it), is named by any production file but the one that
+//     wraps it, `lib/score-box.mjs`.
 // Each prohibition has its companion: the scan still finds every sanctioned site, and it names a bypass planted into a copy of a real file. No folder is made: the copies are strings.
 // Outside this scan: `spikes/lang-bench` builds boxes of its own (the execution layer; a pinned SDK directory, the whole distribution hidden) and is another harness's to guard.
 import assert from 'node:assert/strict';
@@ -42,7 +44,8 @@ const named = sites => sites.map(s => `${s.rel}:${s.line} ${s.kind} (in ${s.owne
 
 /** The files that may compose a bwrap argv, each with what it does and why that is no second road to a toolchain box. */
 const SANCTIONED = Object.freeze({
-  'minigit-bench/lib/bwrap.mjs': 'the primitives, and the scoring box: scoreBoxArgv',
+  'minigit-bench/lib/bwrap.mjs': 'the primitives, and scoreBoxArgv: the scoring box WITHOUT the dotnet list (this file is pinned by lang-bench\'s execution-layer identity, so the list cannot live in it)',
+  'minigit-bench/lib/score-box.mjs': 'scoringBoxArgv: scoreBoxArgv\'s argv with the dotnet tmpfs inserted before its first bind; the one scoring box a scorer builds',
   'minigit-bench/lib/sandbox.mjs': 'the agent\'s box: agentBoxPrefix (agentBoxArgv appends the command to it); boxView READS the flags of a recorded argv',
   'minigit-bench/lib/preflight.mjs': '`bwrap --version`, asked before any box is built: it builds none',
   'lang-explore/lib/oracle.mjs': 'bruteBoxArgv: the box of `python3 -I brute.py` over private material; PATH is /usr/bin:/bin, no toolchain is bound and nothing is built or scored in it, so it takes no pin',
@@ -50,7 +53,10 @@ const SANCTIONED = Object.freeze({
 });
 /** The three places an argv is opened: file -> the builder. Two run a toolchain and must take the dotnet list; the third is named with its reason above. */
 const BUILDERS = Object.freeze({ 'lang-explore/lib/oracle.mjs': 'bruteBoxArgv', 'minigit-bench/lib/bwrap.mjs': 'scoreBoxArgv', 'minigit-bench/lib/sandbox.mjs': 'agentBoxPrefix' });
-const TOOLCHAIN_BUILDERS = Object.freeze([['minigit-bench/lib/sandbox.mjs', 'agentBoxPrefix'], ['minigit-bench/lib/bwrap.mjs', 'scoreBoxArgv']]);
+const TOOLCHAIN_BUILDERS = Object.freeze([['minigit-bench/lib/sandbox.mjs', 'agentBoxPrefix'], ['minigit-bench/lib/score-box.mjs', 'scoringBoxArgv']]);
+/** The files that may name `scoreBoxArgv`, the scoring box without the list: where it is defined, and the one module that wraps it. */
+const NAMES_THE_BARE_SCORING_BOX = Object.freeze(['minigit-bench/lib/bwrap.mjs', 'minigit-bench/lib/score-box.mjs']);
+const naming = (sources, word) => sources.filter(s => new RegExp(`(?<![\\w$])${word}(?![\\w$])`).test(stripComments(s.text))).map(s => s.rel).sort();
 
 /** The sites that are outside the table, or open a second argv. */
 function bypasses(sources) {
@@ -92,7 +98,9 @@ test('The_scan_still_finds_every_sanctioned_site_and_the_three_builders_by_name'
 test('Both_toolchain_builders_take_the_dotnet_list_from_boxDotnetHide_and_nothing_else_computes_one', () => {
   const sources = production();
   assert.deepEqual(withoutTheList(sources), []);
-  assert.deepEqual(callers(sources, 'boxDotnetHide'), ['minigit-bench/lib/bwrap.mjs', 'minigit-bench/lib/sandbox.mjs'], 'the decision is taken by the two builders only');
+  assert.deepEqual(callers(sources, 'boxDotnetHide'), ['minigit-bench/lib/sandbox.mjs', 'minigit-bench/lib/score-box.mjs'], 'the decision is taken by the two builders only');
+  assert.deepEqual(naming(sources, 'scoreBoxArgv'), [...NAMES_THE_BARE_SCORING_BOX], 'no scorer builds its box from scoreBoxArgv itself: it comes through scoringBoxArgv, or it has no dotnet list');
+  assert.ok(naming(sources, 'scoringBoxArgv').length >= 3, 'and the scan still finds the scorers that do (v1\'s steps and the pilot\'s judge)');
   assert.deepEqual(callers(sources, 'otherDotnetVersions'), ['minigit-bench/lib/dotnet-hide.mjs'], 'and the list is computed in one place: no caller keeps a list of its own');
   const oracle = stripComments(sources.find(s => s.rel === 'lang-explore/lib/oracle.mjs').text);
   assert.match(oracle, /setenvAll\(\{ PATH: '\/usr\/bin:\/bin'/, 'the third builder binds no toolchain');
@@ -120,7 +128,10 @@ test('A_bypass_planted_into_a_copy_of_a_real_file_is_named_with_its_file_and_lin
     const found = named(bypasses(copy.sources));
     assert.ok(found.length > 0 && found.every(f => f.startsWith(`${file}:${copy.line} `) || f.startsWith(`${file}:${copy.line + 1} `)), `${file}:${copy.line} is named, and only it: ${found.join('; ')}`);
   }
-  // a builder that loses the list, in a copy: the line is the one of sandbox.mjs and bwrap.mjs that carries it
+  // a scorer that goes around the wrapper, in a copy of the pilot's judge
+  const around = planted(sources, 'lang-explore/lib/score.mjs', "import { scoreBoxArgv } from '../../minigit-bench/lib/bwrap.mjs';\nexport const bareBox = o => scoreBoxArgv(o);");
+  assert.deepEqual(naming(around.sources, 'scoreBoxArgv').filter(f => !NAMES_THE_BARE_SCORING_BOX.includes(f)), ['lang-explore/lib/score.mjs']);
+  // a builder that loses the list, in a copy: the line is the one of sandbox.mjs and score-box.mjs that carries it
   for (const [file, name] of TOOLCHAIN_BUILDERS) {
     const without = sources.map(s => (s.rel === file ? { rel: file, text: s.text.replace(/^.*\.\.\.boxDotnetHide\(.*\n/m, '') } : s));
     assert.notEqual(without.find(s => s.rel === file).text, sources.find(s => s.rel === file).text, `${file} holds the line`);

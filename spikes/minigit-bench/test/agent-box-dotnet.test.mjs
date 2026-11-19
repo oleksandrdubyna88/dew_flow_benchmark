@@ -1,16 +1,16 @@
 // The EFFECT of the dotnet hide list in the real box on this host (E2 amendment 2026-11-19, D-9; the plan gate's point 3). `box-dotnet-paths.test.mjs` shows every path sends the tmpfs; here bwrap, the
 // muxer and the SDK answer: the box lists one SDK, the pin, and a program built and run in it is built by the pinned SDK and runs on the pin's runtime. Each "cannot" has its control: the same probe
 // in the same box WITHOUT the computed tmpfs sees the other SDK. The hidden paths are read from `otherDotnetVersions`, never typed. Every folder is an owned one (`ownedDir`), removed with its test.
-// The last test is the SCORING box (`scoreBoxArgv`): the same list, so a tree is scored by the SDK it was built with.
+// One test is the SCORING box as the scorers build it (`scoringBoxArgv` of `lib/score-box.mjs`): the same list, so a tree is scored by the SDK it was built with.
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
-import { scoreBoxArgv } from '../lib/bwrap.mjs';
 import { makeSnapshot, makeWritable } from '../lib/cache-snapshot.mjs';
 import { DISTRIBUTION_DOTNET, dirEntriesOf, otherDotnetVersions } from '../lib/dotnet-hide.mjs';
 import { agentBoxPrefix } from '../lib/sandbox.mjs';
+import { scoringBoxArgv } from '../lib/score-box.mjs';
 import { DOTNET_PIN, boxOptions, envFor, hostHas, newSession, probeArgv, withoutPair } from './box-helpers.mjs';
 import { hostLacks, sandboxGate } from './helpers.mjs';
 
@@ -154,7 +154,7 @@ test('The_real_scoring_box_lists_exactly_the_pinned_sdk_and_gives_a_folder_with_
   for (const d of Object.values(dirs)) mkdirSync(d);
   assert.equal(existsSync(path.join(dirs.copyDir, 'global.json')), false, 'nothing in the folder pins an SDK: what dotnet --version says is what the box shows');
   const hidden = otherDotnetVersions({ pin: DOTNET_PIN });
-  const real = scoreBoxArgv({ ...dirs, cwd: dirs.copyDir, dotnetPin: DOTNET_PIN });
+  const real = scoringBoxArgv({ ...dirs, cwd: dirs.copyDir, dotnetPin: DOTNET_PIN });
   const script = 'dotnet --list-sdks\necho "version=$(dotnet --version)"';
   const listed = out => sdkLines(out).filter(l => !l.startsWith('version='));
   const inside = await probeArgv(real, script); // the scoring box carries its own environment (--clearenv, --setenv), none is given here

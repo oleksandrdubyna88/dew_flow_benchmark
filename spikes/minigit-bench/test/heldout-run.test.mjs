@@ -9,7 +9,6 @@ import { packDir } from '../lib/heldout-archive.mjs';
 import { generateKey, readKey, seal } from '../lib/heldout-crypto.mjs';
 import { DEFAULT_LIMITS } from '../lib/limits.mjs';
 import { assertWorkRoot, heldoutScore, makeHeldoutDep, runSuite, sweepLeftovers, withClearSuite } from '../lib/heldout-run.mjs';
-import { DOTNET_PIN } from './box-helpers.mjs';
 import { homeDir, pythonGate, sandboxGate, tmpDir } from './helpers.mjs';
 import { writeToySuite } from './toy-suite.mjs';
 
@@ -224,7 +223,7 @@ test('A_missing_binary_fails_every_case_and_blocks_none', async t => {
 test('A_hanging_binary_fails_its_case_on_timeout', async t => {
   if (!pythonGate(t) || !sandboxGate(t)) return;
   const { dir, binary, work } = copyWith('#!/bin/sh\nsleep 60\n');
-  const box = [...scoreBoxArgv({ copyDir: dir, casesDir: work, home: tmpDir('home'), tmp: tmpDir('tmp'), dotnetPin: DOTNET_PIN })];
+  const box = [...scoreBoxArgv({ copyDir: dir, casesDir: work, home: tmpDir('home'), tmp: tmpDir('tmp') })];
   const started = Date.now();
   const r = await runToy(binary, work, { box, timeoutS: 1 });
   assert.equal(r.ok, true, r.reason);
@@ -286,7 +285,7 @@ test('The_per_invocation_limit_the_plan_hands_to_the_held_out_dependency_is_the_
   if (!pythonGate(t) || !sandboxGate(t)) return;
   const { suiteEnc, keyFile } = sealedToy();
   const { dir, binary, work } = copyWith('#!/bin/sh\nsleep 60\n');
-  const box = [...scoreBoxArgv({ copyDir: dir, casesDir: work, home: tmpDir('home'), tmp: tmpDir('tmp'), dotnetPin: DOTNET_PIN })];
+  const box = [...scoreBoxArgv({ copyDir: dir, casesDir: work, home: tmpDir('home'), tmp: tmpDir('tmp') })];
   const dep = makeHeldoutDep({ suiteEnc, keyFile, workRoot: homeDir('dep-limit') });
   const started = Date.now();
   const scored = await dep({ binary, phase: 'v1', box, casesDir: work, scoreDir: tmpDir('score'), timeoutS: 1 });
