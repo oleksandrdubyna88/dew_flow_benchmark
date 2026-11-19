@@ -25,7 +25,8 @@ import { replay } from './replay.mjs';
 import { repartitionSeries } from './repartition.mjs';
 import { rescore } from './rescore.mjs';
 import { createSeries, isStageState, latestSeries, loadSeries, seriesRootProblem, pairComplete, seriesInputs, seriesPrompts, stackState } from './series.mjs';
-import { stageSeriesDirs } from './stage-series.mjs';
+import { paidStageSeriesDirs } from './stage-series.mjs';
+import { openReasonOf } from './stage-step.mjs';
 import { loadWorld } from './world.mjs';
 import { machineFor, pilotQuiet } from './machine.mjs';
 
@@ -79,10 +80,13 @@ async function createFor({ explore, task, calibration, io }) {
   return createSeries({ home: io.home, explore: isQuick(task) ? quickExplore(explore, io.home) : explore, calibration, task: task.id, inputsExtra: extra });
 }
 
-/** The sentence refusing `init` while a Stage 1 series exists: the six tasks of the freeze are run in that one series (`stage-init`, `stage-run`), never in a one-task series beside it. */
-const stageOpenProblem = home => {
-  const [dir] = stageSeriesDirs(home);
-  return dir === undefined ? null : `a Stage 1 series exists (${dir}): the tasks of Stage 1 run in that one series, made by \`stage-init\` and run by \`stage-run\`; \`init\` makes a one-task series only while none exists`;
+/**
+ * The sentence refusing `init` while a paid Stage 1 series is OPEN (not a rehearsal's, not stopped, not finished: `openReasonOf`): the six tasks of the freeze are run in that one series (`stage-init`, `stage-run`), never in a one-task series
+ * beside it. A rehearsal, a stopped series and a finished one do not hold `init` back; a series that cannot be read does (fail closed, the sentence says why).
+ */
+const stageOpenProblem = io => {
+  const open = paidStageSeriesDirs(io.home).map(dir => ({ dir, why: openReasonOf({ dir, io }) })).find(s => s.why !== null);
+  return open === undefined ? null : `a Stage 1 series exists and is open (${open.dir}; ${open.why}): the tasks of Stage 1 run in that one series, made by \`stage-init\` and run by \`stage-run\`; \`init\` makes a one-task series only while no paid Stage 1 series is open (a rehearsal, a stopped or a finished series does not count)`;
 };
 
 /** `init --task NN`: create a series of that task (the mask draw is made and recorded here). Needs `prepare` and `calibrate --task NN` done. */
@@ -98,7 +102,7 @@ async function makeSeriesCommand(values, io) {
   return EXIT.done;
 }
 
-const initCommand = async (values, io) => { const stage = stageOpenProblem(io.home); return stage ? refused(io, stage) : makeSeriesCommand(values, io); };
+const initCommand = async (values, io) => { const stage = stageOpenProblem(io); return stage ? refused(io, stage) : makeSeriesCommand(values, io); };
 
 export const cmdInit = heldoutAware(initCommand);
 

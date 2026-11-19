@@ -1,19 +1,21 @@
 // The verbs of Stage 1 on the command line and their neighbours (F3.S1 (a), PR 3): `run`, `init` and `prune` refuse a Stage 1 series and name the new verbs, `stage-run` refuses an exploratory one, `stage-status` prints the rounds and the spend on five
 // lines that add up to the ledger. The explore.mjs entry point lists the three verbs.
 import assert from 'node:assert/strict';
-import { appendFileSync, readFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
 import { main } from '../explore.mjs';
 import { readLedger } from '../../minigit-bench/lib/ledger.mjs';
 import { cmdInit, cmdPrune, cmdRun } from '../lib/commands.mjs';
 import { cmdStageStatus } from '../lib/stage-commands.mjs';
+import { stageInit } from '../lib/stage-init.mjs';
 import { stageRun } from '../lib/stage-run.mjs';
 import { SPEND_LINES, spendLines, stageStatusLines } from '../lib/stage-status.mjs';
-import { createSeries, ledgerFileOf, loadSeries } from '../lib/series.mjs';
+import { createSeries, ledgerFileOf, loadSeries, runMapFileOf } from '../lib/series.mjs';
 import { quickCalibration } from '../lib/quick.mjs';
 import { pinsOfTask } from '../lib/tasks.mjs';
-import { EXPLORE, TASKS } from './stage-series-fixture.mjs';
-import { SLOTS, mapOf, runRig } from './stage-run-fixture.mjs';
+import { EXPLORE, TASKS, makeSeries } from './stage-series-fixture.mjs';
+import { GO_ALL, GO_PILOT, PILOT_GO_LINE, SLOTS, mapOf, readbackHolds, runRig } from './stage-run-fixture.mjs';
 
 const say = lines => line => lines.push(line);
 const ioOf = (rig, lines) => ({ ...rig.io, say: say(lines), exploreFn: undefined });
@@ -32,6 +34,52 @@ test('run_and_init_refuse_a_stage_series_and_stage_run_refuses_an_exploratory_on
   assert.equal(r.exit, 4);
   assert.match(r.message, /is not a Stage 1 series: stage-run works on a series made by stage-init, a one-task series is run with `run`/);
   assert.deepEqual(rig.log, []);
+});
+
+const STAGE_REFUSAL = /a Stage 1 series exists .*made by `stage-init` and run by `stage-run`/;
+const initWords = async rig => { const lines = []; const exit = await cmdInit({ task: '04' }, ioOf(rig, lines)); return { exit, text: lines.join('\n') }; };
+const nextSlot = rig => stageRun({ values: { series: rig.dir, what: 'next' }, io: rig.io });
+const finishedRig = async slots => {
+  const rig = await runRig({ lines: [GO_PILOT, GO_ALL, PILOT_GO_LINE, ...readbackHolds()] });
+  for (let i = 0; i < slots; i += 1) assert.equal((await nextSlot(rig)).exit, 0, `slot ${i + 1}`);
+  return rig;
+};
+
+test('init_is_not_refused_by_a_rehearsal_series', async () => {
+  const { io, dir } = await makeSeries({ stage: { initGuardFn: undefined } }, { rehearsal: true, 'task-repo': '/fake/task-repo' });
+  assert.match(path.basename(dir), /^r-/, 'the control: the series is a rehearsal');
+  const got = await initWords({ io });
+  assert.doesNotMatch(got.text, /a Stage 1 series exists/);
+});
+
+test('init_is_still_refused_by_an_open_paid_series_beside_a_rehearsal_one', async () => {
+  const rig = await runRig();
+  const rehearsal = await stageInit({ values: { rehearsal: true, 'task-repo': '/fake/task-repo' }, io: { ...rig.io, stage: { ...rig.io.stage, initGuardFn: undefined, rand: () => 'cd34' } } });
+  assert.match(path.basename(rehearsal.dir), /^r-/, 'the control: a rehearsal exists beside the paid series');
+  const got = await initWords(rig);
+  assert.equal(got.exit, 4);
+  assert.match(got.text, STAGE_REFUSAL);
+  assert.ok(got.text.includes(path.basename(rig.dir)) && !got.text.includes('r-2026'), 'the sentence names the open paid series, not the rehearsal');
+});
+
+test('init_is_not_refused_by_a_finished_or_stopped_stage_series', async () => {
+  const almost = await finishedRig(SLOTS.length - 1);
+  assert.match((await initWords(almost)).text, STAGE_REFUSAL, 'the control: with one slot left the series is open');
+  const done = await finishedRig(SLOTS.length);
+  assert.match((await nextSlot(done)).message, /finished/, 'the control: the schedule offers nothing more');
+  assert.doesNotMatch((await initWords(done)).text, /a Stage 1 series exists/, 'every slot done');
+  const stopped = await runRig();
+  writeFileSync(runMapFileOf(stopped.dir), `${JSON.stringify({ ...mapOf(stopped.dir), stopped: { rule: 'stop: auth', reason: '{}', at: '2026-11-20T10:00:00Z' } }, null, 2)}\n`);
+  assert.doesNotMatch((await initWords(stopped)).text, /a Stage 1 series exists/, 'a stopped series');
+});
+
+test('init_is_refused_when_a_stage_series_cannot_be_read_and_the_sentence_says_why', async () => {
+  const rig = await runRig();
+  writeFileSync(runMapFileOf(rig.dir), 'not json');
+  const got = await initWords(rig);
+  assert.equal(got.exit, 4);
+  assert.match(got.text, STAGE_REFUSAL);
+  assert.match(got.text, /cannot be read .*counts as open/);
 });
 
 test('prune_refuses_a_stage_series', async () => {

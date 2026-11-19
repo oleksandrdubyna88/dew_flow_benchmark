@@ -44,6 +44,26 @@ const unitOrRefusal = ({ series, read, what }) => {
   return chosen.value === null ? { finished: true } : { series, read, unit: chosen.value };
 };
 
+/**
+ * Why the Stage 1 series in `dir` is still open, or null when it has ended: stopped (the run-map's `stopped`, the backstop `nextSlot` reads too) or every slot done (`unitOf` offers nothing, `{ finished: true }`). One road with `stage-run`:
+ * a gate that refuses (no pilot GO, no seed yet) or a slot still to run is open. A series, its run-map or its gates that cannot be read is open too (fail closed), and the sentence says why.
+ */
+export function openReasonOf({ dir, io }) {
+  const series = openStage({ seriesDir: dir, io });
+  if (!series.ok) return unreadableOpen('it', series.reason);
+  return series.value.map.stopped ? null : gatesOpenReason({ series: series.value, io });
+}
+
+const unreadableOpen = (what, reason) => `${what} cannot be read (${reason}), so it counts as open`;
+
+/** The reason a series that is not stopped is open, or null when the schedule offers nothing more (every slot done). */
+function gatesOpenReason({ series, io }) {
+  const read = readGates({ series, io });
+  return read.ok ? scheduleOpenReason(unitOrRefusal({ series, read: read.value, what: 'next' })) : unreadableOpen('its gates', read.reason);
+}
+
+const scheduleOpenReason = chosen => (chosen.finished ? null : `its schedule is not finished (${chosen.refusal ? chosen.refusal.message : 'a slot is still to run'})`);
+
 /** The unit `what` names, with what it reads: `{ refusal }` | `{ finished: true }` | `{ series, read, unit }`. */
 function chooseUnit({ dir, what, io }) {
   const series = openStage({ seriesDir: dir, io });

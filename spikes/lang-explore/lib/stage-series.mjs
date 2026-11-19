@@ -3,7 +3,7 @@
 // `tasks.<NN>`, each task's slice (`stage-inputs.mjs`). Pure but for the directory it makes.
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { STAGE_ROUNDS } from './stage-schedule.mjs';
-import { createSeries, exploreChildren, isStageState, loadSeries } from './series.mjs';
+import { createSeries, exploreChildren, isRehearsal, isStageState, loadSeries } from './series.mjs';
 import { FREEZE_TASKS } from './workspaces-sources.mjs';
 
 export { inputsOfTask, isStageInputs } from './stage-inputs.mjs';
@@ -37,6 +37,9 @@ export function createStageSeries({ home, explore, pre, wide, slices, date, pref
 
 /** The Stage 1 series directories under the explore root (a rehearsal's included), whatever their names. */
 export const stageSeriesDirs = home => exploreChildren(home).filter(c => c.state.ok && isStageState(c.state.value)).map(c => c.dir);
+
+/** The paid Stage 1 series directories: `stageSeriesDirs` without a rehearsal's (the series' own `inputs.json` says which it is, `isRehearsal`). */
+export const paidStageSeriesDirs = home => stageSeriesDirs(home).filter(dir => !isRehearsal(dir));
 
 /** The series in `dir`, which must be a Stage 1 series: `ok({ dir, state, map })` | `fail` naming the verbs of an ordinary series. */
 export function loadStageSeries(dir) {

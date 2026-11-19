@@ -600,8 +600,8 @@ pilot's sessions carry `pair: 0`* (v1's own number for a fixed list), and tell t
 they have no pair record (the schedule never read `pair` for them). A slot's `pair` is its number, as the schedule says. (3) *The
 order of the checks of `stage-run`*: series, lock, dated lines and seed, unit, owner's go, guard, task pins, pinned price file and
 policy, plan; each refusal leaves the run-map as it was. A rehearsal series needs no go line and no GO, has a seed of its own, and
-its read-back lines say `holds`. (4) *"`init` refuses a Stage 1 series"* is read as: `init` refuses while a Stage 1 series exists
-under the explore root, naming `stage-init` and `stage-run`; `run` and `prune` refuse a Stage 1 series by its `stage` field.
+its read-back lines say `holds`. (4) *"`init` refuses a Stage 1 series"* is read as: `init` refuses only while an open paid Stage 1 series exists
+under the explore root (not a rehearsal, not finished, not stopped), naming `stage-init` and `stage-run`; `run` and `prune` refuse a Stage 1 series by its `stage` field (coai plan round, PR 3, finding 5).
 (5) *What a session stores*: the agent box's culture is read from `plan.json` (the locale `agentEnv` is built from) with both keys
 confirmed in `argv.json`'s environment keys, and the scoring box's environment per pass comes from the layer's own `boxEnv` with
 the same inputs; both say their source. `STORED_FIELDS` (12 fields) is the list the later tools read. (6) *`stage-run` on a data
