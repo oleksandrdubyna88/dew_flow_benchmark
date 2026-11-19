@@ -14,8 +14,9 @@ import { ownedFolder } from './toolchain-fixtures.mjs';
 const EXPLORE = fileURLToPath(new URL('../../lang-explore/inputs/explore.json', import.meta.url));
 const PACKAGES = fileURLToPath(new URL('../../lang-explore/inputs/packages.json', import.meta.url));
 const STATES = fileURLToPath(new URL('../inputs/specs.d/spec-states.json', import.meta.url));
-const SIX = ['04', '05', '06', '07', '08', '10'];
 const json = file => JSON.parse(readFileSync(file, 'utf8'));
+/** The six tasks of the freeze: the record's own spec rows (lang-bench's data, written by `record`); the registry's and the engine's task lists are held equal to them where they are read. */
+const freezeTasks = () => Object.keys(json(STATES).specs).sort();
 
 test('The_default_source_of_the_gated_hashes_is_the_registered_packages_and_it_differs_from_the_engine_pin_after_the_freeze', () => {
   assert.equal(path.resolve(DEFAULT_PINS), PACKAGES, 'the default file is packages.json, not explore.json');
@@ -24,7 +25,10 @@ test('The_default_source_of_the_gated_hashes_is_the_registered_packages_and_it_d
   const packages = json(PACKAGES);
   const engine = json(EXPLORE).tasks;
   const { specs } = json(STATES);
-  for (const id of SIX) {
+  const ids = freezeTasks();
+  assert.equal(ids.length, 6, 'the record holds the six');
+  assert.deepEqual(Object.keys(packages).sort(), ids, 'the registry holds a package for each of the record\'s tasks and for no other');
+  for (const id of ids) {
     assert.equal(pins.value.specs.get(id), packages[id].specSha256, `task ${id}: the gated hash is the package's specSha256`);
     assert.notEqual(pins.value.specs.get(id), engine[id].spec.sha256, `task ${id}: the engine's pin is the frozen text, not the gated one`);
     assert.equal(engine[id].spec.sha256, specs[id].sha256, `task ${id}: and the engine's pin is the frozen text the record holds`);
@@ -75,7 +79,7 @@ test('The_real_freeze_commit_passes_check_commit_with_the_default_gated_hashes_a
   const ran = (pins = []) => runFreeze(['check-commit', '--repo', repo, '--before', before, '--after', c, ...pins]);
   const real = await ran();
   assert.equal(real.exit, 0, `${real.stdout}${real.stderr}`);
-  const engine = packagesFile(t, 'engine-pins.json', Object.fromEntries(SIX.map(id => [id, { specSha256: json(EXPLORE).tasks[id].spec.sha256 }])));
+  const engine = packagesFile(t, 'engine-pins.json', Object.fromEntries(freezeTasks().map(id => [id, { specSha256: json(EXPLORE).tasks[id].spec.sha256 }])));
   const wrong = await ran(['--pins', engine]);
   assert.equal(wrong.exit, 1, 'the engine\'s frozen hashes are not the gated text: the control that the check can fail');
   assert.match(wrong.stderr, /not the gated text/);

@@ -358,15 +358,42 @@ test('A_row_of_a_task_whose_spec_is_in_an_accepted_freeze_is_never_replaced_or_a
   assert.equal(added.ok, false, 'no row of a frozen task is added either');
 });
 
-test('The_freeze_guard_does_not_touch_a_task_outside_the_freeze_a_freeze_not_accepted_or_a_missing_record_and_refuses_one_it_cannot_read', () => {
+test('The_freeze_guard_does_not_touch_a_task_outside_the_freeze_or_a_missing_record_and_refuses_one_it_cannot_read', () => {
   const p = writePackage();
   const pkg = load(p);
   const fresh = () => ({ packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: NO_FREEZE });
   assert.equal(register({ p, pkg, files: { ...fresh(), statesFile: statesFile({ tasks: ['04'] }) } }).ok, true, 'task 05 is not in the freeze');
-  assert.equal(register({ p, pkg, files: { ...fresh(), statesFile: statesFile({ state: 'provisional' }) } }).ok, true, 'a freeze that is not accepted guards nothing');
   assert.equal(register({ p, pkg, files: { ...fresh(), statesFile: NO_FREEZE } }).ok, true, 'a missing record is no freeze');
   const files = { ...fresh(), statesFile: statesFile({ text: '{' }) };
   const broken = register({ p, pkg, files });
   assert.ok(broken.ok === false && /spec-states\.json cannot be read/.test(broken.reason), broken.reason);
   assert.equal(existsSync(files.packagesFile), false, 'nothing is written over a record that cannot be read');
+});
+
+const GOOD_ROW = { state: 'frozen', sha256: 'f'.repeat(64) };
+const GOOD_FREEZE = { state: 'accepted', tag: 'spec-frozen-B-20261118' };
+
+test('A_record_that_is_valid_JSON_but_malformed_refuses_every_registration_and_says_what_is_malformed', () => {
+  const p = writePackage();
+  const pkg = load(p);
+  const cases = [
+    ['not an object', '[]', /not an object/],
+    ['null', 'null', /not an object/],
+    ['no freeze object', JSON.stringify({ specs: { '05': GOOD_ROW } }), /no `freeze` object/],
+    ['a freeze that is not an object', JSON.stringify({ freeze: 'accepted', specs: { '05': GOOD_ROW } }), /no `freeze` object/],
+    ['a state that is not known', JSON.stringify({ freeze: { ...GOOD_FREEZE, state: 'provisional' }, specs: { '05': GOOD_ROW } }), /freeze\.state is "provisional", not "accepted"/],
+    ['no tag', JSON.stringify({ freeze: { state: 'accepted' }, specs: { '05': GOOD_ROW } }), /freeze\.tag is not text/],
+    ['no specs object', JSON.stringify({ freeze: GOOD_FREEZE }), /no `specs` object/],
+    ['an empty specs object', JSON.stringify({ freeze: GOOD_FREEZE, specs: {} }), /no `specs` object/],
+    ['a row without its hash', JSON.stringify({ freeze: GOOD_FREEZE, specs: { '05': { state: 'frozen' } } }), /specs\.05 is not a frozen spec row/],
+    ['a row that is not frozen', JSON.stringify({ freeze: GOOD_FREEZE, specs: { '05': { ...GOOD_ROW, state: 'draft' } } }), /specs\.05 is not a frozen spec row/],
+  ];
+  for (const [name, text, why] of cases) {
+    const files = { packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: statesFile({ text }) };
+    const r = register({ p, pkg, files });
+    assert.ok(r.ok === false && /malformed/.test(r.reason) && why.test(r.reason), `${name}: ${r.reason}`);
+    assert.equal(existsSync(files.packagesFile), false, `${name}: nothing is written`);
+  }
+  const good = { packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: statesFile({ text: JSON.stringify({ freeze: GOOD_FREEZE, specs: { '04': GOOD_ROW } }) }) };
+  assert.equal(register({ p, pkg, files: good }).ok, true, 'the control: a well-formed record that does not hold task 05 guards nothing');
 });
