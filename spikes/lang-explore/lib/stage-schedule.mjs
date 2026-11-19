@@ -6,6 +6,11 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { MAX_ATTEMPTS, MASKS, STACK_ORDER, openSessions, pairComplete, sessionsOf, stackState } from './series.mjs';
 import { FREEZE_TASKS } from './workspaces-sources.mjs';
 
+/** The kind of each task of Stage 1 (`inputs/explore.json` pins it; a test holds this table equal to the pins). The read-back picks one daemon task and one web task. */
+export const TASK_KINDS = Object.freeze({ '04': 'web', '05': 'daemon', '06': 'web', '07': 'daemon', '08': 'web', 10: 'daemon' });
+/** The by-hand row of the read-back (v1's G-1: the read-back is ok on every init field), as a dated line of the registered amendments carries it. */
+export const READBACK_ROW = 'G-1';
+
 export const STAGE_ROUNDS = 5;
 /** The run-map kind of a data session: the slot's number is its `pair`. */
 export const DATA_KIND = 'data';
@@ -47,14 +52,36 @@ const orderOfRound = ({ seed, round }) => FREEZE_TASKS.map(task => [digest(`${se
 const ridsOf = ({ seed, task, round }) => Object.fromEntries(STACK_ORDER.map(stack => [stack, ATTEMPTS.map(attempt => ridOfSlot({ seed, task, stack, round, attempt }))]));
 
 const slotOf = ({ seed, round, task, position }) => ({
-  slot: (round - 1) * FREEZE_TASKS.length + position + 1, round, task,
+  slot: (round - 1) * FREEZE_TASKS.length + position + 1, round, task, kind: TASK_KINDS[task],
   masks: Object.fromEntries(STACK_ORDER.map(stack => [stack, maskOfSlot({ round, task, stack })])),
   first: firstStackOfSlot({ seed, round, task }), rids: ridsOf({ seed, task, round }),
 });
 
-/** The 30 slots in the order they run: `{ slot, round, task, masks: { csharp, node }, first, rids: { csharp: [a1, a2], node: [a1, a2] } }`. */
-export const slotsOf = ({ seed }) => Array.from({ length: STAGE_ROUNDS }, (_, i) => i + 1)
+const baseSlots = ({ seed }) => Array.from({ length: STAGE_ROUNDS }, (_, i) => i + 1)
   .flatMap(round => orderOfRound({ seed, round }).map((task, position) => slotOf({ seed, round, task, position })));
+
+const KINDS = Object.freeze(['daemon', 'web']);
+
+/** The task of `kind` the read-back takes in `round`: one of the kind's three, by the seed. */
+function pickTask({ seed, round, kind }) {
+  const tasks = FREEZE_TASKS.filter(task => TASK_KINDS[task] === kind);
+  return tasks[Number.parseInt(digest(`${seed}:lang-v2:readback:r${round}:${kind}`).slice(0, 8), 16) % tasks.length];
+}
+
+/** The two cells of the read-back: round 1 and round 2, one daemon task and one web task, which kind comes first decided by the seed. */
+function readbackCells(seed) {
+  const kinds = bitOf(`${seed}:lang-v2:readback:kind`) ? [...KINDS].reverse() : KINDS;
+  return kinds.map((kind, i) => ({ round: i + 1, kind, task: pickTask({ seed, round: i + 1, kind }) }));
+}
+
+/** The 30 slots in the order they run: `{ slot, round, task, kind, masks: { csharp, node }, first, rids: { csharp: [a1, a2], node: [a1, a2] }, readback }`. */
+export function slotsOf({ seed }) {
+  const picked = readbackCells(seed);
+  return baseSlots({ seed }).map(s => ({ ...s, readback: picked.some(p => p.round === s.round && p.task === s.task) }));
+}
+
+/** The read-back pairs, named by the seed before any result exists: `[{ slot, round, task, kind }]`, one slot of round 1 and one of round 2, one daemon and one web. */
+export const readbackSlots = ({ seed }) => slotsOf({ seed }).filter(s => s.readback).map(({ slot, round, task, kind }) => ({ slot, round, task, kind }));
 
 /** The first two sessions of a seed that share a rid: `[rid, nameOfFirst, nameOfSecond]`, or null. */
 function collision(seed) {
@@ -90,6 +117,40 @@ function gateProblem({ pilotGo, seedRevealed, slots }) {
   return seedRevealed === true && hasSlots(slots) ? null : 'no data slot before the seed is revealed: seed-reveal comes after the pilot, and the slots are made from it';
 }
 
+const holds = (lines, rid) => lines.some(l => l.rid === rid && l.g === READBACK_ROW && l.verdict === 'holds');
+
+/** A session of a read-back slot that a dated `refuted` line names: it ended as `void: harness`, so its one re-run is the next step. The run-map may not say so yet (the harness applies the line when it rescores), so the schedule reads the line. */
+const refutesSession = ({ refuted, numbers }) => s => s.kind === DATA_KIND && s.status === 'scored' && numbers.has(s.pair) && refuted.has(s.rid);
+
+const voided = s => ({ ...s, status: 'ran', data: false, class: 'void: harness' });
+
+/** The run-map as the schedule reads it: a session of a read-back slot with a `refuted` line is a void. A line about any other session changes nothing. */
+function withRefuted({ map, slots, lines }) {
+  const refutes = refutesSession({ refuted: new Set(lines.filter(l => l.g === READBACK_ROW && l.verdict === 'refuted').map(l => l.rid)), numbers: new Set(slots.filter(s => s.readback).map(s => s.slot)) });
+  return { ...map, sessions: Object.fromEntries(Object.entries(map.sessions).map(([rid, s]) => [rid, refutes(s) ? voided(s) : s])) };
+}
+
+/** The rids of a finished read-back slot whose session that counts (a scored last attempt of a stack) has no `holds` line yet. */
+const unreadRids = ({ map, slot, lines }) => STACK_ORDER.filter(stack => stackState(map, slot.slot, stack, DATA_KIND) === 'done')
+  .map(stack => sessionsOf(map, slot.slot, stack, DATA_KIND).at(-1).rid).filter(rid => !holds(lines, rid));
+
+/** The first read-back slot inside `within` that still awaits lines: `[slot, rids]`, or undefined. */
+const awaitingOf = ({ map, slots, lines, within }) => slots.filter(s => s.readback && within(s)).map(s => [s, unreadRids({ map, slot: s, lines })]).find(([, rids]) => rids.length > 0);
+
+/** The parent's own rule, stated apart from the gate below so a later change to the barrier cannot lose it: round 3 does not start while a read-back slot of rounds 1 and 2 awaits a line. */
+function roundThreeProblem({ map, slots, target, lines }) {
+  const waiting = target.round < 3 ? undefined : awaitingOf({ map, slots, lines, within: s => s.round <= 2 });
+  return waiting === undefined ? null : `${describe(target)}: round 3 never starts before the read-back lines of rounds 1 and 2 are on main; ${describe(waiting[0])} still awaits ${waiting[1].join(', ')}`;
+}
+
+/** The read-back gate: no slot after a read-back slot is offered until each of its sessions that counts has its dated line. */
+function readbackGateProblem({ map, slots, target, lines }) {
+  const waiting = awaitingOf({ map, slots, lines, within: s => s.slot < target.slot });
+  return waiting === undefined ? null : `${describe(waiting[0])} is a read-back slot: no later slot is offered until each of its two sessions that counts has its dated read-back line (${READBACK_ROW}, holds or refuted); still unread: ${waiting[1].join(', ')}; the print is \`readback.mjs --series <dir> --pair ${waiting[0].slot}\``;
+}
+
+const linesProblem = args => roundThreeProblem(args) ?? readbackGateProblem(args);
+
 const rerunHint = (map, n) => (voidStacks(map, n).length > 0 ? '; a void is re-run once, alone, before the next slot: stage-run --what next' : '');
 
 /** The sentence for an earlier slot that is not finished: across a round boundary it is the round rule, inside a round the barrier. */
@@ -103,17 +164,17 @@ function behindSentence({ map, behind, target }) {
  * The sentence refusing slot number `slot` now, or null: the gates, then the order (a slot is offered only when every earlier slot is finished, and round r + 1 never starts while a pair of round r is unscored), and a finished slot is
  * never offered again. `slots` is `slotsOf({ seed })`, absent before the seed is revealed.
  */
-export function slotProblem({ map, slots, slot, pilotGo, seedRevealed }) {
+export function slotProblem({ map, slots, slot, pilotGo, seedRevealed, readbackLines = [] }) {
   const gate = gateProblem({ pilotGo, seedRevealed, slots });
   if (gate) return gate;
   const target = slots.find(s => s.slot === slot);
-  return target === undefined ? `slot ${slot}: Stage 1 has slots 1 to ${slots.length}` : orderProblem({ map, slots, target });
+  return target === undefined ? `slot ${slot}: Stage 1 has slots 1 to ${slots.length}` : orderProblem({ map: withRefuted({ map, slots, lines: readbackLines }), slots, target, lines: readbackLines });
 }
 
-function orderProblem({ map, slots, target }) {
+function orderProblem({ map, slots, target, lines }) {
   const behind = slots.find(s => s.slot < target.slot && !finished(map, s.slot));
   if (behind !== undefined) return behindSentence({ map, behind, target });
-  return finished(map, target.slot) ? `${describe(target)} is finished: a finished slot is never run again` : null;
+  return finished(map, target.slot) ? `${describe(target)} is finished: a finished slot is never run again` : linesProblem({ map, slots, target, lines });
 }
 
 const sessionOf = ({ slot, stack, attempt, label }) => ({ rid: slot.rids[stack][attempt - 1], pair: slot.slot, stack, attempt, kind: DATA_KIND, label, mask: slot.masks[stack], task: slot.task, round: slot.round });
@@ -154,9 +215,12 @@ function planOffer({ map, slot }) {
  * The next step of the series: `ok(slot + { action: 'plan' | 'resume' | 'rerun', sessions | resumed })` for the first slot that is not finished, `ok(null)` when the series is done, `fail(sentence)` when nothing may run. The slot is the first
  * unfinished one, so the barrier holds by construction; `slotProblem` states the same order as a sentence for a verb that is asked for a slot by number.
  */
-export function nextSlot({ map, slots, pilotGo, seedRevealed }) {
+export function nextSlot({ map, slots, pilotGo, seedRevealed, readbackLines = [] }) {
   const gate = gateProblem({ pilotGo, seedRevealed, slots });
   if (gate) return fail(gate);
-  const slot = slots.find(s => !finished(map, s.slot));
-  return slot === undefined ? ok(null) : offerFor({ map, slot });
+  const seen = withRefuted({ map, slots, lines: readbackLines });
+  const slot = slots.find(s => !finished(seen, s.slot));
+  if (slot === undefined) return ok(null);
+  const waiting = linesProblem({ map: seen, slots, target: slot, lines: readbackLines });
+  return waiting ? fail(waiting) : offerFor({ map: seen, slot });
 }

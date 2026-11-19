@@ -4,8 +4,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { sha256Of } from '../../minigit-bench/lib/inputs.mjs';
 import { openSeries, planSession, transition } from '../../minigit-bench/lib/run-map.mjs';
+import { loadExplore } from '../lib/inputs.mjs';
 import { MASKS, VOID_UNSCORED, maskOf, pairComplete, stackState } from '../lib/series.mjs';
-import { STAGE_ROUNDS, firstStackOfSlot, maskOfSlot, nextSlot, ridOfSlot, seedProblem, slotProblem, slotsOf } from '../lib/stage-schedule.mjs';
+import { STAGE_ROUNDS, TASK_KINDS, firstStackOfSlot, maskOfSlot, nextSlot, readbackSlots, ridOfSlot, seedProblem, slotProblem, slotsOf } from '../lib/stage-schedule.mjs';
 
 const COLLIDING_SEED = 'lv2-collide-2902';
 const TASKS = ['04', '05', '06', '07', '08', '10'];
@@ -109,6 +110,13 @@ const GOOD = { class: 'completed', data: true, scored: true };
 const VOID = { class: 'void: harness', data: false, scored: false };
 const RAN = { class: 'completed', data: true, scored: false };
 const GATES = { pilotGo: true, seedRevealed: true };
+const RB = readbackSlots({ seed: SEED });
+const line = (slot, stack, attempt, verdict, extra = {}) => ({ g: 'G-1', verdict, rid: SLOTS[slot - 1].rids[stack][attempt - 1], ...extra });
+const holds = (slot, stack, attempt = 1) => line(slot, stack, attempt, 'holds');
+const refuted = (slot, stack, attempt = 1) => line(slot, stack, attempt, 'refuted');
+const rid = (slot, stack, attempt = 1) => SLOTS[slot - 1].rids[stack][attempt - 1];
+/** The read-back lines of both read-back slots, `holds` for the first attempt of both stacks: what the tests of the barrier and the re-run leave in place, so the read-back gate stays out of their way. */
+const READ = RB.flatMap(p => [holds(p.slot, 'csharp'), holds(p.slot, 'node')]);
 
 /** A run-map of kind `data` from a script of `[slot, stack, attempt, end]`: `end` is `planned`, `launching` or the patch of a `ran` session (scored when `end.scored`). */
 function mapWith(script) {
@@ -127,7 +135,8 @@ function mapWith(script) {
 
 /** Slots 1 to `last` finished: both stacks scored. */
 const finished = last => Array.from({ length: last }, (_, i) => i + 1).flatMap(slot => [[slot, 'csharp', 1, GOOD], [slot, 'node', 1, GOOD]]);
-const next = (script, extra = {}) => nextSlot({ map: mapWith(script), slots: SLOTS, ...GATES, ...extra });
+const next = (script, extra = {}) => nextSlot({ map: mapWith(script), slots: SLOTS, ...GATES, readbackLines: READ, ...extra });
+const asked = (script, lines) => nextSlot({ map: mapWith(script), slots: SLOTS, ...GATES, readbackLines: lines });
 const describeSlot = n => `slot ${n} (round ${SLOTS[n - 1].round}, task ${SLOTS[n - 1].task})`;
 
 test('A_data_session_is_seen_through_the_kind_and_a_quick_run_pair_is_not_a_data_slot', () => {
@@ -219,4 +228,103 @@ test('A_new_slot_plans_both_stacks_in_the_seeded_order_each_under_its_rid_and_ma
     assert.deepEqual(offer.sessions.map(x => x.stack), lead === 'csharp' ? ['csharp', 'node'] : ['node', 'csharp'], `${lead} leads: it is launched first`);
     assert.deepEqual(offer.sessions.map(x => [x.rid, x.attempt, x.label, x.mask, x.pair, x.kind, x.task, x.round]), offer.sessions.map(x => [slot.rids[x.stack][0], 1, 'paired', slot.masks[x.stack], slot.slot, 'data', slot.task, slot.round]));
   }
+});
+
+// ---- the read-back pairs and the read-back gate ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+test('The_read_back_pairs_are_named_by_the_seed_one_of_each_kind_in_rounds_1_and_2', () => {
+  for (const seed of seedsOf('lv2-readback-', 60)) {
+    const picks = readbackSlots({ seed });
+    assert.deepEqual(picks.map(p => p.round), [1, 2], `${seed}: one slot of round 1 and one of round 2`);
+    assert.deepEqual(picks.map(p => p.kind).sort(), ['daemon', 'web'], `${seed}: one daemon task and one web task`);
+    const all = slotsOf({ seed });
+    assert.deepEqual(all.filter(s => s.readback).map(s => s.slot), picks.map(p => p.slot), 'the slots carry the flag the picks name');
+    for (const p of picks) assert.deepEqual([all[p.slot - 1].task, all[p.slot - 1].round, TASK_KINDS[p.task]], [p.task, p.round, p.kind]);
+  }
+  assert.deepEqual(readbackSlots({ seed: SEED }), readbackSlots({ seed: SEED }));
+  const distinct = new Set(seedsOf('lv2-readback-', 60).map(seed => JSON.stringify(readbackSlots({ seed }).map(p => [p.task, p.round]))));
+  assert.ok(distinct.size > 6, `sixty seeds name ${distinct.size} different pairs of slots: the seed decides, nothing is fixed`);
+  assert.deepEqual(new Set(seedsOf('lv2-readback-', 60).map(seed => readbackSlots({ seed })[0].kind)), new Set(['daemon', 'web']), 'the seed decides which kind is read back in round 1');
+});
+
+test('The_kinds_the_schedule_holds_are_the_kinds_of_the_pins', () => {
+  const pins = loadExplore().value.tasks;
+  assert.deepEqual(Object.keys(TASK_KINDS).sort(), TASKS);
+  for (const task of TASKS) assert.equal(TASK_KINDS[task], pins[task].kind, `task ${task}`);
+});
+
+test('No_slot_after_a_read_back_slot_is_offered_until_both_its_sessions_have_their_dated_line', () => {
+  const [rb] = RB;
+  const script = finished(rb.slot);
+  const none = asked(script, []);
+  assert.equal(none.ok, false);
+  assert.ok(none.reason.includes(describeSlot(rb.slot)), none.reason);
+  assert.match(none.reason, /is a read-back slot: no later slot is offered until each of its two sessions that counts has its dated read-back line \(G-1, holds or refuted\)/);
+  assert.ok(none.reason.includes(rid(rb.slot, 'csharp')) && none.reason.includes(rid(rb.slot, 'node')), 'both rids are named');
+  const one = asked(script, [holds(rb.slot, 'csharp')]);
+  assert.ok(one.reason.includes(rid(rb.slot, 'node')) && !one.reason.includes(rid(rb.slot, 'csharp')), `one line of two is not enough: ${one.reason}`);
+  assert.match(slotProblem({ map: mapWith(script), slots: SLOTS, slot: rb.slot + 1, ...GATES, readbackLines: [holds(rb.slot, 'csharp')] }), /still unread/);
+  const both = asked(script, [holds(rb.slot, 'csharp'), holds(rb.slot, 'node')]);
+  assert.deepEqual([both.ok, both.value.slot, both.value.action], [true, rb.slot + 1, 'plan']);
+  assert.equal(asked(finished(rb.slot - 1), []).value.slot, rb.slot, 'the read-back slot itself is offered without lines: the lines come after it was scored');
+});
+
+test('A_refuted_read_back_makes_the_session_a_void_and_its_re_run_is_the_next_step_before_any_later_slot', () => {
+  const [rb] = RB;
+  for (const stack of ['csharp', 'node']) {
+    const other = stack === 'csharp' ? 'node' : 'csharp';
+    const step = asked(finished(rb.slot), [refuted(rb.slot, stack), holds(rb.slot, other)]).value;
+    assert.deepEqual([step.slot, step.action, step.rerun, step.attempt], [rb.slot, 'rerun', stack, 2], `${stack} refuted`);
+    assert.equal(step.sessions[0].rid, rid(rb.slot, stack, 2));
+  }
+  const map = mapWith([...finished(rb.slot - 1), [rb.slot, 'csharp', 1, { class: 'void: harness', data: false, scored: false }], [rb.slot, 'node', 1, GOOD]]);
+  assert.equal(nextSlot({ map, slots: SLOTS, ...GATES, readbackLines: [refuted(rb.slot, 'csharp'), holds(rb.slot, 'node')] }).value.rerun, 'csharp', 'the same step when the harness already wrote the void into the run-map');
+  assert.match(slotProblem({ map: mapWith(finished(rb.slot)), slots: SLOTS, slot: rb.slot + 1, ...GATES, readbackLines: [refuted(rb.slot, 'node'), holds(rb.slot, 'csharp')] }), /is not finished \(csharp: done, node: void-rerunnable\)/, 'no later slot before the re-run');
+});
+
+test('The_re_run_of_a_refuted_session_is_read_back_too_before_the_next_slot_is_offered', () => {
+  const [rb] = RB;
+  const script = [...finished(rb.slot), [rb.slot, 'csharp', 2, GOOD]];
+  const lines = [refuted(rb.slot, 'csharp'), holds(rb.slot, 'node')];
+  const waiting = asked(script, lines);
+  assert.equal(waiting.ok, false);
+  assert.ok(waiting.reason.includes(rid(rb.slot, 'csharp', 2)) && !waiting.reason.includes(rid(rb.slot, 'csharp', 1)), `the re-run's own rid is what is unread: ${waiting.reason}`);
+  assert.equal(asked(script, [...lines, holds(rb.slot, 'csharp', 2)]).value.slot, rb.slot + 1);
+});
+
+test('A_second_refuted_read_back_ends_the_cell_and_the_next_slot_is_offered_only_then', () => {
+  const [rb] = RB;
+  const script = [...finished(rb.slot), [rb.slot, 'csharp', 2, GOOD]];
+  const lines = [refuted(rb.slot, 'csharp'), refuted(rb.slot, 'csharp', 2), holds(rb.slot, 'node')];
+  const step = asked(script, lines).value;
+  assert.deepEqual([step.slot, step.action], [rb.slot + 1, 'plan'], 'nothing loops: the cell is missing and the next slot is offered');
+  assert.equal(asked(script, [refuted(rb.slot, 'csharp'), refuted(rb.slot, 'csharp', 2)]).ok, false, 'the other stack is still unread');
+});
+
+test('A_read_back_line_for_a_slot_that_is_no_read_back_slot_opens_nothing_and_closes_nothing', () => {
+  const [rb] = RB;
+  assert.ok(SLOTS.slice(0, rb.slot - 1).every(s => !s.readback) && rb.slot > 2, 'the fixture seed puts two plain slots before the first read-back slot');
+  const reopened = asked(finished(rb.slot - 1), [refuted(1, 'csharp'), refuted(2, 'node')]);
+  assert.deepEqual([reopened.value.slot, reopened.value.action], [rb.slot, 'plan'], 'a refuted line about a plain slot reopens nothing: no re-run, the next slot goes on');
+  const stray = asked(finished(rb.slot), [holds(1, 'csharp'), holds(1, 'node'), holds(2, 'csharp'), holds(2, 'node')]);
+  assert.equal(stray.ok, false, 'lines about other slots do not satisfy the read-back slot\'s gate');
+  assert.ok(stray.reason.includes(describeSlot(rb.slot)) && stray.reason.includes(rid(rb.slot, 'csharp')), stray.reason);
+  const bothOf = patch => ['csharp', 'node'].map(stack => ({ ...holds(rb.slot, stack), ...patch }));
+  assert.equal(asked(finished(rb.slot), bothOf({ g: 'G-2' })).ok, false, 'a line of another row does not close the read-back');
+  assert.equal(asked(finished(rb.slot), bothOf({ verdict: 'explained' })).ok, false, 'only holds or refuted close it');
+  const voidOnly = asked(finished(rb.slot), [holds(rb.slot, 'csharp'), { ...refuted(rb.slot, 'node'), g: 'G-10' }]);
+  assert.ok(voidOnly.reason.includes(rid(rb.slot, 'node')), 'a refuted line of another row voids nothing here and closes nothing');
+});
+
+test('Round_3_is_refused_until_the_read_back_lines_of_rounds_1_and_2_exist', () => {
+  const [first, second] = RB;
+  const handMade = finished(12);
+  const partial = asked(handMade, [holds(first.slot, 'csharp'), holds(first.slot, 'node')]);
+  assert.equal(partial.ok, false);
+  assert.match(partial.reason, /round 3 never starts before the read-back lines of rounds 1 and 2 are on main/);
+  assert.ok(partial.reason.includes(describeSlot(second.slot)) && partial.reason.includes(rid(second.slot, 'csharp')), partial.reason);
+  assert.equal(slotProblem({ map: mapWith(handMade), slots: SLOTS, slot: 13, ...GATES, readbackLines: [] }).includes('round 3 never starts'), true);
+  const all = [first, second].flatMap(p => [holds(p.slot, 'csharp'), holds(p.slot, 'node')]);
+  assert.equal(asked(handMade, all).value.slot, 13);
 });
