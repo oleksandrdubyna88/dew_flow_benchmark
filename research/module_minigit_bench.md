@@ -497,6 +497,12 @@ the pins, every `global.json`. *What changed:* the box.
   the operator is asked to hold the `dotnet-*` packages for its length (the standing risk of the note below); the next box, and the
   next preflight, see the new version and hide or refuse it. A view that cannot change under a running box is the pinned-`dotnetDir`
   path: the whole distribution is one tmpfs there, and the SDK is a directory of the run's own.
+- **Known limits of the scorer's pin (todo, from the code gate's fourth round, 2026-11-19; not built).** (1) A scorer started BY HAND
+  without `--dotnet-pin` takes v1's pin from `inputs/stacks.json` as it is now, not the pin the session ran with: when the registered
+  pin changes, record the pin with each session and validate the scorer's against it (that change is a plan change of its own). (2) A
+  well-formed but wrong `--dotnet-pin` (for example `10.0.115` where only `10.0.114` is installed) leaves the scoring box with no SDK,
+  so a correct submission would be recorded as a failed build: a probe of the scoring box before scoring (as the preflight probes the
+  session's box) would turn that into an environment refusal. The run path is not affected: it hands the scorer the run's own pin.
 - **The guard that keeps this true** (finding 1): `test/box-builders-scan.test.mjs` reads every production `.mjs` of
   `spikes/minigit-bench` and `spikes/lang-explore` and fails, naming file and line, when a bwrap argv is composed outside the named
   builders or a toolchain builder stops taking `boxDotnetHide`. The table it holds: `lib/bwrap.mjs` (the primitives, and `scoreBoxArgv`, the scoring box without the list), `lib/score-box.mjs`
