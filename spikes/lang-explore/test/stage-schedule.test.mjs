@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { sha256Of } from '../../minigit-bench/lib/inputs.mjs';
 import { openSeries, planSession, transition } from '../../minigit-bench/lib/run-map.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
-import { MASKS, VOID_UNSCORED, maskOf, pairComplete, stackState } from '../lib/series.mjs';
+import { MASKS, VOID_UNSCORED, isOpenSession, maskOf, openSessions, pairComplete, sessionsOf, stackState, stateOfSessions } from '../lib/series.mjs';
 import { STAGE_ROUNDS, TASK_KINDS, firstStackOfSlot, maskOfSlot, nextSlot, pilotPlan, pilotStep, readbackSlots, ridOfSlot, seedProblem, slotProblem, slotsOf } from '../lib/stage-schedule.mjs';
 
 const COLLIDING_SEED = 'lv2-collide-2902';
@@ -343,6 +343,7 @@ function pilotMap(script) {
     map = planSession(map, { rid, stack, phase: 'v1', attempt, kind, task, mask, twin, label: 'test' }).value;
     if (end === 'planned') return;
     map = transition(map, rid, 'launching', {}).value;
+    if (end === 'launching') return;
     map = transition(map, rid, 'ran', { class: end.class, data: end.data }).value;
     if (end.scored) map = transition(map, rid, 'scored', {}).value;
   });
@@ -487,4 +488,113 @@ test('The_pilot_plans_argument_is_validated_field_by_field_and_each_refusal_name
   refused({ ...PILOT, daemon: '10' }, 'pilot.daemon');
   assert.match(pilotPlan({ pilot: { ...PILOT, daemon: '10' } }).reason, /distinct/, 'the A/A and the daemon pair are two different tasks');
   assert.match(pilotPlan({ pilot: { ...PILOT, web: '06' } }).reason, /G-16/, 'the web pair is task 04 because G-16 needs its real pilot tree');
+});
+
+// ---- plan round 2, second pass: the immutable verdict, the series.mjs kind, the pilot's tables, slotProblem -----------------------------------------------------------------------------------------------------
+
+const dated = (l, date) => ({ ...l, date });
+
+test('The_first_read_back_line_of_a_rid_is_final_and_a_later_line_that_conflicts_is_refused_never_applied', () => {
+  const [rb] = RB;
+  const later = finished(rb.slot + 3);
+  const firstHolds = [dated(holds(rb.slot, 'csharp'), '2026-11-20'), dated(holds(rb.slot, 'node'), '2026-11-20')];
+  assert.equal(asked(later, firstHolds).value.slot, rb.slot + 4, 'without the later line the series goes on');
+  const refutedAfter = asked(later, [...firstHolds, dated(refuted(rb.slot, 'csharp'), '2026-11-25')]);
+  assert.equal(refutedAfter.ok, false, 'a refutation after a holds never voids an attempt once the gate opened');
+  assert.ok(refutedAfter.reason.includes(rid(rb.slot, 'csharp')) && refutedAfter.reason.includes('2026-11-20') && refutedAfter.reason.includes('2026-11-25') && /first dated line is final/.test(refutedAfter.reason), refutedAfter.reason);
+  assert.match(slotProblem({ map: mapWith(later), slots: SLOTS, slot: rb.slot + 4, ...GATES, readbackLines: [...firstHolds, dated(refuted(rb.slot, 'csharp'), '2026-11-25')] }), /first dated line is final/, 'the sentence form asks the same');
+  const holdsAfter = asked(finished(rb.slot), [dated(refuted(rb.slot, 'csharp'), '2026-11-20'), dated(holds(rb.slot, 'csharp'), '2026-11-26'), dated(holds(rb.slot, 'node'), '2026-11-20')]);
+  assert.equal(holdsAfter.ok, false, 'a holds after a refuted is refused too: the re-run is not cancelled');
+  assert.ok(holdsAfter.reason.includes('2026-11-26'), holdsAfter.reason);
+  assert.equal(asked(later, [...firstHolds, dated(holds(rb.slot, 'csharp'), '2026-11-27')]).value.slot, rb.slot + 4, 'a repeated identical line is harmless');
+  assert.equal(asked(later, [...firstHolds, dated(holds(1, 'csharp'), '2026-11-20'), dated(refuted(1, 'csharp'), '2026-11-25')]).value.slot, rb.slot + 4, 'a conflict about a session of no read-back slot is nothing to this gate');
+  assert.equal(asked(later, [...firstHolds, dated(refuted(rb.slot, 'csharp', 2), '2026-11-25')]).value.slot, rb.slot + 4, 'a line of another attempt is another rid: no conflict');
+});
+
+test('Omitting_the_kind_leaves_the_quick_runs_pairs_as_they_were_and_kind_data_is_seen_only_when_asked', () => {
+  let map = openSeries({ seriesId: 'x-test', caps: {} });
+  for (const [stack, rid_, scored] of [['csharp', 'q1', true], ['node', 'q2', false]]) {
+    map = planSession(map, { rid: rid_, pair: 1, stack, phase: 'v1', attempt: 1, kind: 'pilot', label: 'paired', mask: MASKS.low }).value;
+    map = transition(map, rid_, 'launching', {}).value;
+    map = transition(map, rid_, 'ran', { class: 'completed', data: true }).value;
+    if (scored) map = transition(map, rid_, 'scored', {}).value;
+  }
+  assert.deepEqual([stackState(map, 1, 'csharp'), stackState(map, 1, 'node')], ['done', 'open'], 'the default kind is the quick run\'s `pilot`');
+  assert.deepEqual([stackState(map, 1, 'csharp', 'pilot'), stackState(map, 1, 'node', 'pilot')], ['done', 'open'], 'naming it changes nothing');
+  assert.deepEqual([pairComplete(map, 1), sessionsOf(map, 1).map(s => s.rid), openSessions(map, 1).map(s => s.rid)], [false, ['q1', 'q2'], ['q2']]);
+  assert.deepEqual([stackState(map, 1, 'csharp', 'data'), sessionsOf(map, 1, undefined, 'data').length, openSessions(map, 1, 'data').length], ['none', 0, 0], 'the quick run\'s sessions are no Stage 1 slot');
+  assert.deepEqual([isOpenSession(map.sessions.q1), isOpenSession(map.sessions.q2)], [false, true]);
+  assert.deepEqual([stateOfSessions([]), stateOfSessions([map.sessions.q1])], ['none', 'done']);
+});
+
+const pairRows = task => (script, expect, name) => {
+  const step = stepOfPilot([...AA_DONE, ...(task === '04' ? pairDone('05') : []), ...script]);
+  assert.deepEqual(expect(step), true, `${name}: ${JSON.stringify(step)}`);
+};
+const todoShape = step => step.value.todo.map(x => [x.twin ?? x.stack, x.attempt, x.step]);
+const aaScript = rows => rows.map(([twin, attempt, end]) => ['aa', '10', 'csharp', attempt, end, twin]);
+
+test('The_A_A_decision_table_per_state_of_the_twins', () => {
+  const rows = [
+    ['both absent: both twins are planned', [], 'plan', [['a', 1, 'plan'], ['b', 1, 'plan']]],
+    ['one planned, the other scored: only the planned one is launched', aaScript([['a', 1, GOOD], ['b', 1, 'planned']]), 'resume', [['b', 1, 'launch']]],
+    ['one launching: settled', aaScript([['a', 1, GOOD], ['b', 1, 'launching']]), 'resume', [['b', 1, 'settle']]],
+    ['one ended with data, unscored: scored', aaScript([['a', 1, RAN], ['b', 1, GOOD]]), 'resume', [['a', 1, 'score']]],
+    ['one scored and the other void: BOTH twins run again, attempt 2', aaScript([['a', 1, GOOD], ['b', 1, VOID]]), 'again', [['a', 2, 'plan'], ['b', 2, 'plan']]],
+    ['both void: both twins run again', aaScript([['a', 1, VOID], ['b', 1, VOID]]), 'again', [['a', 2, 'plan'], ['b', 2, 'plan']]],
+    ['one open and the other void: the open one is finished first, nothing else', aaScript([['a', 1, 'planned'], ['b', 1, VOID]]), 'resume', [['a', 1, 'launch']]],
+    ['the repeat run planned: it is launched, not planned again', aaScript([['a', 1, GOOD], ['b', 1, VOID], ['a', 2, 'planned'], ['b', 2, 'planned']]), 'resume', [['a', 2, 'launch'], ['b', 2, 'launch']]],
+    ['the repeat run half scored: only the open twin', aaScript([['a', 1, GOOD], ['b', 1, VOID], ['a', 2, GOOD], ['b', 2, 'launching']]), 'resume', [['b', 2, 'settle']]],
+  ];
+  for (const [name, script, action, shape] of rows) {
+    const step = stepOfPilot(script);
+    assert.deepEqual([step.ok, step.value?.what, step.value?.action, step.ok ? todoShape(step) : null], [true, 'aa', action, shape], name);
+  }
+  assert.equal(stepOfPilot(aaScript([['a', 1, GOOD], ['b', 1, GOOD]])).value.what, 'pilot:05', 'both scored: the A/A is finished');
+  assert.equal(stepOfPilot(aaScript([['a', 1, GOOD], ['b', 1, VOID], ['a', 2, GOOD], ['b', 2, GOOD]])).value.what, 'pilot:05', 'the repeat settles it');
+  assert.match(stepOfPilot(aaScript([['a', 1, GOOD], ['b', 1, VOID], ['a', 2, GOOD], ['b', 2, VOID]])).reason, /after its one repeat/, 'a void at attempt 2: the A/A ends and the pilot cannot go on; an instrument fix and a new go come first');
+  assert.match(stepOfPilot(aaScript([['a', 1, GOOD]])).reason, /holds one twin only of its run 1/, 'one twin of a run without the other is a refusal, whatever it is');
+  assert.match(stepOfPilot(aaScript([['a', 1, GOOD], ['b', 1, VOID], ['a', 2, GOOD]])).reason, /holds one twin only of its run 2/);
+});
+
+test('The_pilot_pairs_follow_the_slot_decision_table', () => {
+  const cases = [
+    ['both absent: both stacks planned', [], 'plan', [['csharp', 1, 'plan'], ['node', 1, 'plan']]],
+    ['one planned, the other scored: only the planned one', [['pilot', '05', 'csharp', 1, GOOD], ['pilot', '05', 'node', 1, 'planned']], 'resume', [['node', 1, 'launch']]],
+    ['launching: settled', [['pilot', '05', 'csharp', 1, 'launching'], ['pilot', '05', 'node', 1, GOOD]], 'resume', [['csharp', 1, 'settle']]],
+    ['ended with data, unscored: scored', [['pilot', '05', 'csharp', 1, GOOD], ['pilot', '05', 'node', 1, RAN]], 'resume', [['node', 1, 'score']]],
+    ['void at attempt 1: that stack alone, attempt 2', [['pilot', '05', 'csharp', 1, VOID], ['pilot', '05', 'node', 1, GOOD]], 'rerun', [['csharp', 2, 'plan']]],
+    ['an open session is finished before a void is re-run', [['pilot', '05', 'csharp', 1, VOID], ['pilot', '05', 'node', 1, 'planned']], 'resume', [['node', 1, 'launch']]],
+    ['the re-run planned: launched, not planned again', [['pilot', '05', 'csharp', 1, VOID], ['pilot', '05', 'csharp', 2, 'planned'], ['pilot', '05', 'node', 1, GOOD]], 'resume', [['csharp', 2, 'launch']]],
+  ];
+  for (const [name, script, action, shape] of cases) {
+    const step = stepOfPilot([...AA_DONE, ...script]);
+    assert.deepEqual([step.ok, step.value?.what, step.value?.action, step.ok ? todoShape(step) : null], [true, 'pilot:05', action, shape], name);
+  }
+  const final = [...AA_DONE, ['pilot', '05', 'csharp', 1, VOID], ['pilot', '05', 'csharp', 2, VOID], ['pilot', '05', 'node', 1, GOOD]];
+  assert.equal(stepOfPilot(final).value.what, 'pilot:04', 'a void at attempt 2 ends the pair: nothing, the web pair is next');
+  assert.match(stepOfPilot([...AA_DONE, ['pilot', '05', 'csharp', 1, GOOD]]).reason, /holds sessions of one stack only/);
+  assert.match(stepOfPilot([...AA_DONE, ['pilot', '05', 'csharp', 1, GOOD], ['pilot', '05', 'node', 1, { class: 'stop: T1 breach', data: false, scored: false }]]).reason, /ended with a stop/);
+});
+
+test('slotProblem_refuses_what_nextSlot_would_not_offer_and_accepts_what_it_offers', () => {
+  const [rb] = RB;
+  const ask = (script, slot, lines = READ, gates = GATES) => slotProblem({ map: mapWith(script), slots: SLOTS, slot, ...gates, readbackLines: lines });
+  // acceptance: exactly the slot nextSlot offers, in every state the offers were tested in
+  for (const script of [[], [[1, 'csharp', 1, GOOD], [1, 'node', 1, 'planned']], [[1, 'csharp', 1, VOID], [1, 'node', 1, GOOD]], finished(2), finished(rb.slot - 1)]) {
+    const offered = next(script).value.slot;
+    assert.equal(ask(script, offered), null, `slot ${offered} is accepted`);
+    assert.equal(ask(script, offered + 1) === null, false, `slot ${offered + 1} is refused`);
+  }
+  // the refusals, each its own sentence
+  assert.match(ask([], 1, [], { pilotGo: false, seedRevealed: true }), /pilot is GO/);
+  assert.match(ask([], 1, [], { pilotGo: true, seedRevealed: false }), /seed is revealed/);
+  for (const bad of [0, 31, 1.5, '1', undefined]) assert.match(ask([], bad), /Stage 1 has slots 1 to 30/, `slot ${String(bad)}`);
+  assert.match(ask([[1, 'csharp', 1, GOOD]], 3), /slot 1 .* is not finished/, 'the barrier');
+  assert.match(ask(finished(5).concat([[6, 'csharp', 1, GOOD]]), 7), /round 2 never starts while a pair of round 1 is unscored/, 'the round rule');
+  assert.match(ask(finished(2), 2), /is finished: a finished slot is never run again/);
+  assert.match(ask(finished(rb.slot), rb.slot + 1, []), /is a read-back slot/, 'the read-back gate');
+  assert.match(ask(finished(12), 13, []), /round 3 never starts before the read-back lines/, 'the parent\'s round 3 rule');
+  assert.match(ask(finished(rb.slot), rb.slot + 1, [...READ, dated(refuted(rb.slot, 'csharp'), '2026-11-25')]), /first dated line is final/, 'a conflicting line');
+  assert.equal(slotProblem({ map: mapWith([]), slots: null, slot: 1, ...GATES }) === null, false, 'no slots before the reveal is a refusal and never a throw');
 });

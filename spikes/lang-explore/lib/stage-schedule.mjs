@@ -117,6 +117,27 @@ function gateProblem({ pilotGo, seedRevealed, slots }) {
   return seedRevealed === true && hasSlots(slots) ? null : 'no data slot before the seed is revealed: seed-reveal comes after the pilot, and the slots are made from it';
 }
 
+const isVerdictLine = l => l.g === READBACK_ROW && (l.verdict === 'holds' || l.verdict === 'refuted');
+
+/** The rids of every session a read-back slot can hold (both stacks, both attempts). */
+const readbackRidsOf = slots => new Set(slots.filter(s => s.readback).flatMap(s => STACK_ORDER.flatMap(stack => s.rids[stack])));
+
+/** The verdict lines of the read-back slots' sessions, grouped by rid in file order (the first line of a rid is first in its group). */
+function linesByRid({ slots, lines }) {
+  const rids = readbackRidsOf(slots);
+  const groups = new Map();
+  for (const l of lines.filter(x => isVerdictLine(x) && rids.has(x.rid))) groups.set(l.rid, [...(groups.get(l.rid) ?? []), l]);
+  return groups;
+}
+
+/** The sentence refusing a later read-back line that conflicts with the first dated line of its rid, or null. A repeated identical line is harmless; the first line is final, so the later one is never applied. */
+function conflictProblem({ slots, lines }) {
+  const group = [...linesByRid({ slots, lines }).values()].find(g => g.some(l => l.verdict !== g[0].verdict));
+  if (group === undefined) return null;
+  const [first, later] = [group[0], group.find(l => l.verdict !== group[0].verdict)];
+  return `the read-back lines disagree about ${first.rid}: ${first.date ?? 'undated'} ${first.verdict}, then ${later.date ?? 'undated'} ${later.verdict}; the first dated line is final, so the later one is refused and never applied`;
+}
+
 const holds = (lines, rid) => lines.some(l => l.rid === rid && l.g === READBACK_ROW && l.verdict === 'holds');
 
 /** A session of a read-back slot that a dated `refuted` line names: it ended as `void: harness`, so its one re-run is the next step. The run-map may not say so yet (the harness applies the line when it rescores), so the schedule reads the line. */
@@ -168,7 +189,8 @@ export function slotProblem({ map, slots, slot, pilotGo, seedRevealed, readbackL
   const gate = gateProblem({ pilotGo, seedRevealed, slots });
   if (gate) return gate;
   const target = slots.find(s => s.slot === slot);
-  return target === undefined ? `slot ${slot}: Stage 1 has slots 1 to ${slots.length}` : orderProblem({ map: withRefuted({ map, slots, lines: readbackLines }), slots, target, lines: readbackLines });
+  if (target === undefined) return `slot ${slot}: Stage 1 has slots 1 to ${slots.length}`;
+  return conflictProblem({ slots, lines: readbackLines }) ?? orderProblem({ map: withRefuted({ map, slots, lines: readbackLines }), slots, target, lines: readbackLines });
 }
 
 function orderProblem({ map, slots, target, lines }) {
@@ -238,8 +260,8 @@ function offerFor({ map, slot }) {
  * unfinished one, so the barrier holds by construction; `slotProblem` states the same order as a sentence for a verb that is asked for a slot by number.
  */
 export function nextSlot({ map, slots, pilotGo, seedRevealed, readbackLines = [] }) {
-  const gate = gateProblem({ pilotGo, seedRevealed, slots });
-  if (gate) return fail(gate);
+  const refused = gateProblem({ pilotGo, seedRevealed, slots }) ?? conflictProblem({ slots, lines: readbackLines });
+  if (refused) return fail(refused);
   const seen = withRefuted({ map, slots, lines: readbackLines });
   const slot = slots.find(s => !finished(seen, s.slot));
   if (slot === undefined) return ok(null);
@@ -327,11 +349,22 @@ function aaSettled({ sessions, aa }) {
   return sessions.every(s => s.attempt === 1) ? aaAgain(aa) : (voidedAt(sessions, 2) ? fail(AFTER_REPEAT) : ok(null));
 }
 
+/** The first run (attempt) of the A/A that holds one twin and not both, or undefined. */
+const halfRunOf = sessions => [...new Set(sessions.map(s => s.attempt))].find(attempt => sessions.filter(s => s.attempt === attempt).length !== 2);
+
+/** The sentence for an A/A that ended with a stop or holds one twin of a run only, or null. */
+function aaProblem(sessions) {
+  const stopped = sessions.find(s => stateOfSessions([s]) === 'stopped');
+  if (stopped) return `the A/A ${stopped.twin} ended with a stop (${stopped.class}): a stopped series is never run again`;
+  const half = halfRunOf(sessions);
+  return half ? `the A/A holds one twin only of its run ${half}: the twins are planned together` : null;
+}
+
 /** The A/A: two sessions of one task and one stack, one on each mask; a halt is resumed, a stop ends the pilot. */
 function aaStep({ map, plan }) {
   const sessions = pilotSessionsOf({ map, kind: AA_KIND, task: plan.task });
-  const stopped = sessions.find(s => stateOfSessions([s]) === 'stopped');
-  if (stopped) return fail(`the A/A ${stopped.twin} ended with a stop (${stopped.class}): a stopped series is never run again`);
+  const problem = aaProblem(sessions);
+  if (problem) return fail(problem);
   const open = sessions.filter(isOpenSession);
   if (open.length > 0) return ok({ what: 'aa', action: 'resume', todo: open.map(resumeEntry) });
   return sessions.length === 0 ? ok({ what: 'aa', action: 'plan', todo: plan.sessions.map(planEntry) }) : aaSettled({ sessions, aa: plan });
