@@ -44,9 +44,12 @@ function fixedStep(map, kind) {
 
 // ---- a launch step --------------------------------------------------------------------------------------------------------------
 
-/** The sessions of a launch step, planned in the run-map when they are new, and only those still `planned`: a session that already ended (its partner was reset by a resume) is never launched again (`ran -> launching` is not a transition). */
+/** Does the caller own the schedule of this run? It does when the context carries `stepOf` (F3.S1: Stage 1's slots): v1 then plans no session from its own seed and asks the caller for every step. */
+const callerSteps = ctx => typeof ctx.stepOf === 'function';
+
+/** The sessions of a launch step, planned in the run-map when they are new, and only those still `planned`: a session that already ended (its partner was reset by a resume) is never launched again (`ran -> launching` is not a transition). The sessions of a caller's step are the ones the caller planned in the map, as for the other kinds. */
 function planItems({ ctx, h, step }) {
-  const all = ctx.kind === 'data' ? itemsOf({ ctx, step }) : step.sessions.map(s => ({ session: s, rid: s.rid, mask: h.get().sessions[s.rid].mask }));
+  const all = ctx.kind === 'data' && !callerSteps(ctx) ? itemsOf({ ctx, step }) : step.sessions.map(s => ({ session: s, rid: s.rid, mask: h.get().sessions[s.rid].mask }));
   for (const item of all) {
     if (h.get().sessions[item.rid] === undefined) {
       h.apply(planSession(h.get(), { rid: item.rid, pair: ctx.pair, ...item.session, kind: ctx.kind, label: step.label, mask: item.mask }));
@@ -140,8 +143,9 @@ async function scoreOne({ ctx, deps, h, ref, flag, say }) {
   return null;
 }
 
-/** The refs of a score step, the stack the seed names first coming first. */
+/** The refs of a score step, the stack the seed names first coming first (a caller's step keeps the order it gave). */
 function scoreOrder({ ctx, step }) {
+  if (callerSteps(ctx)) return step.sessions;
   const first = firstStack({ seed: ctx.seed ?? '', pair: ctx.pair, phase: step.sessions[0].phase });
   return [...step.sessions].sort((a, b) => (a.stack === first ? -1 : b.stack === first ? 1 : 0));
 }
@@ -191,7 +195,7 @@ function applyHandVerdicts({ ctx, h, say }) {
  * re-run), the run halts, resumably, and names the command that runs pair j first (review MINOR-6). -> a sentence or null; never for the A/A, the pilot or the rehearsal.
  */
 function earlierPairNotDone({ ctx, map }) {
-  if (ctx.kind !== 'data') return null;
+  if (ctx.kind !== 'data' || callerSteps(ctx)) return null; // a caller that owns the schedule has asked its own barrier
   const behind = Array.from({ length: ctx.pair - 1 }, (_, i) => i + 1).find(j => nextStep(pairState(map, j)).action !== 'done');
   return behind === undefined ? null : `pair ${behind} is not done (its next step is ${describeStep(nextStep(pairState(map, behind)))}): run --what pair:${behind} first, then pair ${ctx.pair}. Pairs run in order, and a dated refuted line on an earlier pair needs its re-run before the next pair starts`;
 }
@@ -214,7 +218,7 @@ function preStep({ ctx, deps, h, say, signal }) {
 
 /** A pair that is done gets its record. */
 function finishedPair({ ctx, h }) {
-  if (ctx.kind === 'data') writePairRecord({ ctx, map: h.get(), pair: ctx.pair });
+  if (ctx.kind === 'data' && !callerSteps(ctx)) writePairRecord({ ctx, map: h.get(), pair: ctx.pair });
   return done(EXIT.done, 'done');
 }
 
@@ -230,11 +234,17 @@ function carryV1Quiet(state, step) {
   if (step.action === 'launch' && step.phase === 'v1') state.v1Quiet = state.quiet?.quiet ?? null;
 }
 
+/** The next step of this run: the caller's (`ctx.stepOf(map)`, when the context carries one), v1's own two-phase schedule for the kind `data`, or the fixed list of any other kind. */
+const nextStepOf = ({ ctx, h }) => {
+  if (callerSteps(ctx)) return ctx.stepOf(h.get());
+  return ctx.kind === 'data' ? nextStep(pairState(h.get(), ctx.pair)) : fixedStep(h.get(), ctx.kind);
+};
+
 /** One pass of the loop. -> `{ exit, message }` when the run ends, else `null`. */
 async function loopPass(a) {
   const early = preStep(a);
   if (early) return early;
-  const step = a.ctx.kind === 'data' ? nextStep(pairState(a.h.get(), a.ctx.pair)) : fixedStep(a.h.get(), a.ctx.kind);
+  const step = nextStepOf(a);
   const result = await stepResult(a, step);
   if (!result) carryV1Quiet(a.state, step);
   return result;
