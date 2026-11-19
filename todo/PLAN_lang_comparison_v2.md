@@ -741,6 +741,8 @@ when the required mask cannot be applied exactly; a refusal halts the series res
 
 #### F3 — The series and the report
 
+*(2026-11-19: its stories document is [PLAN_lang_comparison_v2_E9_F3.md](PLAN_lang_comparison_v2_E9_F3.md), written when F3 started; a link, no change.)*
+
 - **Goal:** one pre-registered bare series over six tasks, isolated, accounted, balanced, with frozen identities, run and
   scored; then a generated record on six tasks with the claim's limit stated, and Stage 2 decided on a date.
 - **Needs:** F2's tag.
