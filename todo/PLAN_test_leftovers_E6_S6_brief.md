@@ -669,3 +669,23 @@ that reading was wrong for these three: the folder is private.) The readers that
 file with `testsToDelete-u99999-bench-plant-AbCdEf` planted in `heldoutDir` before the check → `pass 1` each (unseen). GREEN: the three files
 41/41. RED again: the same plants → `fail 1` each, actual `[ 'testsToDelete-u99999-bench-plant-AbCdEf' ]`. Both guards: 2 and 2.
 (b) `todo/README.md`: the brief's index line says built, not "plan only".
+
+**Fix 8 — two minigit-bench tests the head runs found host-bound (2026-11-19, test only).** The head runs at `dc9c679d` (umask 0022,
+as the base runs; logs `~/rsd/e6s6/head-dc9c679d/`) left, besides the two SDK ones (below), two reds that the base passed and S6 never
+touched (`git diff a8106448 dc9c679d` is empty for both files). (a) `test/broker.test.mjs`
+`A_request_the_upstream_reset_after_part_of_it_was_written_is_charged_the_reservation_not_waived`: red 5 of 5 alone, and red 3 of 3 at
+the BASE commit `a8106448` too — the host changed, not the code (WSL rebooted 2026-11-18 10:29, kernel `6.18.58.1`; `tcp_wmem` max
+4194304): a 3 MB body fits the kernel's send buffer whole, so `finish` ("handed over") fires before the raw upstream's reset and
+`requestSent` is true. Fix: the body is the largest the broker admits (`MAX_BODY_BYTES` less 64 KiB), and the test asserts its
+premise (the body is larger than `tcp_wmem`'s max). RED: 5 of 5 `fail 1` (`the request was not fully handed over`). GREEN: 5 of 5
+`pass 31`. RED again: the same test with 3 MB → `fail 1`, "the body (3145728 bytes) must be larger than the kernel's send buffer
+(4194304)". (b) `test/bare-wiring.test.mjs` `A_cancel_during_the_quiet_wait_of_the_real_wiring_ends_it_at_once`: 7821 ms against a 5 s
+bound at load 24 under `nice -n 19`; green 3 of 3 alone at load 15. The property is "cut short inside the 60 s window": the bound is
+now half the window, 30 s. RED: the run's 7821 ms. GREEN: `pass 15`. RED again: the abort moved to 35 s → `fail 1` (35986 ms).
+*The umask (an environment fact, no fix here; a todo for the followups plan):* the first head run went through a `systemd-run --user`
+unit, whose umask is 0002; it made 51 `lang-bench` reds (every `exec-layer` run parent is refused as "writable by others" — the code is
+right to refuse) and one `minigit-bench` red (`test/heldout-archive.test.mjs:30`, the unpacked files 0644 against the 0664 they were
+written with: the test assumes umask 0022). Rerun with `UMask=0022`, as the base: all gone. *The SDK reds* (7: `minigit-bench` 2,
+`lang-explore` 5, every one "the box must hold exactly one SDK (2 listed)") come from SDK 11.0.100, which the owner keeps (2026-11-19);
+the fix is the instrument's, on its own branch `fix/box-one-sdk` under `PLAN_minigit_stack_bench_E2.md`'s amendment D-9 (coai
+`10fb6711`), and S6 merges main after it.
