@@ -187,3 +187,18 @@ test('A_stopped_series_is_refused_for_every_unit_with_the_stop_exit_and_nothing_
 });
 
 void fakeLoop; void mapOf;
+
+test('A_rehearsal_series_has_its_own_seed_no_go_lines_to_wait_for_and_read_back_lines_that_hold', async () => {
+  const { readGates } = await import('../lib/stage-gates.mjs');
+  const { openStage } = await import('../lib/stage-step.mjs');
+  const { stageInit } = await import('../lib/stage-init.mjs');
+  const { initIo } = await import('./stage-series-fixture.mjs');
+  const io = initIo();
+  const made = await stageInit({ values: { rehearsal: true, 'task-repo': '/t' }, io });
+  const series = openStage({ seriesDir: made.dir, io });
+  const read = readGates({ series: series.value, io: { ...io, stage: { ...io.stage, amendmentsFile: '/nonexistent/amendments.md' } } });
+  assert.equal(read.ok, true, read.reason);
+  assert.deepEqual([read.value.gates.seedRevealed, read.value.gates.pilotGo, read.value.gates.seed === series.value.state.rehearsalSeed], [true, true, true]);
+  assert.equal(read.value.gates.readbackLines.length, 8, 'two read-back slots, two stacks, two attempts');
+  assert.ok(read.value.gates.readbackLines.every(l => l.g === 'G-1' && l.verdict === 'holds'));
+});

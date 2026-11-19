@@ -7,7 +7,8 @@ import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { INPUTS } from './paths.mjs';
 import { STAGE_AMENDMENTS_FILE, ownerGoLine, parseStageAmendments, pilotGoProblem, readStageAmendments, readbackLinesOf } from './stage-amendments.mjs';
-import { isRehearsal } from './series.mjs';
+import { STACK_ORDER, isRehearsal } from './series.mjs';
+import { READBACK_ROW, slotsOf } from './stage-schedule.mjs';
 
 /** The revealed seed: `seed.txt` of the registered `prereg` folder, written by `seed-reveal` (PR 5) after the pilot. */
 export const STAGE_SEED_FILE = path.join(INPUTS, 'prereg', 'seed.txt');
@@ -31,8 +32,11 @@ function revealedSeed({ series, io }) {
   return sha256(seed) === series.state.seedSha256 ? ok(seed) : fail(`${file} does not hash to the series' seedSha256 (${String(series.state.seedSha256).slice(0, 12)}): it is not the seed that was committed`);
 }
 
-/** The gates of a rehearsal series: its own seed, no pilot GO to wait for, no line. */
-const rehearsalGates = series => ({ seed: series.state.rehearsalSeed, seedRevealed: true, pilotGo: true, readbackLines: [] });
+/** The read-back lines of a rehearsal: no judge reads it, so every session of a read-back slot counts as read back (`holds`), and the free round is not stopped at its read-back slot. */
+const rehearsalLines = seed => slotsOf({ seed }).filter(s => s.readback).flatMap(s => STACK_ORDER.flatMap(stack => s.rids[stack].map(rid => ({ date: '2026-01-01', g: READBACK_ROW, verdict: 'holds', rid, evidence: 'rehearsal', who: 'rehearsal' }))));
+
+/** The gates of a rehearsal series: its own seed, no pilot GO to wait for, and read-back lines that say `holds`. */
+const rehearsalGates = series => ({ seed: series.state.rehearsalSeed, seedRevealed: true, pilotGo: true, readbackLines: rehearsalLines(series.state.rehearsalSeed) });
 
 /** The gates of a paid series from the dated lines and the seed file. -> `ok(gates)` | `fail`. */
 function paidGates({ series, io, lines, text }) {
