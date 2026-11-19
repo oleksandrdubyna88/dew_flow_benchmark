@@ -4,6 +4,7 @@ import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { agentBoxPrefix, layoutPaths } from '../../minigit-bench/lib/sandbox.mjs';
+import { sessionBoxArgv } from '../../minigit-bench/lib/session-launch.mjs';
 import { DISTRIBUTION_DOTNET } from '../lib/quick.mjs';
 import { loadPrompts, planForSession } from '../lib/plan.mjs';
 import { EXPLORE } from './quick-leak-fixture.mjs';
@@ -16,7 +17,11 @@ const ctx = over => ({
 });
 const quickCtx = ctx({ dotnetDir: '/dn', hide: DISTRIBUTION_DOTNET });
 const plan = stack => planForSession({ ctx: quickCtx, item: { session: { stack, phase: 'v1', attempt: 1 }, rid: 'abc123', layout } });
-const prefixOf = p => agentBoxPrefix({ layout, arm: 'bare', toolchains: p.toolchains, claudeBinary: p.claudeBinary, nodeDir: p.nodeDir, hide: p.hide, operatorHome: HOME, exists: () => true });
+/** The prefix (up to bwrap's `--`) of the box the launcher builds from the plan (v1's own function, not a copy of its call): every path exists, and the pinned SDK directory means no version folder is listed. */
+function prefixOf(p) {
+  const argv = sessionBoxArgv({ plan: p, command: [], seams: { exists: () => true, listDir: dir => { throw new Error(`a quick box must not list ${dir}`); } } });
+  return argv.slice(0, argv.indexOf('--') + 1);
+}
 
 /** The destinations (the argument after the flag) of every `flag` in the argv. */
 const destinations = (argv, ...flags) => argv.flatMap((a, i) => (flags.includes(a) ? [argv[i + 2] ?? argv[i + 1]] : []));
@@ -43,7 +48,7 @@ for (const stack of ['csharp', 'node']) {
     const readOnly = destinations(argv, '--ro-bind');
     assert.ok(readOnly.includes('/dn'), 'the pinned SDK is bound read-only');
     for (const dir of DISTRIBUTION_DOTNET) assert.ok(tmpfsAt(argv).includes(dir), `${dir} is hidden`);
-    const plain = agentBoxPrefix({ layout, arm: 'bare', toolchains: ['/ts'], claudeBinary: '/x/claude', nodeDir: '/n', operatorHome: HOME, exists: () => true });
+    const plain = agentBoxPrefix({ layout, arm: 'bare', toolchains: ['/ts'], claudeBinary: '/x/claude', nodeDir: '/n', operatorHome: HOME, exists: () => true, dotnetPin: EXPLORE.dotnet.sdk, listDir: () => [] }); // the olympiad box: the distribution's dotnet, on a host with nothing else to hide
     const extra = argv.filter(a => !plain.includes(a));
     assert.deepEqual(extra.filter(a => a.startsWith('/') && !a.startsWith('/dn') && !DISTRIBUTION_DOTNET.includes(a)), [], 'no other path appears in the quick box that the olympiad box lacks');
   });

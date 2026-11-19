@@ -95,7 +95,7 @@ class AbortRuleTests(unittest.TestCase):
     def test_The_rule_reads_the_end_of_the_stderr_file_whatever_its_size(self):
         long = "x\n" * 100_000 + "Out of memory.\n"
         self.assertEqual(rs_abort.runtime_abort(134, stderr_file(self, long), HIGH), "dotnet")
-        self.assertIsNone(rs_abort.runtime_abort(134, os.path.join(tempfile.gettempdir(), "testsToDelete-no-such-stderr"), HIGH))
+        self.assertIsNone(rs_abort.runtime_abort(134, os.path.join(bs.scratch_dir(self), "no-such-stderr"), HIGH))
 
 
 MIB = 1024 * 1024

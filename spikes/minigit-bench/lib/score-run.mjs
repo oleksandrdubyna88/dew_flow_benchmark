@@ -18,9 +18,10 @@ const ENV_WAIT_MS = 60_000;
 /** The last line the scorer printed that says why (its `environment:` / `scorer failed:` / `usage error:` line), else the tail of its output. */
 const why = stdout => stdout.trim().split('\n').filter(Boolean).at(-1) ?? '(no output)';
 
-function argvFor({ session, source, stack, phase, toolchains, nugetCache, npmCache, scorer, cpus }) {
+/** `--dotnet-pin` is ALWAYS on the argv, as text: a run that holds no pin sends `undefined`, which the scorer refuses as a usage error (exit 4, `failed`), never a scoring box that shows every SDK of the host. */
+function argvFor({ session, source, stack, phase, toolchains, dotnetPin, nugetCache, npmCache, scorer, cpus }) {
   return ['-c', cpus, 'nice', '-n', '19', process.execPath, scorer, '--session', session, '--source', source, '--arm', 'bare', '--stack', stack, '--phase', phase,
-    ...toolchains.flatMap(t => ['--toolchain', t]), ...(nugetCache ? ['--nuget-cache', nugetCache] : []), ...(npmCache ? ['--npm-cache', npmCache] : [])];
+    ...toolchains.flatMap(t => ['--toolchain', t]), '--dotnet-pin', String(dotnetPin), ...(nugetCache ? ['--nuget-cache', nugetCache] : []), ...(npmCache ? ['--npm-cache', npmCache] : [])];
 }
 
 function readScore(session) {
@@ -51,10 +52,11 @@ async function attemptScore({ argv, session, outerTimeoutMs }) {
 
 /**
  * -> `{ kind: 'scored', score, trace }` | `{ kind: 'environment' | 'failed' | 'scorer-timeout', reason }`. `sleep` is injected so a test does not wait a minute.
- * `scorer` and `cpus` are parameters for the same reason (a stub scorer; the real default is the whole machine).
+ * `scorer` and `cpus` are parameters for the same reason (a stub scorer; the real default is the whole machine). `dotnetPin` is the run's pinned SDK version (`ctx.dotnetPin`): the scoring box
+ * shows only that SDK, as the session's box did.
  */
-export async function scoreSession({ session, source, stack, phase, toolchains, nugetCache, npmCache, outerTimeoutMs = SCORER_OUTER_MS, sleep, scorer = SCORER, cpus = '0-13' }) {
-  const argv = argvFor({ session, source, stack, phase, toolchains, nugetCache, npmCache, scorer, cpus });
+export async function scoreSession({ session, source, stack, phase, toolchains, dotnetPin, nugetCache, npmCache, outerTimeoutMs = SCORER_OUTER_MS, sleep, scorer = SCORER, cpus = '0-13' }) {
+  const argv = argvFor({ session, source, stack, phase, toolchains, dotnetPin, nugetCache, npmCache, scorer, cpus });
   let last = null;
   for (let attempt = 0; attempt <= ENV_RETRIES; attempt += 1) {
     if (attempt > 0) await sleep(ENV_WAIT_MS);

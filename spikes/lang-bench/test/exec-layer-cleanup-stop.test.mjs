@@ -94,7 +94,7 @@ test('A_cleanup_that_leaves_a_unit_keeps_the_run_folder_and_its_claim_and_a_late
     const opened = await openRun({ ...${JSON.stringify(plain)}, owned: ownedFor({ token: 'bench' }) });
     if (!opened.ok) { console.log(JSON.stringify({ problem: opened.reason })); process.exit(1); }
     const run = opened.value;
-    const stub = async () => ({ removed: [], left: [{ kind: 'scope', name: 'testsToDelete-stub-scope', reason: 'stub: it will not end' }] });
+    const stub = async () => ({ removed: [], left: [{ kind: 'scope', name: 'stub-scope', reason: 'stub: it will not end' }] });
     const report = await cleanup(run, { scopes: stub });
     console.log(JSON.stringify({ dir: run.dir, clean: report.clean, left: report.left.map(item => item.kind + ':' + item.name) }));
     process.kill(process.pid, 'SIGKILL'); // the run's process is gone: its claim now says so

@@ -8,10 +8,11 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { contaminationHits } from '../lib/contamination.mjs';
 import { boxReachable, boxSkeleton, layoutPaths } from '../lib/sandbox.mjs';
+import { DOTNET_PIN } from './box-helpers.mjs';
 
 const home = os.homedir();
 const layout = layoutPaths(path.join(home, 'rsd', 'minigit', 's-20261030-92a9', 's'), '9804fc');
-const box = { layout, nodeDir: path.join(home, '.nvm', 'versions', 'node', 'v26.12.1'), toolchains: [path.join(home, 'rsd', 'minigit', 'toolchains', 'typescript-7.0.2')], claudeBinary: path.join(home, 'rsd', 'minigit', 'toolchains', 'claude-2.1.310') };
+const box = { layout, nodeDir: path.join(home, '.nvm', 'versions', 'node', 'v26.12.1'), toolchains: [path.join(home, 'rsd', 'minigit', 'toolchains', 'typescript-7.0.2')], claudeBinary: path.join(home, 'rsd', 'minigit', 'toolchains', 'claude-2.1.310'), dotnetPin: DOTNET_PIN };
 const ctx = { rid: layout.rid, treeRoot: layout.work, home, boxHome: layout.home, harnessPaths: [layout.harness, layout.net], partnerPaths: [], arm: 'bare', ownSecrets: [], allow: boxReachable(box), skeleton: boxSkeleton(box), isLink: () => false };
 const sev = (tool, input) => contaminationHits({ calls: [{ tool, input }], ctx }).filter(h => h.rule === 'outside-path').map(h => h.severity).join() || '-';
 const bash = command => sev('Bash', { command });

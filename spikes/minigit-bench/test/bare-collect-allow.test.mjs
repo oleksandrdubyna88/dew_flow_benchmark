@@ -2,7 +2,8 @@
 // toolchain the box binds read-only and the session's own box dirs are no reach; a partner's dir, the operator's other files, another series and the harness's own dirs stay one.
 import './fake-home.mjs'; // first: the scan reads os.homedir() as the protected home
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { appendFileSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -14,6 +15,7 @@ import { loadSessionDir } from '../lib/smoke-load.mjs';
 import { lay } from './bare-fixture.mjs';
 import { pilotCommands } from './pilot-ts-calls.mjs';
 import { spikeDir } from './helpers.mjs';
+import { DOTNET_PIN } from './box-helpers.mjs';
 
 const home = os.homedir();
 const toolchains = path.join(home, 'rsd', 'minigit', 'toolchains');
@@ -27,7 +29,7 @@ const PLAN = { token: 'sk-ant-oat01-REALREALREALREALREAL0123456789', dummy: 'sk-
 /** A series under the fake home, where the real ones live: `<home>/rsd/minigit/<series>/s` (outside-path is high only under the home, a partner's dir, or the harness's). */
 function series() {
   mkdirSync(path.join(home, 'rsd', 'minigit'), { recursive: true });
-  const root = path.join(mkdtempSync(path.join(home, 'rsd', 'minigit', 'testsToDelete-series-')), 's');
+  const root = path.join(home, 'rsd', 'minigit', `series-${randomUUID()}`, 's'); // inside the fake home, which fake-home.mjs removes
   mkdirSync(root, { recursive: true });
   return root;
 }
@@ -39,7 +41,7 @@ function session(root, rid) {
 }
 const toolUse = (command, i) => ({ type: 'assistant', timestamp: '2026-10-30T10:00:00Z', message: { id: `msg-x${i}`, content: [{ type: 'tool_use', id: `tu-x${i}`, name: 'Bash', input: { command } }] } });
 /** The session's own `argv.json` as the launcher writes it: the bwrap argv of the box it ran in (the allow-list is read from it, never from the plan or the context). */
-const writeArgv = (layout, box) => writeFileSync(layout.files.argv, `${JSON.stringify({ bwrap: agentBoxPrefix({ layout, arm: 'bare', operatorHome: home, exists: () => false, ...box }), claude: [], envKeys: [] })}\n`);
+const writeArgv = (layout, box) => writeFileSync(layout.files.argv, `${JSON.stringify({ bwrap: agentBoxPrefix({ layout, arm: 'bare', operatorHome: home, exists: () => false, dotnetPin: DOTNET_PIN, ...box }), claude: [], envKeys: [] })}\n`);
 const run = (layout, commands, { box = NO_TOOLCHAIN, argv = true, ...over } = {}) => {
   if (argv) writeArgv(layout, { ...box, layout });
   else writeFileSync(layout.files.argv, 'null\n');
@@ -115,7 +117,7 @@ test('The_high_hits_themselves_are_kept_in_the_outcome_detail_with_rule_source_w
 
 test('The_paths_the_scan_allows_are_the_binds_the_box_argv_really_builds_less_the_harness_and_net_dirs', () => {
   const layout = layoutPaths('/home/op/rsd/s', 'a');
-  const opts = { layout, nodeDir: '/home/op/.nvm/n', toolchains: ['/home/op/t/ts', '/home/op/t/dotnet'], claudeBinary: '/home/op/t/claude', extraRo: ['/x/ro'], extraRw: ['/x/rw'], operatorHome: '/home/op' };
+  const opts = { layout, nodeDir: '/home/op/.nvm/n', toolchains: ['/home/op/t/ts', '/home/op/t/dotnet'], claudeBinary: '/home/op/t/claude', extraRo: ['/x/ro'], extraRw: ['/x/rw'], operatorHome: '/home/op', dotnetPin: DOTNET_PIN };
   const argv = agentBoxPrefix({ ...opts, arm: 'bare', exists: () => false });
   const hostsOf = flag => argv.flatMap((a, i) => (a === flag ? [argv[i + 1]] : []));
   const binds = [...hostsOf('--ro-bind'), ...hostsOf('--bind')].filter(p => p !== '/'); // the root bind is the whole host: not a path the box adds

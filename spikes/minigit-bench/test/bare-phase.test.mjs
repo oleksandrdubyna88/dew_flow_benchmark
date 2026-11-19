@@ -4,8 +4,13 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { launchPhase, maskedSpawn } from '../lib/bare-phase.mjs';
+import { launchPhase, maskedSpawn, v1Plan } from '../lib/bare-phase.mjs';
+import { otherDotnetVersions } from '../lib/dotnet-hide.mjs';
+import { layoutPaths } from '../lib/sandbox.mjs';
+import { sessionBoxArgv } from '../lib/session-launch.mjs';
 import { context, items, sleep } from './bare-ctx.mjs';
+import { DOTNET_PIN } from './box-helpers.mjs';
+import { ROOT, SDK_11, fakeDirs, tmpfsOf, twoSdkHost } from './dotnet-fixture.mjs';
 
 test('A_phase_starts_every_session_on_its_mask_stamps_the_spawn_and_measures_the_skew', async () => {
   const ctx = { ...context(), planOver: { tickMs: 7 } };
@@ -124,4 +129,17 @@ test('Every_planted_canary_is_removed_when_planting_or_planning_a_later_session_
   const depsB = { spawn: () => ({}), maskCheckMs: 5, procApi: { pids: () => [], read: () => '' }, listProjectDirs: () => [dirB], launchSession: async () => { throw new Error('never launched'); } };
   await assert.rejects(launchPhase({ ctx: b, items: bad, deps: depsB }), /cobol/);
   assert.deepEqual(readdirSync(dirB).filter(f => f.startsWith('scratch-note-')), [], 'a plan that throws leaves no canary in the operator\'s folders');
+});
+
+test('The_v1_plan_of_a_run_context_carries_the_pinned_sdk_so_the_sessions_box_hides_every_other_version', () => {
+  // no folder: the context is the fields v1Plan reads, the layout is paths only, the host is an invented listing with two SDKs
+  const ctx = { claudeBinary: '/x/claude', cliVersion: '2.1.310', nodeDir: '/n', tsDir: '/ts', dotnetPin: DOTNET_PIN, token: 'fake', prices: {}, home: '/home/nobody', harnessSources: {}, caps: { capUsd: 1, wallMs: 1, stallMs: 1 } };
+  const item = { layout: layoutPaths('/series/s', 'abc123'), session: { stack: 'node', phase: 'v1' } };
+  const host = fakeDirs(twoSdkHost());
+  const plan = v1Plan({ ctx, item });
+  assert.equal(plan.dotnetPin, DOTNET_PIN);
+  const hidden = tmpfsOf(sessionBoxArgv({ plan, command: ['claude'], seams: host }));
+  assert.ok(hidden.includes(`${ROOT}/sdk/${SDK_11.sdk}`) && hidden.includes(`${ROOT}/shared/Microsoft.NETCore.App/${SDK_11.runtime}`), hidden.join(' '));
+  assert.deepEqual(hidden.filter(p => p.startsWith(`${ROOT}/`)), [...otherDotnetVersions({ pin: DOTNET_PIN, ...host })]);
+  assert.throws(() => sessionBoxArgv({ plan: v1Plan({ ctx: { ...ctx, dotnetPin: undefined }, item }), command: ['claude'], seams: host }), /dotnetPin undefined is not an SDK version/, 'a context without the pin cannot launch');
 });

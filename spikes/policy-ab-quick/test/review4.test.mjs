@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -12,9 +11,15 @@ import { parseNdjson, summarize } from '../lib/summary.mjs';
 import { outcomeOf } from '../lib/watchdog.mjs';
 import { runAll } from '../pilot.mjs';
 import { assembleReport, reportTarget } from '../report.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = name => parseNdjson(fs.readFileSync(path.join(here, 'fixtures', name), 'utf8'));
+// The platform's own root (`/` here, the drive on Windows): a literal `D:/x` is a relative path on Linux, `<cwd>/D:/x`.
+const ROOT = path.parse(process.cwd()).root;
+const slash = p => p.replace(/\\/g, '/');
 
 // ---- detection ------------------------------------------------------------------------------------------------------
 
@@ -105,26 +110,21 @@ test('resume is refused when the harness, the probe or the runs root changed sin
   assert.throws(() => assertResumable({ ...ok, runMap: { cells: {} } }), /no series record/);
 });
 
-test('setting a void attempt aside renames its folder into void/, keeps the record, and clears the cell for a re-run', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pab-resume-'));
-  try {
-    for (const c of ['c1', 'c2']) fs.mkdirSync(path.join(root, c, 'tree', 'src_vs_code', 'node_modules', 'pkg'), { recursive: true });
-    fs.writeFileSync(path.join(root, 'c2', 'summary.json'), JSON.stringify({ usd: 6.57 }));
-    fs.writeFileSync(path.join(root, 'c2', 'run.json'), '{}');
-    const map = mapOf({ c1: { outcome: 'completed' }, c2: { outcome: VOID_OUTCOME } });
-    const patch = setAsideAttempts(root, [{ cell: 'c2' }, { cell: 'c3' }], map, { srcDir: 'src_vs_code', mount: '.agents/conventions' });
-    assert.deepEqual(Object.keys(patch), ['c2'], 'c3 never started: nothing to move');
-    assert.equal(patch.c2.outcome, null);
-    assert.deepEqual(patch.c2.attempts, [{ n: 1, outcome: VOID_OUTCOME, void: true, spendUsd: 6.57, movedTo: 'void/c2-a1' }]);
-    assert.ok(!fs.existsSync(path.join(root, 'c2')));
-    assert.ok(fs.existsSync(path.join(root, 'void', 'c2-a1', 'summary.json')), 'the record stays');
-    assert.ok(!fs.existsSync(path.join(root, 'void', 'c2-a1', 'tree', 'src_vs_code', 'node_modules')), 'its node_modules are freed');
-    assert.ok(fs.existsSync(path.join(root, 'c1', 'tree', 'src_vs_code', 'node_modules')), 'a kept cell is untouched');
-    assert.equal(attemptEntry({ attempts: [{}], outcome: VOID_OUTCOME }, 1, n => `a${n}`).n, 2);
-  } finally {
-    fs.rmSync(path.join(root, 'void'), { recursive: true, force: true });
-    fs.rmSync(root, { recursive: true, force: true });
-  }
+test('setting a void attempt aside renames its folder into void/, keeps the record, and clears the cell for a re-run', t => {
+  const root = owned.ownedDir(t, 'pabresume');
+  for (const c of ['c1', 'c2']) fs.mkdirSync(path.join(root, c, 'tree', 'src_vs_code', 'node_modules', 'pkg'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'c2', 'summary.json'), JSON.stringify({ usd: 6.57 }));
+  fs.writeFileSync(path.join(root, 'c2', 'run.json'), '{}');
+  const map = mapOf({ c1: { outcome: 'completed' }, c2: { outcome: VOID_OUTCOME } });
+  const patch = setAsideAttempts(root, [{ cell: 'c2' }, { cell: 'c3' }], map, { srcDir: 'src_vs_code', mount: '.agents/conventions' });
+  assert.deepEqual(Object.keys(patch), ['c2'], 'c3 never started: nothing to move');
+  assert.equal(patch.c2.outcome, null);
+  assert.deepEqual(patch.c2.attempts, [{ n: 1, outcome: VOID_OUTCOME, void: true, spendUsd: 6.57, movedTo: 'void/c2-a1' }]);
+  assert.ok(!fs.existsSync(path.join(root, 'c2')));
+  assert.ok(fs.existsSync(path.join(root, 'void', 'c2-a1', 'summary.json')), 'the record stays');
+  assert.ok(!fs.existsSync(path.join(root, 'void', 'c2-a1', 'tree', 'src_vs_code', 'node_modules')), 'its node_modules are freed');
+  assert.ok(fs.existsSync(path.join(root, 'c1', 'tree', 'src_vs_code', 'node_modules')), 'a kept cell is untouched');
+  assert.equal(attemptEntry({ attempts: [{}], outcome: VOID_OUTCOME }, 1, n => `a${n}`).n, 2);
 });
 
 // ---- the report -------------------------------------------------------------------------------------------------------
@@ -150,10 +150,12 @@ test('a report whose every cell is void never overwrites the results file; it go
   const story = loadStory('coai-751');
   const allVoidReport = { cells: [{ cell: 'c1', outcome: VOID_OUTCOME }, { cell: 'c2', outcome: VOID_OUTCOME }, { cell: 'reference', outcome: null }] };
   assert.equal(allVoid(allVoidReport.cells), true);
-  assert.equal(reportTarget({ story, report: allVoidReport, root: 'D:/rsd/_s2c' }).replace(/\\/g, '/'), 'D:/rsd/_s2c/report-void.json');
+  const runsRoot = path.join(ROOT, 'rsd', '_s2c');
+  assert.equal(slash(reportTarget({ story, report: allVoidReport, root: runsRoot })), slash(path.join(runsRoot, 'report-void.json')));
   const mixed = { cells: [{ cell: 'c1', outcome: 'completed' }, { cell: 'c2', outcome: VOID_OUTCOME }] };
   assert.equal(allVoid(mixed.cells), false);
-  assert.match(reportTarget({ story, report: mixed, root: 'D:/rsd/_s2c' }).replace(/\\/g, '/'), /research\/bench\/policy-ab-coai-751-data\.json$/);
+  assert.match(slash(reportTarget({ story, report: mixed, root: runsRoot })), /research\/bench\/policy-ab-coai-751-data\.json$/);
   assert.equal(allVoid([]), false, 'no cells is not "all void"');
-  assert.equal(reportTarget({ out: 'D:/x/y.json', story, report: allVoidReport, root: 'D:/rsd/_s2c' }).replace(/\\/g, '/'), 'D:/x/y.json', 'an explicit --out is the operator\'s call');
+  const out = path.join(ROOT, 'x', 'y.json');
+  assert.equal(slash(reportTarget({ out, story, report: allVoidReport, root: runsRoot })), slash(out), 'an explicit --out is the operator\'s call');
 });

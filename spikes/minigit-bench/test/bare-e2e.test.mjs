@@ -16,7 +16,7 @@ import { fakeToken, prices, sseAnswer, sseBody, chunksOf, stubUpstream } from '.
 import { SEED, context } from './bare-ctx.mjs';
 import { homeDir, inputs, keyGate, pythonGate, sandboxGate, spikeDir, tmpDir } from './helpers.mjs';
 import { stubClaude } from '../lib/stub-cli.mjs';
-import { TS_DIR } from './box-helpers.mjs';
+import { DOTNET_PIN, TS_DIR } from './box-helpers.mjs';
 
 test('A_stub_pair_runs_end_to_end', { timeout: 1_800_000 }, async t => {
   if (!sandboxGate(t) || !keyGate(t) || !pythonGate(t)) return;
@@ -30,7 +30,7 @@ test('A_stub_pair_runs_end_to_end', { timeout: 1_800_000 }, async t => {
   const ctx = {
     ...base, seriesDir, sessionsRoot: path.join(seriesDir, 's'), inputsRoot: fetched.root, hashes: fetched.entries, kind: 'data', pair: 1, seed: SEED,
     runMapFile: path.join(seriesDir, 'run-map.json'), ledgerFile: path.join(seriesDir, 'ledger.ndjson'), ceilingUsd: 500, bareBudgetUsd: 40, caps: { capUsd: 6, wallMs: 120_000, stallMs: 60_000 },
-    claudeBinary: stubClaude(tmpDir('stub')), cliVersion: '2.1.310', nodeDir: path.dirname(path.dirname(process.execPath)), tsDir: TS_DIR, token: fakeToken(), prices: prices(), table: policy.value.table, policy: policy.value.policy,
+    claudeBinary: stubClaude(tmpDir('stub')), cliVersion: '2.1.310', nodeDir: path.dirname(path.dirname(process.execPath)), tsDir: TS_DIR, dotnetPin: DOTNET_PIN, token: fakeToken(), prices: prices(), table: policy.value.table, policy: policy.value.policy,
     harnessSources: { boxInit: path.join(spikeDir, 'harness', 'box-init.mjs'), audit: path.join(spikeDir, '..', 'policy-ab-quick', 'hooks', 'audit.mjs') },
     planOver: { upstream: upstream.upstream, tickMs: 200, sampleMs: 200, settleMs: 300, graceMs: 2000 }, snapshotPackages: [], packageRules: [], handVerdictsFor: () => [], harnessIdentity: 'a'.repeat(64), preregTag: 'prereg/minigit-bare-20261030',
     abortReason: () => null, abortExit: () => 130, spin: { medianMs: 20 }, aliasStore: aliasStore(path.join(seriesDir, 'aliases.json')),

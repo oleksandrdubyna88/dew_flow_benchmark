@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +25,9 @@ import { gitlinkFromStage, resolverInstallArgs } from '../lib/tree.mjs';
 import { renderGenerated } from '../lib/prepare-generated.mjs';
 import { planCells, spentInRoot } from '../pilot.mjs';
 import { trimFor } from '../prepare-cell.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fx = name => fs.readFileSync(path.join(here, 'fixtures', name), 'utf8');
@@ -123,23 +125,19 @@ test('shedding names exact paths under the runs root and refuses anything else',
   for (const bad of [root, path.join(root, 'c2'), path.join(root, 'c2', 'tree'), path.join(root, 'c2', 'summary.json'), path.resolve('D:/other/c2/score'), path.join(root, '..', 'score'), path.join(root, 'score')]) assert.equal(isShedPath(bad, root), false, bad);
 });
 
-test('shedCell removes only the targets that exist, through the injected remover, and keeps the records', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pab-shed-'));
-  try {
-    const cell = path.join(root, 'c1');
-    fs.mkdirSync(path.join(cell, 'score', '_own'), { recursive: true });
-    fs.mkdirSync(path.join(cell, 'tree', 'src_vs_code', 'node_modules', 'x'), { recursive: true });
-    fs.writeFileSync(path.join(cell, 'score.json'), '{}');
-    fs.writeFileSync(path.join(cell, 'summary.json'), '{}');
-    const { removed, refused } = shedCell(root, 'c1', { srcDir: 'src_vs_code' });
-    assert.equal(removed.length, 2);
-    assert.deepEqual(refused, []);
-    assert.ok(!fs.existsSync(path.join(cell, 'score')) && !fs.existsSync(path.join(cell, 'tree', 'src_vs_code', 'node_modules')));
-    assert.ok(fs.existsSync(path.join(cell, 'score.json')) && fs.existsSync(path.join(cell, 'summary.json')) && fs.existsSync(path.join(cell, 'tree')));
-    assert.deepEqual(shedCell(root, 'c1', { srcDir: 'src_vs_code' }).removed, []);
-  } finally {
-    fs.rmSync(root, { recursive: true, force: true });
-  }
+test('shedCell removes only the targets that exist, through the injected remover, and keeps the records', t => {
+  const root = owned.ownedDir(t, 'pabshed');
+  const cell = path.join(root, 'c1');
+  fs.mkdirSync(path.join(cell, 'score', '_own'), { recursive: true });
+  fs.mkdirSync(path.join(cell, 'tree', 'src_vs_code', 'node_modules', 'x'), { recursive: true });
+  fs.writeFileSync(path.join(cell, 'score.json'), '{}');
+  fs.writeFileSync(path.join(cell, 'summary.json'), '{}');
+  const { removed, refused } = shedCell(root, 'c1', { srcDir: 'src_vs_code' });
+  assert.equal(removed.length, 2);
+  assert.deepEqual(refused, []);
+  assert.ok(!fs.existsSync(path.join(cell, 'score')) && !fs.existsSync(path.join(cell, 'tree', 'src_vs_code', 'node_modules')));
+  assert.ok(fs.existsSync(path.join(cell, 'score.json')) && fs.existsSync(path.join(cell, 'summary.json')) && fs.existsSync(path.join(cell, 'tree')));
+  assert.deepEqual(shedCell(root, 'c1', { srcDir: 'src_vs_code' }).removed, []);
 });
 
 // ---- parallel children, from a fixture -----------------------------------------------------------------------------------
@@ -270,18 +268,14 @@ test('a resolver-layout summary adds the resolver record with both signals and t
   assert.equal(s.resolver.sessionStart.hookEventsPresent, false);
 });
 
-test('the resolver tree is not trimmed, the native one is', () => {
+test('the resolver tree is not trimmed, the native one is', t => {
   assert.equal(trimFor('D:/never-touched', { layout: 'resolver', mount: 'm' }).skipped, true);
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pab-trim-'));
-  try {
-    fs.mkdirSync(path.join(dir, 'm', 'common'), { recursive: true });
-    fs.mkdirSync(path.join(dir, 'm', 'research'), { recursive: true });
-    fs.writeFileSync(path.join(dir, 'm', 'common', 'subagent-models.md'), 'x');
-    fs.writeFileSync(path.join(dir, 'm', 'research', 'r.md'), 'y');
-    assert.deepEqual(trimFor(dir, { layout: 'native', mount: 'm' }), { files: 1, bytes: 1 });
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
+  const dir = owned.ownedDir(t, 'pabtrim');
+  fs.mkdirSync(path.join(dir, 'm', 'common'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'm', 'research'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'm', 'common', 'subagent-models.md'), 'x');
+  fs.writeFileSync(path.join(dir, 'm', 'research', 'r.md'), 'y');
+  assert.deepEqual(trimFor(dir, { layout: 'native', mount: 'm' }), { files: 1, bytes: 1 });
 });
 
 test('adapter sync: reference hooks key replaces the project one, other keys stay, the user-guard installer is removed everywhere', () => {

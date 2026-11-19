@@ -14,6 +14,7 @@ import { readNpmPackages, readNugetPackages } from './packages.mjs';
 import { fail, ok } from './result.mjs';
 import { runBounded } from './run.mjs';
 import { agentBoxArgv, agentEnv, dummyToken, sessionLayout } from './sandbox.mjs';
+import { v1SdkPin } from './stacks-pin.mjs';
 
 const SPIKE = fileURLToPath(new URL('..', import.meta.url));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -122,15 +123,21 @@ function boxResult(r, command, timeoutMs) {
   return r.value.code === 0 ? ok(r.value) : fail(`\`${command.join(' ')}\` exited ${r.value.code}: ${tail}`);
 }
 
+/** The whole argv of a snapshot step's box: the agent's box, with the pinned SDK directory or the pinned SDK version. `seams` (`exists`, `listDir`) are the tests'. */
+export const snapshotBoxArgv = ({ layout, nodeDir, command, toolchains = [], dotnetDir = null, hide = [], dotnetPin, seams = {} }) => agentBoxArgv({
+  layout, arm: 'bare', toolchains, hide, claudeBinary: process.execPath, nodeDir, command, dotnetPin, dotnetDir, ...seams,
+});
+
 /**
  * Run one command in the agent's box. `toolchains`, `dotnetDir`, `tsDir`, `hide` (E1.S4) are the box fields of `makeSnapshot`'s `box`: pinned toolchain directories bound read-only, put on PATH, and host paths
  * hidden. They exist because the snapshot must be made with the pinned toolchains and not with the distribution's `dotnet` (`/usr/bin/dotnet`): every box that runs a pinned-toolchain program hides
- * `/usr/lib/dotnet`, `/usr/share/dotnet`, `/etc/dotnet` AND sets `DOTNET_ROOT` (through `env`). With none of them the box is what it always was.
+ * `/usr/lib/dotnet`, `/usr/share/dotnet`, `/etc/dotnet` AND sets `DOTNET_ROOT` (through `env`). With none of them the box runs the distribution's dotnet, and then `dotnetPin` (the pinned SDK
+ * version) is required: the box shows only that SDK's versions (E2 amendment 2026-11-19), so a snapshot is never restored by another SDK the host also holds.
  */
-export async function inBox({ layout, nodeDir, command, timeoutMs, name, env: extra = {}, toolchains = [], dotnetDir = null, tsDir = null, hide = [] }) {
+export async function inBox({ layout, nodeDir, command, timeoutMs, name, env: extra = {}, toolchains = [], dotnetDir = null, tsDir = null, hide = [], dotnetPin }) {
   const env = boxEnv({ layout, name, nodeDir, extra, dotnetDir, tsDir });
   if (!env.ok) return env;
-  const argv = agentBoxArgv({ layout, arm: 'bare', toolchains, hide, claudeBinary: process.execPath, nodeDir, command });
+  const argv = snapshotBoxArgv({ layout, nodeDir, command, toolchains, dotnetDir, hide, dotnetPin });
   return boxResult(await runBounded(argv[0], argv.slice(1), { env: env.value, timeoutMs }), command, timeoutMs);
 }
 
@@ -210,8 +217,14 @@ async function runStep({ step, resolved, box }) {
   return problem ? fail(problem) : ok(stepRecord({ step, command, ran, printed }));
 }
 
+/**
+ * `makeSnapshot`'s `box`, completed. A box with no pinned SDK directory runs the distribution's dotnet and shows only the pinned SDK's versions (E2 amendment 2026-11-19), so it must be told the pin:
+ * the caller's `dotnetPin` (the pilot's `prepare` passes its own), or, with none given, v1's (`readPin`). Never a box with neither: `inBox` refuses that.
+ */
+export const snapshotBoxFields = (box = {}, readPin = v1SdkPin) => (box.dotnetDir || box.dotnetPin !== undefined ? box : { ...box, dotnetPin: readPin() });
+
 async function runRecipe({ stack, spec, recipe, layout, nodeDir, out, box: extraBox, dirName }) {
-  const { env: boxEnvExtra = {}, ...boxFields } = extraBox;
+  const { env: boxEnvExtra = {}, ...boxFields } = snapshotBoxFields(extraBox);
   const box = { layout, nodeDir, timeoutMs: recipe.stepTimeoutMs, name: layout.rid, env: { ...(spec.env ?? {}), ...boxEnvExtra }, ...boxFields };
   const resolved = await resolveAll({ ...box, spec: spec.resolve });
   if (!resolved.ok) return resolved;

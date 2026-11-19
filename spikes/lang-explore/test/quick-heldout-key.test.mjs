@@ -14,6 +14,9 @@ import { backupProblem, keyProblem, makeMountOf, mountOf } from '../lib/heldout-
 import { checkHeldout } from '../lib/heldout-check.mjs';
 import { closeClearFolder, openClearFolder, sweepClearFolder } from '../lib/package-seal.mjs';
 import { mountFor, sealedClosed, world } from './quick-heldout-fixture.mjs';
+import { classifyName, ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
@@ -77,7 +80,8 @@ test('A_key_whose_sha256_differs_from_the_entry_is_refused_and_the_remedy_names_
 
 // ---- the key through open, check, close and the sweep ---------------------------------------------------------------------------------------------------------------------
 const entryFile = w => JSON.parse(readFileSync(w.frozenFile, 'utf8')).tasks['04'];
-const tempsIn = dir => readdirSync(dir).filter(n => /^testsToDelete-|\.owner$/.test(n));
+// A prefixed name of ANY owner (the shipped classifier reads names; the folder is the fixture's own) or a claim.
+const tempsIn = dir => readdirSync(dir).filter(n => classifyName(n).form !== 'none' || n.endsWith('.owner'));
 const newKey = () => { const file = path.join(tmpDir('q-key-b'), 'heldout.key'); generateKey(file); return file; };
 
 test('The_registry_entry_holds_the_keys_sha256_and_never_its_bytes', async () => {

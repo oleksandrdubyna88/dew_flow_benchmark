@@ -7,7 +7,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { readEvidence } from '../lib/freeze-evidence.mjs';
-import { formatOwner, processProbe, thisOwner } from '../../../.agents/conventions/tools/lib/owned.mjs';
+import { classifyName, formatOwner, processProbe, thisOwner } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { run as classes } from '../tools/format-classes.mjs';
 import { assemble } from '../lib/specs-record.mjs';
 import { annotate, baseFiles, evidence, freezeAndMerge, freezeBranch, fullFreeze, LATER_TAG, makeFreezeRepo, pushTag, SCRATCH, sha256, specPath, specText, squashMerge, TAG, workspaceFiles, workspacesBranch, workspacesCheckFile, FORMAT_PATH } from './support/freeze-fixtures.mjs';
@@ -17,7 +17,8 @@ import { owned } from './support/owned.mjs';
 const said = result => `${result.stdout}${result.stderr}`;
 const statesFile = f => path.join(f.inputs, 'specs.d', 'spec-states.json');
 const readStates = f => JSON.parse(readFileSync(statesFile(f), 'utf8'));
-const leftovers = f => readdirSync(f.inputs).filter(name => /^teststodelete-/i.test(name));
+// Every prefixed name the tool left in the fixture's own folder, any owner: read by the shipped classifier (a reader of names, not a sweep).
+const leftovers = f => readdirSync(f.inputs).filter(name => classifyName(name).form !== 'none');
 const KILL_CHILD = fileURLToPath(new URL('./support/freeze-kill-child.mjs', import.meta.url));
 const commitDay = (repo, sha) => new Date(Number(git(repo, 'show', '-s', '--format=%ct', sha)) * 1000).toISOString().slice(0, 10);
 

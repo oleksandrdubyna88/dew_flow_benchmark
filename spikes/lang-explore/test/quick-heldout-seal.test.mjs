@@ -16,11 +16,15 @@ import { casesTreeHash, loadHeldoutQuick } from '../lib/heldout-quick.mjs';
 import { closeClearFolder, openClearFolder, registryMismatchProblem, sealPackage } from '../lib/package-seal.mjs';
 import { quickTask } from './quick-leak-fixture.mjs';
 import { filesUnder, sealedClosed, TOKEN, world } from './quick-heldout-fixture.mjs';
+import { classifyName, ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const entryOf = w => JSON.parse(readFileSync(w.frozenFile, 'utf8')).tasks[w.taskId];
 const archiveOf = w => path.join(w.heldoutDir, 'suite.enc');
-const leftovers = dir => readdirSync(dir).filter(n => /^testsToDelete-|\.owner$|\.tmp$|^\.clear\.lock/.test(n));
+// A prefixed name of ANY owner (the shipped classifier reads names; the folder is the fixture's own), a claim, a temporary file or the clear lock.
+const leftovers = dir => readdirSync(dir).filter(n => classifyName(n).form !== 'none' || /\.owner$|\.tmp$|^\.clear\.lock/.test(n));
 
 /** A different valid archive at the archive's name: other cases, the same key. */
 function plantOtherArchive(w) {
@@ -324,7 +328,7 @@ test('An_open_killed_before_its_rename_leaves_no_cases_folder_and_the_next_open_
   const w = await sealedClosed();
   await assert.rejects(openClearFolder({ ...w.args, hooks: { beforeRename: () => { throw new Error('planted fault'); } } }), /planted fault/);
   assert.equal(existsSync(w.casesDir), false, 'no cases/');
-  const [temp] = readdirSync(w.heldoutDir).filter(n => /^testsToDelete-.*-bench-clear-/.test(n) && !n.endsWith('.owner'));
+  const [temp] = readdirSync(w.heldoutDir).filter(n => n.startsWith(owned.ownedPrefix('clear')) && !n.endsWith('.owner'));
   assert.ok(temp, 'one owned temporary folder remains');
   assert.ok(filesUnder(path.join(w.heldoutDir, temp)).length > 0, 'with files in it');
   assert.equal(existsSync(path.join(w.heldoutDir, `${temp}.owner`)), true, 'and its claim');

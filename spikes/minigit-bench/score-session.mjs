@@ -2,7 +2,9 @@
 // Scores one finished session and writes <session>/score/score.json.
 //
 //   node spikes/minigit-bench/score-session.mjs --session <dir> --source <dir> --arm process|bare --stack csharp|node --phase v1|v2
-//        --toolchain <dir>... [--nuget-cache <dir>] [--npm-cache <dir>] [--inputs-repo <url|path>]
+//        --toolchain <dir>... [--nuget-cache <dir>] [--npm-cache <dir>] [--inputs-repo <url|path>] [--dotnet-pin <x.y.z>]
+//
+// `--dotnet-pin` is the pinned SDK version the scoring box is told (it hides every other dotnet version of the host): the runner hands its own; with none given it is inputs/stacks.json's.
 //
 // Exit codes (the repository's CLI contract): 0 scored (whatever the score) | 3 environment (resumable): bwrap not on PATH, a toolchain
 // or cache directory absent, the scoring box cannot start, another scoring of the session in progress, the pinned inputs unreachable or
@@ -12,6 +14,7 @@ import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { isSdkVersion } from './lib/dotnet-hide.mjs';
 import { findOnPath } from './lib/find-on-path.mjs';
 import { fetchInputs } from './lib/fetch-inputs.mjs';
 import { fail, ok } from './lib/result.mjs';
@@ -21,7 +24,17 @@ import { runScoring, scoringPlan } from './lib/score-pipeline.mjs';
 const OPTIONS = {
   session: { type: 'string' }, source: { type: 'string' }, arm: { type: 'string' }, stack: { type: 'string' }, phase: { type: 'string' },
   toolchain: { type: 'string', multiple: true }, 'nuget-cache': { type: 'string' }, 'npm-cache': { type: 'string' }, 'inputs-repo': { type: 'string' },
+  'dotnet-pin': { type: 'string' },
 };
+
+/** What is wrong with the options as given, as a usage sentence, or null. */
+function usageProblem(parsed) {
+  const missing = ['session', 'source', 'arm', 'stack', 'phase'].filter(k => !parsed[k]);
+  if (missing.length > 0) return `missing --${missing.join(', --')}`;
+  if (!parsed.toolchain?.length) return 'at least one --toolchain <dir> is required';
+  // a pin that is given must be one (the scoring box hides every dotnet version but this one's): a word that is no version is refused HERE, as a usage error, before any step runs
+  return parsed['dotnet-pin'] === undefined || isSdkVersion(parsed['dotnet-pin']) ? null : `--dotnet-pin ${parsed['dotnet-pin'].slice(0, 40)} is not an SDK version (x.y.z, for example 10.0.114)`;
+}
 
 /** argv -> ok(options) | fail(usage message) */
 export function parseCli(argv) {
@@ -32,9 +45,8 @@ export function parseCli(argv) {
     if (e.code?.startsWith('ERR_PARSE_ARGS')) return fail(e.message);
     throw e;
   }
-  const missing = ['session', 'source', 'arm', 'stack', 'phase'].filter(k => !parsed[k]);
-  if (missing.length > 0) return fail(`missing --${missing.join(', --')}`);
-  if (!parsed.toolchain?.length) return fail('at least one --toolchain <dir> is required');
+  const problem = usageProblem(parsed);
+  if (problem !== null) return fail(problem);
   const resolve = p => (p ? path.resolve(p) : undefined);
   return ok({ ...parsed, toolchain: parsed.toolchain.map(p => path.resolve(p)), 'nuget-cache': resolve(parsed['nuget-cache']), 'npm-cache': resolve(parsed['npm-cache']) });
 }
@@ -47,6 +59,9 @@ function missingEnvironment(o) {
   if (findOnPath('bwrap') === null) return 'bwrap is not on PATH';
   return absent.length > 0 ? `missing ${absent.join(', ')}` : null;
 }
+
+/** The scorer's dependencies from its options: the toolchains and the pinned SDK its boxes are told (`--dotnet-pin`; absent, `defaultDeps` reads the registered one). */
+export const scorerDeps = (o, inputs) => defaultDeps({ inputs, toolchainDirs: o.toolchain, dotnetPin: o['dotnet-pin'] });
 
 /** The whole command; `write` receives each output line. Resolves to the exit code. */
 export async function main(argv, write = line => process.stdout.write(`${line}\n`)) {
@@ -63,7 +78,7 @@ export async function main(argv, write = line => process.stdout.write(`${line}\n
   if (!fetched.ok) { write(`environment: ${fetched.reason}`); return 3; }
   let scored;
   try {
-    scored = await runScoring(planned.value, defaultDeps({ inputs: fetched.value, toolchainDirs: o.toolchain }));
+    scored = await runScoring(planned.value, scorerDeps(o, fetched.value));
   } catch (e) {
     write(`scorer failed: ${e.message}`);
     return 5;

@@ -10,6 +10,9 @@ import { attributeDiagnostics, parseTscDiagnostics } from '../lib/tsc.mjs';
 import { gitDirFor } from '../hooks/audit.mjs';
 import { initInfo, summarize } from '../lib/summary.mjs';
 import { selectRemovals } from '../lib/trim.mjs';
+import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
+
+const owned = ownedFor({ token: 'bench' });
 
 const ctx = { treeRoot: 'D:/rsd/_q1/c1/tree', home: 'C:\\Users\\me' };
 const call = (tool, input, agent = 'main') => ({ agent, tool, input });
@@ -132,7 +135,6 @@ test('unobserved children = Agent calls that ran minus distinct agent ids; new n
 });
 
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { preparePlanText, validate } from '../prepare-cell.mjs';
 import { holdoutVerdict } from '../score-cell.mjs';
@@ -173,14 +175,10 @@ test('run map merges per cell and keeps the seed', () => {
   assert.deepEqual(a, { seed: 's', cells: { c1: { arm: 'A', armSha: 'x' }, c2: { arm: 'B' } } });
 });
 
-test('a cell with a stream already on disk is refused', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pab-fresh-'));
-  try {
-    fs.writeFileSync(path.join(dir, 'stream.ndjson'), '');
-    await assert.rejects(assertFresh(dir, path.join(dir, 'tree'), dir), /already has a stream/);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
+test('a cell with a stream already on disk is refused', async t => {
+  const dir = owned.ownedDir(t, 'pabfresh');
+  fs.writeFileSync(path.join(dir, 'stream.ndjson'), '');
+  await assert.rejects(assertFresh(dir, path.join(dir, 'tree'), dir), /already has a stream/);
 });
 
 test('mount trim keeps only rule directories', () => {

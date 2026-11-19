@@ -5,10 +5,14 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { hundredPercent } from '../../minigit-bench/lib/score-pipeline.mjs';
-import { PLACE, acceptedOf, boxArgvs, judgeConfig, scoreShape, verdictCounts, withEnv } from '../lib/score.mjs';
+import { DISTRIBUTION_DOTNET, otherDotnetVersions } from '../../minigit-bench/lib/dotnet-hide.mjs';
+import { PIN, ROOT, SDK_11, fakeDirs, tmpfsOf, twoSdkHost } from '../../minigit-bench/test/dotnet-fixture.mjs';
+import { loadExplore } from '../lib/inputs.mjs';
+import { quickExplore } from '../lib/quick.mjs';
+import { PLACE, acceptedOf, boxArgvs, judgeConfig, judgeDotnet, scoreShape, verdictCounts, withEnv } from '../lib/score.mjs';
 
 const pairs = argv => Object.fromEntries(argv.flatMap((a, i) => (a === '--setenv' ? [[argv[i + 1], argv[i + 2]]] : [])));
-const OPTS = { toolchainDirs: ['/n'], tsDir: '/ts', nugetCache: '/c/nuget', npmCache: '/c/npm', locale: 'de_DE.UTF-8', envExtra: { DOTNET_gcServer: '0', NODE_OPTIONS: '' }, operatorHome: '/home/op', exists: () => true };
+const OPTS = { toolchainDirs: ['/n'], tsDir: '/ts', nugetCache: '/c/nuget', npmCache: '/c/npm', locale: 'de_DE.UTF-8', envExtra: { DOTNET_gcServer: '0', NODE_OPTIONS: '' }, operatorHome: '/home/op', dotnetPin: PIN, exists: () => true, listDir: () => [] };
 
 test('withEnv_replaces_a_key_in_place_adds_a_new_one_after_the_last_and_refuses_an_argv_without_an_environment', () => {
   const argv = ['bwrap', '--clearenv', '--setenv', 'A', '1', '--setenv', 'B', '2', '--chdir', '/x', '--', ];
@@ -70,7 +74,7 @@ test('A_session_is_accepted_only_with_a_clean_build_every_case_passed_and_the_me
 
 test('The_judge_config_carries_the_pilots_locale_and_environment_the_limits_and_both_case_sets', () => {
   const area = tmpDir('cfg');
-  const explore = { locale: 'de_DE.UTF-8', envExtra: { DOTNET_gcServer: '0', NODE_OPTIONS: '' } };
+  const explore = { locale: 'de_DE.UTF-8', envExtra: { DOTNET_gcServer: '0', NODE_OPTIONS: '' }, dotnet: { sdk: PIN } };
   const files = { 'samples/s01.in': { bytes: Buffer.from('1\n') }, 'samples/s01.out': { bytes: Buffer.from('1\n') }, 'build.sh': { bytes: Buffer.from('x') } };
   const limits = { timeMs: 2000, memoryBytes: 1, buildTimeoutMs: 3 };
   const config = judgeConfig({ explore, files, sets: [{ name: 'heldout', dir: '/h' }], limits, toolchains: { dirs: ['/n'], tsDir: '/ts' }, caches: {}, area });
@@ -79,5 +83,47 @@ test('The_judge_config_carries_the_pilots_locale_and_environment_the_limits_and_
   assert.equal(config.limits, limits);
   assert.deepEqual(config.placeholders, PLACE);
   for (const box of [config.buildBox, config.runBox]) assert.deepEqual([pairs(box).LANG, pairs(box).LC_ALL, pairs(box).DOTNET_gcServer], ['de_DE.UTF-8', 'de_DE.UTF-8', '0']);
+  // the judge's boxes are told the pilot's pinned SDK (explore.dotnet.sdk): the same argv as boxArgvs with that pin, and no box at all without it
+  const told = boxArgvs({ toolchainDirs: ['/n'], tsDir: '/ts', nugetCache: path.join(area, 'cache-nuget'), npmCache: path.join(area, 'cache-npm'), locale: explore.locale, envExtra: explore.envExtra, dotnetPin: explore.dotnet.sdk });
+  assert.deepEqual([config.buildBox, config.runBox], [told.buildBox, told.runBox]);
+  // and the pinned SDK directory of its toolchains, when the world has one
+  const withDir = judgeConfig({ explore, files, sets: [], limits, toolchains: { dirs: ['/n'], tsDir: '/ts', dotnetDir: '/dn' }, caches: {}, area });
+  for (const box of [withDir.buildBox, withDir.runBox]) assert.ok(box.some((a, i) => a === '--ro-bind' && box[i + 1] === '/dn' && box[i + 2] === '/dn'), 'the judge hands toolchains.dotnetDir to its boxes');
   assert.ok(existsSync(path.join(area, 'cache-nuget')) && existsSync(path.join(area, 'cache-npm')), 'an absent cache is an empty one');
+});
+
+test('Both_judge_boxes_hide_every_other_dotnet_version_of_a_host_that_holds_several_and_a_judge_with_no_pin_builds_no_box', () => {
+  const host = fakeDirs(twoSdkHost());
+  const { buildBox, runBox } = boxArgvs({ ...OPTS, ...host });
+  for (const [name, box] of [['buildBox', buildBox], ['runBox', runBox]]) {
+    const hidden = tmpfsOf(box);
+    assert.ok(hidden.includes(`${ROOT}/sdk/${SDK_11.sdk}`), `${name}: --tmpfs ${ROOT}/sdk/${SDK_11.sdk}`);
+    assert.ok(hidden.includes(`${ROOT}/shared/Microsoft.NETCore.App/${SDK_11.runtime}`), `${name}: another major's runtime is hidden`);
+    assert.deepEqual(hidden.filter(p => DISTRIBUTION_DOTNET.some(root => p.startsWith(`${root}/`))), [...otherDotnetVersions({ pin: PIN, ...host })], `${name}: the one list, whole`);
+  }
+  const { dotnetPin: _dropped, ...noPin } = OPTS;
+  assert.throws(() => boxArgvs({ ...noPin, ...host }), /dotnetPin undefined is not an SDK version/);
+});
+
+test('The_judges_boxes_for_a_profile_with_a_pinned_sdk_directory_bind_it_hide_the_distribution_whole_and_list_nothing', () => {
+  const host = fakeDirs(twoSdkHost());
+  const neverListed = { exists: host.exists, listDir: dir => { throw new Error(`a box with a pinned SDK directory must not list ${dir}`); } };
+  const { buildBox, runBox } = boxArgvs({ ...OPTS, dotnetPin: '10.0.403', dotnetDir: '/dn', envExtra: { ...OPTS.envExtra, DOTNET_ROOT: '/dn' }, ...neverListed });
+  for (const [name, box] of [['buildBox', buildBox], ['runBox', runBox]]) {
+    const hidden = tmpfsOf(box);
+    for (const root of DISTRIBUTION_DOTNET.filter(host.exists)) assert.ok(hidden.includes(root), `${name}: ${root} is hidden whole`);
+    assert.deepEqual(hidden.filter(p => DISTRIBUTION_DOTNET.some(root => p.startsWith(`${root}/`))), [], `${name}: no version folder is listed`);
+    assert.ok(box.some((a, i) => a === '--ro-bind' && box[i + 1] === '/dn' && box[i + 2] === '/dn'), `${name}: the pinned directory is bound read-only`);
+    assert.equal(pairs(box).PATH, '/n/bin:/n:/dn/bin:/dn:/usr/bin:/bin:/ts/node_modules/.bin', `${name}: and on PATH`);
+    assert.equal(pairs(box).DOTNET_ROOT, '/dn', `${name}: DOTNET_ROOT comes with the profile's extra environment, as for the session`);
+  }
+});
+
+test('The_judge_takes_the_pinned_directory_from_its_toolchains_and_refuses_a_quick_profile_that_brings_none', () => {
+  const pilot = loadExplore().value;
+  const quick = quickExplore(pilot, '/home/nobody');
+  assert.deepEqual(judgeDotnet({ explore: pilot, toolchains: { dirs: ['/n'], tsDir: '/ts' } }), { dotnetPin: pilot.dotnet.sdk, dotnetDir: null }, 'the pilot runs the distribution\'s dotnet: its pin, no directory');
+  assert.deepEqual(judgeDotnet({ explore: quick, toolchains: { dirs: ['/n'], tsDir: '/ts', dotnetDir: '/dn' } }), { dotnetPin: pilot.quick.dotnet.sdk, dotnetDir: '/dn' });
+  assert.notEqual(pilot.quick.dotnet.sdk, pilot.dotnet.sdk, 'the quick profile pins another SDK than the pilot: the reason it needs its own directory');
+  assert.throws(() => judgeDotnet({ explore: quick, toolchains: { dirs: ['/n'], tsDir: '/ts' } }), e => e.message.includes(`the quick profile pins SDK ${pilot.quick.dotnet.sdk}`) && e.message.includes('toolchains.dotnetDir'));
 });

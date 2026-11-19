@@ -54,6 +54,7 @@ export function contextOf({ world, calibration, series, seriesDir, kind, pair, t
   return {
     seriesDir, sessionsRoot: path.join(seriesDir, 's'), home, kind, pair, seed: null, inputsRoot: null, hashes: [], snapshots: snapshotsOfWorld(world), ...snapshotFacts(world.snapshots),
     packageRules: readJson(path.join(INPUTS, 'package-flags.json')).rules, claudeBinary, cliVersion: world.explore.cli.version, nodeDir: world.paths.nodeDir, tsDir: world.paths.tsDir, token,
+    dotnetPin: world.explore.dotnet.sdk, // the pinned SDK of this world (the quick profile's, or the pilot's): a box on the distribution's dotnet shows only this one (v1 E2 amendment 2026-11-19)
     ...(world.paths.dotnetDir ? { dotnetDir: world.paths.dotnetDir, hide: DISTRIBUTION_DOTNET } : {}),
     prices: policy.table, table: policy.table, policy: policy.policy,
     harnessSources: { boxInit: path.join(V1, 'harness', 'box-init.mjs'), audit: path.join(V1, '..', 'policy-ab-quick', 'hooks', 'audit.mjs') },

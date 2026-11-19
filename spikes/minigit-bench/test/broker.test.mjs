@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import net from 'node:net';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import { brokerView, forwardHeaders, parseSseUsage } from '../lib/broker.mjs';
+import { MAX_BODY_BYTES } from '../lib/broker-body.mjs';
 import { chunksOf, sleep, sseAnswer, sseBody, startBroker, stubUpstream, viaSocket } from './broker-stub.mjs';
 
 const json = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', ...headers }); res.end(JSON.stringify(body)); };
@@ -269,12 +271,17 @@ test('An_upstream_that_cannot_be_dialled_answers_502_and_charges_nothing_because
 });
 
 test('A_request_the_upstream_reset_after_part_of_it_was_written_is_charged_the_reservation_not_waived', async () => {
-  // a raw upstream that takes the first bytes of a 3 MB body and resets: the connection was made and request bytes left, but the request never finished
+  // a raw upstream that takes the first bytes of a large body and resets: the connection was made and request bytes left, but the request never finished.
+  // The body is the largest the broker admits (MAX_BODY_BYTES less a margin for the JSON around it): a body the kernel's send buffer can take whole is
+  // "handed over" (`finish`) before the reset lands, and the test would then prove nothing — 3 MB did exactly that on a host whose tcp_wmem max is 4 MB.
+  const sendBufferMax = (() => { try { return Number(readFileSync('/proc/sys/net/ipv4/tcp_wmem', 'utf8').trim().split(/\s+/)[2]); } catch { return 0; } })();
+  const pad = MAX_BODY_BYTES - 64 * 1024;
+  assert.ok(pad > sendBufferMax, `the body (${pad} bytes) must be larger than the kernel's send buffer (${sendBufferMax}), or the reset comes after the hand-over`);
   const raw = net.createServer(sock => { sock.once('data', () => sock.destroy()); sock.on('error', () => {}); });
   await new Promise(r => raw.listen(0, '127.0.0.1', r));
   const b = await startBroker({ stub: { upstream: { host: '127.0.0.1', port: raw.address().port, tls: false } }, capUsd: 10 });
   try {
-    const body = JSON.stringify({ model: 'claude-sonnet-5-5', pad: 'x'.repeat(3 * 1024 * 1024) });
+    const body = JSON.stringify({ model: 'claude-sonnet-5-5', pad: 'x'.repeat(pad) });
     assert.equal((await viaSocket(b.socketPath, { body })).status, 502);
     const line = b.lines.find(l => l.event === 'upstream-error');
     assert.equal(line.requestSent, false, 'the request was not fully handed over');
