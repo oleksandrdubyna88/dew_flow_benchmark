@@ -476,15 +476,38 @@ the pins, every `global.json`. *What changed:* the box.
   every SDK and resolves to the pinned one.
 - **What the box still shows of the other version, not covered by the amendment's list.** The files `library-packs/*.11.0.0.nupkg`
   (`Microsoft.DotNet.ILCompiler`, `Microsoft.NET.ILLink.Tasks`; a tmpfs mounts over a directory, not over a file) and the folder
-  `metadata/workloads/11.0.100` (it holds one empty file, `userlocal`). A version folder that is a symbolic link is not hidden either (there is none
-  on this host); the preflight's probe would still count what it shows. So "the box shows what it showed before" holds for the SDK, the
+  `metadata/workloads/11.0.100` (it holds one empty file, `userlocal`). So "the box shows what it showed before" holds for the SDK, the
   runtimes, the packs, the templates and the manifests, and not for these.
+- **A link refuses the box** (the code gate's finding 3). The listing reports sub-directories AND symbolic links (`dirEntriesOf`,
+  `{ name, link }`; a link is never followed). A link where a version folder the list must hide should be (`sdk/<v>`,
+  `shared/<framework>/<v>`, `packs/<pack>/<v>`, `templates/<v>`, `sdk-manifests/<band>`), or where a framework or pack folder it must look
+  into should be, throws: `<path> is a symbolic link: … the box is not built`. A tmpfs cannot hide a link, and following it would mount
+  over a folder the list never read. A link the list would not mount over is no refusal: the pin's own version folders, and a name that is
+  no version. There is no link under `/usr/lib/dotnet` on this host.
+- **What a version is** (finding 4). The WHOLE name: `x.y.z` with at most a prerelease suffix (`11.0.100-preview.6`, `11.0.100-rc.1`),
+  for a pin and for a folder alike (`isSdkVersion`). `10.0.114typo` is no pin (refused, also by `score-session.mjs --dotnet-pin` as a
+  usage error, exit 4) and no version folder (left alone). Before, the pattern was anchored at the start only: such a pin was taken for
+  major 10 and the box hid the real SDK 10.0.114.
+- **Known limit: the list is taken once, when the box is built.** Both boxes bind the host's root read-only, so a dotnet version
+  INSTALLED WHILE A BOX RUNS appears in it (the new folder is not under any tmpfs). The series installs no package during a cell, and
+  the operator is asked to hold the `dotnet-*` packages for its length (the standing risk of the note below); the next box, and the
+  next preflight, see the new version and hide or refuse it. A view that cannot change under a running box is the pinned-`dotnetDir`
+  path: the whole distribution is one tmpfs there, and the SDK is a directory of the run's own.
+- **The guard that keeps this true** (finding 1): `test/box-builders-scan.test.mjs` reads every production `.mjs` of
+  `spikes/minigit-bench` and `spikes/lang-explore` and fails, naming file and line, when a bwrap argv is composed outside the named
+  builders or a toolchain builder stops taking `boxDotnetHide`. The table it holds: `lib/bwrap.mjs` (the primitives, `scoreBoxArgv`),
+  `lib/sandbox.mjs` (`agentBoxPrefix`; `boxView` reads a recorded argv), `lib/preflight.mjs` (`bwrap --version`, no box),
+  lang-explore's `lib/score.mjs` (`withEnv`: the `--setenv` triples of an argv `scoreBoxArgv` built) and lang-explore's
+  `lib/oracle.mjs` (`bruteBoxArgv`: the box of `python3 -I brute.py` over private material; it binds no toolchain, builds and scores
+  nothing, and so takes no pin; it is the one builder without the list, named with that reason). `spikes/lang-bench` builds boxes of
+  its own (a pinned SDK directory, the whole distribution hidden) and is outside this scan.
 - **The SCORING box takes the same list** (`scoreBoxArgv`, `lib/bwrap.mjs`; added the same day, after the measurement that follows).
   *Before:* `dotnet --list-sdks` there printed `10.0.114` and `11.0.100`, and `dotnet --version` in a folder with no `global.json` was
   `11.0.100`: a tree built by SDK 10.0.114 in the session's box would have been built again by SDK 11 for its score (v1's workspace
   carries no `global.json`; the language comparison's do, with `rollForward: disable`, and pin their own build). *Now:* `scoreBoxArgv`
-  takes `dotnetPin` (and `listDir`, injected as `exists` is) and refuses a box with neither a pin nor a pinned SDK directory, exactly as
-  the agent's box does; with a `dotnetDir` its argv is what it always was. *How the pin reaches it.* v1's scorer builds its box options
+  takes `dotnetPin` (and `listDir`, injected as `exists` is) and refuses a box with no pin, as the agent's box does. It has NO
+  pinned-directory switch (the code gate's finding 2: a `dotnetDir` option existed for a day, had no caller, and would only have
+  switched the list off in a box that never hid the distribution; it was removed, so the scoring box always takes the version list). *How the pin reaches it.* v1's scorer builds its box options
   in ONE place, `defaultDeps` (`lib/score-deps.mjs`: `deps.box = { toolchainDirs, dotnetPin }`), and every step's box is `boxFor`
   (`lib/score-steps.mjs`) over them. A run hands its own pin on: `bare-series.mjs` gives `ctx.dotnetPin` to `scoreSession`
   (`lib/score-run.mjs`), which ALWAYS puts `--dotnet-pin <pin>` on the scorer's argv; `score-session.mjs` checks its shape (a word
