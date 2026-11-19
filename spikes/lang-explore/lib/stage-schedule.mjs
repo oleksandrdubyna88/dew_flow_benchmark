@@ -131,9 +131,18 @@ function gateProblem({ map, pilotGo, seedRevealed, slots }) {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** A line that counts: an object of the read-back row (`G-1`) with the verdict `holds` or `refuted` and a date. An undated line is ignored (it neither opens the gate nor voids nor conflicts), as is anything that is no object. */
+/** A real calendar date `yyyy-mm-dd`: it survives a round trip through a UTC date (so `2026-02-30` and `2026-99-99` are no dates). */
+const isCalendarDate = text => DATE.test(text) && utcDateText(text) === text;
+
+/** The text a `yyyy-mm-dd` comes back as through a UTC date, or null when the date does not exist at all (`2026-99-99`). */
+function utcDateText(text) {
+  const time = Date.parse(`${text}T00:00:00Z`);
+  return Number.isNaN(time) ? null : new Date(time).toISOString().slice(0, 10);
+}
+
+/** A line that counts: an object of the read-back row (`G-1`) with the verdict `holds` or `refuted` and a real calendar date. An undated line, or one whose date is no date (`2026-02-30`), is ignored (it neither opens the gate nor voids nor conflicts), as is anything that is no object. */
 const isVerdict = word => word === 'holds' || word === 'refuted';
-const isVerdictLine = l => isObject(l) && l.g === READBACK_ROW && isVerdict(l.verdict) && DATE.test(String(l.date));
+const isVerdictLine = l => isObject(l) && l.g === READBACK_ROW && isVerdict(l.verdict) && isCalendarDate(String(l.date));
 
 /** The lines that count, in date order (a stable sort: lines of one date keep their order in the file), so "the first dated line" of a rid reads true. `lines` may be anything (null, undefined): it is never a throw. */
 const verdictLines = lines => (Array.isArray(lines) ? lines.filter(isVerdictLine).toSorted((a, b) => byCode(a.date, b.date)) : []);
@@ -258,6 +267,17 @@ function halfProblem({ name, order, states }) {
   return started && order.some(stack => states[stack] === 'none') ? `${name} holds sessions of one stack only (${stateLineOf({ order, states })}): the schedule plans both stacks together` : null;
 }
 
+/**
+ * A crash between planning the two sessions of a unit leaves ONE stack with ONE session that is only `planned` (never launched) and the other stack with none: the missing stack is planned and the lone session launched, so the two stacks start
+ * together. A lone session that got further than `planned` is no such crash and stays a refusal (`halfProblem`). -> `ok({ action: 'resume', todo })` or null.
+ */
+function lonePlanned({ order, of, planned }) {
+  const held = order.filter(stack => of(stack).length > 0);
+  return held.length === 1 && of(held[0]).length === 1 && of(held[0])[0].status === 'planned' ? loneOffer({ lone: of(held[0])[0], planned }) : null;
+}
+
+const loneOffer = ({ lone, planned }) => ok({ action: 'resume', todo: [resumeEntry(lone), ...planned().filter(entry => entry.stack !== lone.stack).map(planEntry)] });
+
 /** Which sessions are still to run, per session state: none planned -> plan both stacks (attempt 1); planned -> launch it; launching -> settle it; ended with data and unscored -> score it; scored -> nothing, never again; void at attempt 1 -> re-run that stack alone (attempt 2, a new rid); void at attempt 2 -> nothing, the cell ends. */
 function stepFor({ order, of, planned, rerunOf, states }) {
   const open = order.flatMap(stack => of(stack).filter(isOpenSession));
@@ -276,6 +296,8 @@ function unitStep(unit) {
   const states = Object.fromEntries(unit.order.map(stack => [stack, stateOfSessions(unit.of(stack))]));
   const stopped = stopProblem({ ...unit, states });
   if (stopped) return settleOnStop({ sessions: unit.order.flatMap(stack => unit.of(stack)), stopped });
+  const lone = lonePlanned(unit);
+  if (lone) return lone;
   const half = halfProblem({ ...unit, states });
   return half ? fail(half) : stepFor({ ...unit, states });
 }
@@ -358,7 +380,7 @@ const pairOf = (kind, task) => ({
  * The pilot's plan: `ok({ aa: { what: 'aa', task, stack, sessions: [twin a on mask A, twin b on mask B] }, pairs: [daemon pair, web pair] })`, each session an entry without a rid. `pilot` is the pre-registration's answer
  * `{ aa: { task, stack }, daemon: <task>, web: <task> }`; an answer that leaves a G-16 task without a pilot tree, or a task of the wrong kind, is refused.
  */
-export function pilotPlan({ pilot }) {
+export function pilotPlan({ pilot } = {}) {
   const problem = pilotProblem(pilot);
   if (problem) return fail(problem);
   return ok({ aa: { what: 'aa', task: pilot.aa.task, stack: pilot.aa.stack, sessions: aaSessions({ aa: pilot.aa, attempt: 1 }) }, pairs: [pairOf('daemon', pilot.daemon), pairOf('web', pilot.web)] });
@@ -404,7 +426,16 @@ function aaStep({ map, plan }) {
   const sessions = pilotSessionsOf({ map, kind: AA_KIND, task: plan.task, stack: plan.stack });
   const stopped = sessions.find(s => stateOfSessions([s]) === 'stopped');
   if (stopped) return withWhat('aa', settleOnStop({ sessions, stopped: `the A/A ${stopped.twin} ended with a stop (${stopped.class}): a stopped series is never run again` }));
-  return twinsProblem(sessions) ? fail(twinsProblem(sessions)) : aaRun({ sessions, plan });
+  return loneTwin({ sessions, plan }) ?? (twinsProblem(sessions) ? fail(twinsProblem(sessions)) : aaRun({ sessions, plan }));
+}
+
+/** A crash between planning the two twins of a run: the lone twin is only `planned`, so it is launched and the other twin planned (as for a slot); a lone twin that got further is a refusal (`twinsProblem`). */
+function loneTwin({ sessions, plan }) {
+  const run = badRunOf(sessions);
+  const held = sessions.filter(s => s.attempt === run);
+  if (run === undefined || held.length !== 1 || held[0].status !== 'planned') return null;
+  const missing = aaSessions({ aa: plan, attempt: run }).filter(entry => entry.twin !== held[0].twin);
+  return ok({ what: 'aa', action: 'resume', todo: [resumeEntry(held[0]), ...missing.map(planEntry)] });
 }
 
 /** The A/A when no twin stopped and the twins are `a` and `b`: finish what is open, plan both, or judge the runs. */

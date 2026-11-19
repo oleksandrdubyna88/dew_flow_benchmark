@@ -2,6 +2,7 @@
 // test hands it a seed and a run-map built here; nothing is read from disk but the pins `TASK_KINDS` is held against.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { FREEZE_TASKS } from '../lib/workspaces-sources.mjs';
 import { sha256Of } from '../../minigit-bench/lib/inputs.mjs';
 import { markStopped, openSeries, planSession, transition } from '../../minigit-bench/lib/run-map.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
@@ -9,7 +10,7 @@ import { MASKS, VOID_UNSCORED, isOpenSession, isVoid, maskOf, openSessions, pair
 import { STAGE_ROUNDS, TASK_KINDS, firstStackOfSlot, maskOfSlot, nextSlot, pilotPlan, pilotStep, readbackSlots, ridOfSlot, roundRuleProblem, seedProblem, slotProblem, slotsOf } from '../lib/stage-schedule.mjs';
 
 const COLLIDING_SEED = 'lv2-collide-2902';
-const TASKS = ['04', '05', '06', '07', '08', '10'];
+const TASKS = [...FREEZE_TASKS];
 const SEED = 'lv2-0123456789abcdef';
 /** The mask table of the parent's rule, written out: the stack of C# on each mask for rounds 1 to 5, A = `0-5` and B = `8-13` (task k = 0 for 04, 1 for 05, ... 5 for 10; A when round + k is odd). */
 const CSHARP_ON = { '04': 'ABABA', '05': 'BABAB', '06': 'ABABA', '07': 'BABAB', '08': 'ABABA', 10: 'BABAB' };
@@ -82,8 +83,8 @@ test('A_swap_per_pair_over_a_seeded_order_can_give_a_task_one_mask_five_times_an
 });
 
 test('The_rids_of_a_seed_are_distinct_over_task_stack_round_and_attempt_and_a_colliding_seed_is_refused', () => {
-  const rids = [];
-  for (const task of TASKS) for (const stack of ['csharp', 'node']) for (let round = 1; round <= 5; round += 1) for (const attempt of [1, 2]) rids.push(ridOfSlot({ seed: SEED, task, stack, round, attempt }));
+  const upTo = n => Array.from({ length: n }, (_, i) => i + 1);
+  const rids = TASKS.flatMap(task => ['csharp', 'node'].flatMap(stack => upTo(5).flatMap(round => upTo(2).map(attempt => ridOfSlot({ seed: SEED, task, stack, round, attempt })))));
   assert.equal(new Set(rids).size, 120, 'six tasks, two stacks, five rounds, two attempts');
   assert.ok(rids.every(r => /^[0-9a-f]{6}$/.test(r)));
   assert.equal(ridOfSlot({ seed: SEED, task: '04', stack: 'csharp', round: 1, attempt: 1 }), sha256Of(`${SEED}:bare:t04:csharp:r1:a1`).slice(0, 6), 'the parent 4.4 form without a group');
@@ -443,7 +444,7 @@ test('The_offer_names_the_stack_the_attempt_the_rid_and_the_step_still_to_run_an
   assert.deepEqual(shape(next([[1, 'csharp', 1, VOID], [1, 'node', 1, 'planned']]).value), [1, 'resume', [['node', 1, n1, 'launch']]], 'what a halt left open is finished before the void is re-run');
   assert.deepEqual(shape(next([[1, 'csharp', 1, VOID], [1, 'csharp', 2, 'planned'], [1, 'node', 1, GOOD]]).value), [1, 'resume', [['csharp', 2, rid(1, 'csharp', 2), 'launch']]], 'a re-run left planned is launched, not planned again');
   assert.match(next([[1, 'csharp', 1, GOOD]]).reason, /holds sessions of one stack only/, 'a stack with no session beside one with sessions is a refusal, whatever the other one is');
-  assert.match(next([[1, 'csharp', 1, 'planned']]).reason, /holds sessions of one stack only/);
+  assert.match(next([[1, 'csharp', 1, 'launching']]).reason, /holds sessions of one stack only/, 'a lone session that got further than planned is still a refusal');
 });
 
 test('A_line_of_the_original_attempt_never_releases_the_re_run_and_each_attempt_has_its_own_rid', () => {
@@ -711,4 +712,54 @@ test('The_hash_helpers_and_the_void_test_are_v1s_and_the_quick_runs_one_each', (
   assert.equal(stateLine(map, 1, 'data'), 'csharp: done, node: void-rerunnable');
   assert.equal(stateLine(map, 1), 'csharp: none, node: none', 'the default kind is the quick run\'s');
   assert.deepEqual(Object.values(map.sessions).map(isVoid), [false, true]);
+});
+
+// ---- plan round 2 of the code: a crash between the two plannings, real calendar dates, no TypeError ---------------------------------------------------------------------------------------------------------------
+
+test('A_crash_between_planning_the_two_sessions_of_a_slot_offers_the_missing_stack_and_a_launched_lone_session_is_still_refused', () => {
+  const c1 = rid(1, 'csharp');
+  const n1 = rid(1, 'node');
+  const lone = next([[1, 'csharp', 1, 'planned']]);
+  assert.equal(lone.ok, true, lone.reason);
+  assert.deepEqual(shape(lone.value), [1, 'resume', [['csharp', 1, c1, 'launch'], ['node', 1, n1, 'plan']]], 'the planned session is launched and the missing stack is planned: the two stacks start together');
+  const loneNode = next([[1, 'node', 1, 'planned']]);
+  assert.deepEqual(shape(loneNode.value), [1, 'resume', [['node', 1, n1, 'launch'], ['csharp', 1, c1, 'plan']]]);
+  assert.equal(loneNode.value.todo[1].mask, SLOTS[0].masks.csharp, 'the missing session is the slot\'s own, with its mask');
+  for (const end of ['launching', RAN, GOOD, VOID]) assert.match(next([[1, 'csharp', 1, end]]).reason, /holds sessions of one stack only/, `a lone session that is ${typeof end === 'string' ? end : end.class} is refused`);
+  assert.match(next([[1, 'csharp', 1, 'planned'], [1, 'csharp', 2, 'planned']]).reason, /holds sessions of one stack only/, 'two sessions of one stack are no lone planned session');
+  assert.equal(next([[1, 'csharp', 1, VOID], [1, 'csharp', 2, 'planned']]).ok, false, 'a re-run planned beside a void with the other stack absent is not a crash between the plannings');
+  assert.equal(slotProblem({ map: mapWith([[1, 'csharp', 1, 'planned']]), slots: SLOTS, slot: 1, ...GATES, readbackLines: READ }), null, 'slotProblem agrees: slot 1 is the offered one');
+});
+
+test('A_crash_between_planning_the_two_sessions_of_a_pilot_pair_or_the_A_A_offers_the_missing_one', () => {
+  const pair = stepOfPilot([...AA_DONE, ['pilot', '05', 'csharp', 1, 'planned']]);
+  assert.deepEqual([pair.ok, pair.value?.what, pair.value?.action, pair.ok ? todoShape(pair) : null], [true, 'pilot:05', 'resume', [['csharp', 1, 'launch'], ['node', 1, 'plan']]]);
+  assert.match(stepOfPilot([...AA_DONE, ['pilot', '05', 'csharp', 1, 'launching']]).reason, /holds sessions of one stack only/, 'a launched lone pair session is refused');
+  for (const [twin, other] of [['a', 'b'], ['b', 'a']]) {
+    const aa = stepOfPilot(aaScript([[twin, 1, 'planned']]));
+    assert.deepEqual([aa.ok, aa.value?.what, aa.value?.action, aa.ok ? todoShape(aa) : null], [true, 'aa', 'resume', [[twin, 1, 'launch'], [other, 1, 'plan']]], `a lone planned twin ${twin}: the other twin is planned`);
+  }
+  const repeat = stepOfPilot(aaScript([['a', 1, GOOD], ['b', 1, VOID], ['b', 2, 'planned']]));
+  assert.deepEqual([repeat.ok, todoShape(repeat)], [true, [['b', 2, 'launch'], ['a', 2, 'plan']]], 'the repeat run too');
+  assert.match(stepOfPilot(aaScript([['a', 1, 'launching']])).reason, /run 1 holds twins a, not a and b/, 'a launched lone twin is refused');
+  assert.match(stepOfPilot(aaScript([['a', 1, GOOD]])).reason, /holds twins a, not a and b/);
+});
+
+test('A_read_back_date_must_be_a_real_calendar_date', () => {
+  const [rb] = RB;
+  const script = finished(rb.slot);
+  const withDate = date => asked(script, [{ ...holds(rb.slot, 'csharp'), date }, { ...holds(rb.slot, 'node'), date }]);
+  assert.equal(withDate('2026-11-20').ok, true, 'a real date opens the gate');
+  assert.equal(withDate('2024-02-29').ok, true, 'a leap day is real');
+  for (const bad of ['2026-99-99', '2026-02-30', '2026-13-01', '2026-00-10', '2026-04-31', '2025-02-29', '0000-00-00']) assert.equal(withDate(bad).ok, false, `${bad} is ignored like an undated line: the gate stays closed`);
+  const conflict = asked(script, [holds(rb.slot, 'csharp'), holds(rb.slot, 'node'), { ...refuted(rb.slot, 'csharp'), date: '2026-02-30' }]);
+  assert.equal(conflict.value.slot, rb.slot + 1, 'an impossible date conflicts with nothing');
+});
+
+test('pilotPlan_and_pilotStep_with_no_argument_fail_with_a_sentence_and_never_throw', () => {
+  for (const call of [() => pilotPlan(), () => pilotPlan({}), () => pilotPlan(undefined), () => pilotStep()]) {
+    const r = call();
+    assert.equal(r.ok, false);
+    assert.match(r.reason, /^pilot: required/);
+  }
 });

@@ -279,7 +279,8 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
   | The stack's last session | `todo` |
   |---|---|
   | none (absent) in both stacks | both stacks, attempt 1, step `plan`, the leading stack first |
-  | none in one stack and a session in the other | a refusal naming the unit (`holds sessions of one stack only`): the two stacks are planned together |
+  | one stack holds exactly one session, only `planned` (a crash between planning the two), the other none | action `resume`: the lone session, step `launch`, and the missing stack, step `plan`, so the two stacks start together (plan round 2 of the code, finding 1) |
+  | none in one stack and any other session in the other (launching or later, or two sessions) | a refusal naming the unit (`holds sessions of one stack only`): the two stacks are planned together, so it cannot say what is still to run |
   | `planned`, never started | that session, step `launch` |
   | `launching` (a crash or a halt cut the launch short) | that session, step `settle` (v1's reconcile settles it; it is neither launched again nor charged twice) |
   | ended with data, not scored (a killed or crashed session is a data attempt) | that session, step `score` |
@@ -300,7 +301,8 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
   | The twins | `pilotStep` |
   |---|---|
   | both absent | both twins, attempt 1, step `plan` |
-  | one twin of a run without the other (any attempt) | a refusal (`the A/A's run n holds twins a, not a and b`): the twins are planned together |
+  | one twin of a run, only `planned`, the other absent (a crash between the two plannings) | action `resume`: that twin `launch` and the other twin `plan`, at that run's attempt |
+  | one twin of a run without the other and that twin got further than `planned` (any attempt) | a refusal (`the A/A's run n holds twins a, not a and b`): the twins are planned together |
   | a twin planned, launching, or ended with data and unscored | finish that twin only (`launch`, `settle`, `score`), before anything else, a void twin included |
   | both scored | the A/A is finished: the daemon pair is next |
   | one scored and the other void (attempt 1), or both void | **both twins** run again, attempt 2, step `plan` (action `again`), never the void one alone: one twin measures no spread |
@@ -348,7 +350,7 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
   fail with a sentence naming the rid and both lines' dates (`the first dated line is final`), so a refutation after a
   `holds` can never void an attempt once the gate opened and a `holds` after a `refuted` never cancels the re-run. A repeated
   identical line is harmless; a conflict about a session of no read-back slot is nothing to the gate. **A line counts only if it
-  carries a date** (`YYYY-MM-DD`, which v1's `parseAmendments` gives every line): an undated line (or a malformed date) is
+  carries a real calendar date** (`YYYY-MM-DD` that exists: `2026-02-30` and `2026-99-99` are no dates; v1's `parseAmendments` gives every line a date): an undated line, or one with no real date, is
   ignored, it neither opens the gate, nor voids, nor conflicts. "First" is the earliest date, ties in the order of the file, and
   the conflict sentence names the lines in that order.
 - **The read-back gate: nothing runs past an unread read-back slot** (plan round 1, finding 2). When a read-back slot is
@@ -429,6 +431,9 @@ One new pure module, `lib/stage-schedule.mjs`. Nothing in it reads a file or the
     - 17a. `A_void_pilot_session_is_re_run_once_alone_and_a_void_twin_runs_the_A_A_again_once_with_both_twins`
     - 17c. `The_A_A_decision_table_per_state_of_the_twins` — a test row for each line of the A/A table above.
     - 17d. `The_pilot_pairs_follow_the_slot_decision_table`
+    - 17f. `A_crash_between_planning_the_two_sessions_of_a_pilot_pair_or_the_A_A_offers_the_missing_one` and, for a slot,
+      13c. `A_crash_between_planning_the_two_sessions_of_a_slot_offers_the_missing_stack_and_a_launched_lone_session_is_still_refused`
+    - 15l. `A_read_back_date_must_be_a_real_calendar_date`; 17g. `pilotPlan_and_pilotStep_with_no_argument_fail_with_a_sentence_and_never_throw`
     - 17e. `The_A_A_looks_only_at_the_twins_of_its_own_task_and_stack` — and two twins that are both `a` are refused.
     - 17b. `The_pilot_plans_argument_is_validated_field_by_field_and_each_refusal_names_its_field` — the control, 05 and 10 in
       either order, and a refusal for each required field, each stack, each wrong task and the duplicate.
@@ -440,7 +445,7 @@ description that v1's `harnessIdentity` moved and that no v1 series is open, and
 50 lines, complexity at most 4; the mask table is computed, never a literal list. The functions: `slotsOf({ seed })`,
 `maskOfSlot({ round, task, stack })` → `ok(mask)` | `fail(sentence)`, `ridOfSlot(...)`, `firstStackOfSlot(...)`, `seedProblem(seed)`,
 `nextSlot({ map, slots, pilotGo, seedRevealed, readbackLines })` → `ok(slot + { action, todo })` | `fail(sentence)` | `ok(null)` when the series is
-done, `slotProblem(...)` (one road in with `nextSlot`), `roundRuleProblem(...)`, `readbackSlots({ seed })`, `pilotPlan({ pilot })`, `pilotStep({ map, pilot })`.
+done, `slotProblem(...)` (one road in with `nextSlot`), `roundRuleProblem(...)`, `readbackSlots({ seed })`, `pilotPlan({ pilot } = {})`, `pilotStep({ map, pilot } = {})` (a missing argument is `fail('pilot: required')`, never a TypeError).
 No command changes in this pull request. **`series.mjs` changes, all of them** (widened, never copied): `sessionsOf(map, pair, stack, kind)`,
 `openSessions(map, pair, kind)`, `stackState(map, pair, stack, kind)` and `pairComplete(map, pair, kind)` take an optional last
 argument, the run-map `kind` of the sessions to look at: `pilot` (the default, the quick run's pairs: every existing caller is
@@ -455,7 +460,7 @@ sentences use them, so there is one void test and one state line). **Tests:** `O
 collide, about one in 10^4 over the whole series; `planSession` refuses a rid that is already in the run-map, so a collision
 fails closed (the launch is refused, nothing is planned twice), and PR 3's `stage-run` says so in its sentence.
 
-**Done when:** the seventeen scenarios, 9a to 9c, 10a, 13a and 13b, 14a and 14b, 15a to 15k and 17a to 17e went red, green, red; §8's row for PR 2.
+**Done when:** the seventeen scenarios, 9a to 9c, 10a, 13a to 13c, 14a and 14b, 15a to 15l and 17a to 17g went red, green, red; §8's row for PR 2.
 
 ### (a) the series over six tasks — PR 3
 
