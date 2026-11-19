@@ -70,22 +70,53 @@ test('The_scan_for_study_words_does_find_one_so_a_clean_result_is_not_an_empty_s
 
 // ---- the spec pins of the engine and the freeze record (F2.S2 (f) item 2): the pins live in two files, so a test holds them equal ----------------------------------------------------------------------------------------
 
-const FREEZE_TASKS = ['04', '05', '06', '07', '08', '10'];
 const readData = rel => JSON.parse(readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8'));
-const pinsOfEngine = () => readData('../inputs/explore.json').tasks;
+const exploreData = () => readData('../inputs/explore.json');
+const pinsOfEngine = () => exploreData().tasks;
 const recordOfFreeze = () => readData('../../lang-bench/inputs/specs.d/spec-states.json');
+
+const sorted = ids => [...ids].sort();
+
+/** The sentence when the three lists of the freeze's tasks disagree (the quick plan's `quick.planTasks`, the tasks marked `quick`, the record's specs), else null. */
+function taskListProblem(explore, record) {
+  const planned = sorted(explore.quick.planTasks);
+  const marked = sorted(Object.entries(explore.tasks).filter(([, task]) => task.quick === true).map(([id]) => id));
+  const recorded = sorted(Object.keys(record.specs));
+  if (JSON.stringify(planned) !== JSON.stringify(recorded)) return `the quick plan's tasks ${planned} are not the record's specs ${recorded}`;
+  return JSON.stringify(planned) === JSON.stringify(marked) ? null : `the quick plan's tasks ${planned} are not the tasks marked quick ${marked}`;
+}
+
+/** The six tasks of the freeze, from the quick plan's list (`quick.planTasks`, the catalog of the quick tasks); a list that disagrees with the record or the marks fails the test that asks. */
+function freezeTasks() {
+  const problem = taskListProblem(exploreData(), recordOfFreeze());
+  assert.equal(problem, null, problem ?? '');
+  return exploreData().quick.planTasks;
+}
+
+test('The_tasks_of_the_freeze_are_the_quick_plan_the_quick_marks_and_the_records_specs_and_a_list_that_disagrees_is_a_finding', () => {
+  const explore = exploreData();
+  const record = recordOfFreeze();
+  assert.equal(taskListProblem(explore, record), null);
+  assert.equal(explore.quick.planTasks.length, 6, 'the six');
+  const fewer = structuredClone(record);
+  delete fewer.specs['10'];
+  assert.match(taskListProblem(explore, fewer), /not the record's specs/, 'a spec missing from the record');
+  const more = structuredClone(explore);
+  more.tasks['01'].quick = true;
+  assert.match(taskListProblem(more, record), /not the tasks marked quick/, 'a task marked quick that the plan does not list');
+});
 
 test('The_engine_pins_of_the_six_specs_equal_the_freeze_record', () => {
   const engine = pinsOfEngine();
   const { freeze, specs } = recordOfFreeze();
   assert.equal(freeze.state, 'accepted', 'the record says the freeze is accepted');
-  for (const id of FREEZE_TASKS) {
+  for (const id of freezeTasks()) {
     const pin = engine[id].spec;
     assert.equal(pin.sha256, specs[id].sha256, `task ${id}: the engine's spec sha256 is the record's`);
     assert.equal(pin.path, specs[id].path, `task ${id}: the engine's spec path is the record's`);
-    assert.ok(specs[id].commitSha.startsWith(pin.sha), `task ${id}: the engine's spec sha ${pin.sha} is a prefix of the record's commit ${specs[id].commitSha}`);
-    assert.equal(pin.sha, specs[id].commitSha.slice(0, 7), `task ${id}: the engine names the commit by its seven-character prefix, as every other pin`);
+    assert.equal(pin.sha, specs[id].commitSha.slice(0, 7), `task ${id}: the engine names the commit by its seven-character prefix, as every other pin, and it is the record's commit`);
     assert.equal(engine[id].draft, false, `task ${id}: a frozen spec is not a draft`);
+    assert.equal(engine[id].format.sha256, freeze.formatSha256, `task ${id}: the engine's FORMAT pin is the frozen FORMAT's sha256`);
   }
 });
 
@@ -94,7 +125,7 @@ test('The_frozen_spec_blobs_at_the_freeze_commit_hash_to_the_record_and_to_the_e
   if (repo === null) return;
   const engine = pinsOfEngine();
   const { freeze, specs } = recordOfFreeze();
-  for (const id of FREEZE_TASKS) {
+  for (const id of freezeTasks()) {
     const pin = engine[id].spec;
     const blob = await blobAt({ repo, sha: freeze.commitSha, file: specs[id].path });
     assert.equal(blob.ok, true, blob.reason);
