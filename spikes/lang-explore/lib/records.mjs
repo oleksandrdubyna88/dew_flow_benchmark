@@ -92,6 +92,9 @@ export const REQUIRED_PATHS = Object.freeze([
   'quality.buildOk', 'quality.visible', 'quality.heldout', 'egress', 'packages', 'loc', 'workspace', 'process',
   'explore.scored', 'explore.buildTest',
 ]);
+/** The paths a record of a Stage 1 session also holds (and only a Stage 1 record: the older records stay complete as they are, D34, D76, T-L11): its arm, the model the alias record resolved, its task, its round and its kind. */
+export const STAGE_PATHS = Object.freeze(['explore.arm', 'explore.model', 'explore.task', 'explore.round', 'explore.kind']);
+
 /** Paths a SCORED session also holds (the explore fields that need a score). */
 export const SCORED_PATHS = Object.freeze(['explore.accepted', 'explore.deviations', 'explore.harnessDrift', 'explore.contractIdentity', 'explore.passRate', 'explore.verdicts', 'explore.cases', 'explore.limits', 'explore.buildMs', 'explore.trapHits', 'explore.floorBreaches', 'quality.heldout.value.percent', 'quality.heldout.value.defects', 'quality.heldout.value.primary100']);
 
@@ -101,16 +104,33 @@ export const PASSES_PATHS = Object.freeze(['explore.verdict', 'explore.scoringSt
 const at = (o, dotted) => dotted.split('.').reduce((x, k) => (x === undefined || x === null ? undefined : x[k]), o);
 
 /** The required paths a record lacks (a scored session's list is longer); `[]` means every metric is there. */
-export const missingPaths = (record, scored = true) => [...REQUIRED_PATHS, ...(scored ? SCORED_PATHS : []), ...(scored && at(record, 'explore.verdict') !== undefined ? PASSES_PATHS : [])].filter(p => at(record, p) === undefined);
+const passesPaths = (record, scored) => (scored && at(record, 'explore.verdict') !== undefined ? PASSES_PATHS : []);
+
+export const missingPaths = (record, scored = true, stage = false) => [...REQUIRED_PATHS, ...(stage ? STAGE_PATHS : []), ...(scored ? SCORED_PATHS : []), ...passesPaths(record, scored)].filter(p => at(record, p) === undefined);
 
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
 const writeJsonAtomic = (file, value) => { const tmp = `${file}.${process.pid}.tmp`; writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`); renameSync(tmp, file); };
 
-/** Add the `explore` section to a session's `record.json` (v1 wrote it), from its `score/score.json` and audit log. Idempotent. -> the record. */
-export function finalizeSessionRecord({ sessionDir, score, audit }) {
+/** The id the alias record resolved for `alias` (the main model), or why none: the series' CLI names its alias (`opus`), and the first session's stream says which id it was. */
+function modelLeaf(record, alias) {
+  const id = record?.cost?.aliases?.value?.aliases?.[alias];
+  return typeof id === 'string' ? known(id) : unknown(`the alias record of the session resolved no id for '${alias}'`);
+}
+
+/**
+ * The identity of a Stage 1 session, each leaf known or saying why: `{ arm, model, task, round, kind }`. `stage` is `{ arm, task, round, kind, alias }` (`round` is `null` for the A/A and the pilot, which belong to none), `record` the v1 record
+ * the alias record is read from.
+ */
+export function stageLeaves({ stage, record }) {
+  const round = stage.round === null ? unknown('an A/A or pilot session belongs to no round') : known(stage.round);
+  return { arm: known(stage.arm), model: modelLeaf(record, stage.alias), task: known(stage.task), round, kind: known(stage.kind) };
+}
+
+/** Add the `explore` section to a session's `record.json` (v1 wrote it), from its `score/score.json` and audit log; a Stage 1 session (`stage`) also gets its arm, model, task, round and kind. Idempotent. -> the record. */
+export function finalizeSessionRecord({ sessionDir, score, audit, stage = null }) {
   const file = path.join(sessionDir, 'record.json');
   const record = readJson(file);
-  const next = { ...record, explore: exploreSection({ score, audit }) };
+  const next = { ...record, explore: { ...exploreSection({ score, audit }), ...(stage ? stageLeaves({ stage, record }) : {}) } };
   writeJsonAtomic(file, next);
   return next;
 }

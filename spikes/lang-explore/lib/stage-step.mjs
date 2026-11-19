@@ -1,0 +1,115 @@
+// ONE unit of Stage 1, from the choice to the records (F3.S1 (a), PR 3). In order, and each refusal leaves the run-map as it was: the series and the dated lines, the unit the schedule offers, the owner's go line for its scope, the guard, the task and
+// its pins, the series' pinned price file and policy, the plan. Then the one body both verbs share, `run.mjs`'s `runUnit`. No pause point is asked (D7, D53).
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { appendLedger } from '../../minigit-bench/lib/ledger.mjs';
+import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { systemClock } from './clock.mjs';
+import { REPO } from './paths.mjs';
+import { pinsMoved, runUnit } from './run.mjs';
+import { CANONICAL_SERIES, isRehearsal, ledgerFileOf, seriesInputs, seriesRootProblem } from './series.mjs';
+import { stageHandVerdictsFor } from './stage-amendments.mjs';
+import { finalizerOf } from './stage-final.mjs';
+import { guardOf, ownerGoFor, readGates } from './stage-gates.mjs';
+import { rehearsalIo } from './stage-rehearsal.mjs';
+import { DATA_KIND } from './stage-schedule.mjs';
+import { loadStageSeries } from './stage-series.mjs';
+import { planUnit, stepOfUnit, unitOf } from './stage-unit.mjs';
+import { taskFromValues } from './tasks.mjs';
+import { runSteps } from './workspaces-pipeline.mjs';
+
+export const EXIT = Object.freeze({ done: 0, stop: 2, halt: 3, config: 4, failed: 5 });
+const refused = message => ({ exit: EXIT.config, message });
+const sha256File = file => createHash('sha256').update(readFileSync(file)).digest('hex');
+
+const canonicalName = (dir, io) => (io.seriesNameOk ?? (n => CANONICAL_SERIES.test(n)))(path.basename(dir));
+const NAME_SENTENCE = dir => `${path.basename(dir)} is not a canonical series name (x-yyyymmdd-4 hex): a paid slot runs on a series made by \`explore.mjs stage-init\`, never on a copy or a rename`;
+
+/** The series in `dir` as `stage-run` takes it: a Stage 1 series directly under the explore root, canonically named (a rehearsal's `r-` name is its own). -> `ok(series)` | `fail`. */
+export function openStage({ seriesDir, io }) {
+  const outside = seriesRootProblem(io.home, seriesDir);
+  const series = outside ? fail(outside) : loadStageSeries(seriesDir);
+  return series.ok ? nameChecked({ series, seriesDir, io }) : series;
+}
+
+const nameChecked = ({ series, seriesDir, io }) => (isRehearsal(seriesDir) || canonicalName(seriesDir, io) ? series : fail(NAME_SENTENCE(seriesDir)));
+
+/** The exit of a schedule refusal: a stopped series is a stop (2), everything else a refusal (4). */
+const exitOfRefusal = sentence => (sentence.includes('is stopped') ? EXIT.stop : EXIT.config);
+
+const unitOrRefusal = ({ series, read, what }) => {
+  const chosen = unitOf({ what, state: series.state, map: series.map, gates: read.gates });
+  if (!chosen.ok) return { refusal: { exit: exitOfRefusal(chosen.reason), message: chosen.reason } };
+  return chosen.value === null ? { finished: true } : { series, read, unit: chosen.value };
+};
+
+/** The unit `what` names, with what it reads: `{ refusal }` | `{ finished: true }` | `{ series, read, unit }`. */
+function chooseUnit({ dir, what, io }) {
+  const series = openStage({ seriesDir: dir, io });
+  const read = series.ok ? readGates({ series: series.value, io }) : series;
+  return read.ok ? unitOrRefusal({ series: series.value, read: read.value, what }) : { refusal: refused(read.reason) };
+}
+
+const goStep = ({ series, unit, read }) => { const go = ownerGoFor({ series, unit, lines: read.lines }); return go.ok ? ok({ go: go.value }) : go; };
+
+async function guardStep({ series, unit, io }) {
+  const guard = guardOf({ series, io });
+  const answer = await guard({ paid: !isRehearsal(series.dir), requireSeed: unit.kind === DATA_KIND });
+  return answer.ok ? ok({ guard }) : answer;
+}
+
+const taskStep = ({ unit, io }) => taskFromValues({ task: unit.task }, io.exploreFn);
+
+const pinnedFiles = pin => ({ prices: path.join(REPO, pin.prices), policy: path.join(REPO, pin.policy) });
+const movedPin = (pin, files) => [['price file', files.prices, pin.pricesSha256], ['crosscheck policy', files.policy, pin.policySha256]].find(([, file, want]) => sha256File(file) !== want);
+
+/** The price file and the crosscheck policy the series pinned, as absolute paths, checked against the sha256 the series recorded. -> `ok({ policyFiles })` | `fail`. */
+function policyStep({ series }) {
+  const inputs = seriesInputs(series.dir);
+  const pin = inputs.ok ? inputs.value.policy : undefined;
+  if (pin === undefined) return fail(`${series.dir}/inputs.json pins no price file and policy: make the series with \`explore.mjs stage-init\``);
+  const moved = movedPin(pin, pinnedFiles(pin));
+  return moved ? fail(`the ${moved[0]} ${moved[1]} is not the one the series pinned (${String(moved[2]).slice(0, 12)}): a change is a dated amendment, never a quiet one`) : ok({ policyFiles: pinnedFiles(pin) });
+}
+
+const pinsStep = ({ series, task }) => { const moved = pinsMoved({ series, task }); return moved ? fail(moved) : ok({}); };
+const planStep = ({ series, unit, io }) => { const made = planUnit({ map: series.map, unit, ...(io.stage?.pilotRand ? { rand: io.stage.pilotRand } : {}) }); return made.ok ? ok({ plan: made.value }) : made; };
+
+/** The `unit` argument of `runUnit`: the unit's kind, the policy files the series pinned, the guard, the Stage 1 parts of the context and the records' finalizer. */
+const unitArgs = ({ series, unit, read, go, guard, explore, policyFiles }) => ({
+  kind: unit.kind, policyFiles, guard,
+  ctx: { stepOf: stepOfUnit(unit), seed: unit.kind === DATA_KIND ? read.gates.seed : null, preregTag: series.state.preregTag, handVerdictsFor: rid => stageHandVerdictsFor(read.text, rid, series.state.seriesId) },
+  finalize: finalizerOf({ unit, go, alias: explore.cli.model }),
+});
+
+/** The owner's go line a launch used, as an event line of the ledger (an event, never a charge). */
+function sayGo({ series, unit, go, io }) {
+  if (go) appendLedger(ledgerFileOf(series.dir), { event: 'owner-go', pair: unit.pair, what: unit.what, date: go.date, scope: go.scope, words: go.words, t: (io.now ?? systemClock)().toISOString() });
+}
+
+/** The run: the series with the plan, the io of the unit (a rehearsal's stub rig) and the one body `runUnit`. */
+async function launch(s) {
+  sayGo(s);
+  const rig = await (isRehearsal(s.series.dir) ? rehearsalIo(s) : { io: s.io, close: async () => {} });
+  try {
+    return await runUnit({ series: { ...s.series, map: s.plan.map }, pair: s.unit.pair, planned: s.plan, io: rig.io, task: s.task, unit: unitArgs(s) });
+  } finally {
+    await rig.close();
+  }
+}
+
+/**
+ * Run the unit `what` names of the series in `dir`. -> `{ exit, message, pairFile?, problems?, unit?, finished? }`: `finished` when the schedule has nothing more to run; `unit` (the slot's number, round, task and whether it is a read-back
+ * slot) when one ran.
+ */
+export async function runStageUnit({ dir, what, io }) {
+  const chosen = chooseUnit({ dir, what, io });
+  if (chosen.refusal) return chosen.refusal;
+  if (chosen.finished) return { exit: EXIT.done, message: 'nothing more to run: every unit the schedule holds is finished', finished: true };
+  const state = { ...chosen, io };
+  const prepared = await runSteps([goStep, guardStep, taskStep, policyStep, pinsStep, planStep], state);
+  if (!prepared.ok) return refused(prepared.reason);
+  const result = await launch(prepared.value);
+  return { ...result, unit: { what: chosen.unit.what, pair: chosen.unit.pair, round: chosen.unit.round, task: chosen.unit.task, readback: chosen.unit.slot?.readback === true } };
+}

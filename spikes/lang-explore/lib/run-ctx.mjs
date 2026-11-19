@@ -40,7 +40,7 @@ function snapshotFacts(snapshots) {
  * -> `ok(ctx)` | `fail`.
  */
 export async function runContext(a) {
-  const policy = crosscheckPolicyFrom(V1, {});
+  const policy = crosscheckPolicyFrom(V1, a.policyFiles);
   if (!policy.ok) return policy;
   const identity = await harnessIdentity(REPO);
   return identity.ok ? ok(contextOf({ ...a, policy: policy.value, identity: identity.value })) : identity;
@@ -50,7 +50,7 @@ const readSpin = home => (existsSync(spinFile(home)) ? readJson(spinFile(home)) 
 const snapshotsOfWorld = world => Object.fromEntries(['csharp', 'node'].map(s => [s, { dir: world.snapshots[s].dir, parts: world.snapshots[s].parts }]));
 
 /** The context object, from the pieces `runContext` gathered. */
-export function contextOf({ world, calibration, series, seriesDir, kind, pair, token, claudeBinary, fill, planOver = {}, abort, home, policy, identity, prompts = loadPrompts() }) {
+export function contextOf({ world, calibration, series, seriesDir, kind, pair, token, claudeBinary, fill, planOver = {}, abort, home, policy, identity, prompts = loadPrompts(), stage = {} }) {
   return {
     seriesDir, sessionsRoot: path.join(seriesDir, 's'), home, kind, pair, seed: null, inputsRoot: null, hashes: [], snapshots: snapshotsOfWorld(world), ...snapshotFacts(world.snapshots),
     packageRules: readJson(path.join(INPUTS, 'package-flags.json')).rules, claudeBinary, cliVersion: world.explore.cli.version, nodeDir: world.paths.nodeDir, tsDir: world.paths.tsDir, token,
@@ -63,6 +63,7 @@ export function contextOf({ world, calibration, series, seriesDir, kind, pair, t
     handVerdictsFor: () => [], abortReason: () => abort.reason, abortExit: () => abort.exit, planOver,
     ...(world.quick === true ? { lostCwdLow: true } : {}),
     fill, planFor: a => recordPlan(planForSession(a)), prompts, locale: world.explore.locale, envExtra: world.explore.envExtra, calibration, series,
+    ...stage, // Stage 1 (`stage-run.mjs`): the revealed seed, the registered tag, the registered amendments' hand verdicts and the caller's own steps (`stepOf`, the loop's seam)
   };
 }
 
@@ -148,9 +149,9 @@ function machineDeps(machine) {
  * The edges of a loop run. `preflightHome` is the home whose token file the preflight looks at (it checks the file EXISTS, never its content): the operator's for a paid run, a throw-away one holding a fake
  * file for the rehearsal. `machine` is `machineFor`'s value, or `null` for the rehearsal (it measures nothing, so the loop never asks). `stub` leaves the operator's project folders alone (no canary is planted).
  */
-export function runDeps({ ctx, world, scoreDep, machine, preflightHome, stub = false, maskProbe = stub ? null : cpus => probeMask({ cpus }) }) {
+export function runDeps({ ctx, world, scoreDep, machine, preflightHome, stub = false, maskProbe = stub ? null : cpus => probeMask({ cpus }), guard = async () => ok(null) }) {
   return {
-    guard: async () => ok(null), retireStale: () => retireStale({ root: ctx.sessionsRoot, now: Date.now(), endCell: a => endCell({ ...a, killTree, procApi: realProcApi }) }),
+    guard, retireStale: () => retireStale({ root: ctx.sessionsRoot, now: Date.now(), endCell: a => endCell({ ...a, killTree, procApi: realProcApi }) }),
     preflight: preflightDep({ ctx, world, preflightHome, maskProbe }), ...machineDeps(machine), now: Date.now,
     scoreSession: scoreDep, phase: { listProjectDirs: stub ? () => [] : projectDirs(ctx.home), maskCheckMs: 15_000 },
   };
