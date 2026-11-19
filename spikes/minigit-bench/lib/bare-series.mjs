@@ -47,9 +47,12 @@ function fixedStep(map, kind) {
 /** Does the caller own the schedule of this run? It does when the context carries `stepOf` (F3.S1: Stage 1's slots): v1 then plans no session from its own seed and asks the caller for every step. */
 const callerSteps = ctx => typeof ctx.stepOf === 'function';
 
+/** Does v1 plan this run's sessions from its own seed? Only for the kind `data` when the caller does not own the schedule. */
+const ownsItems = ctx => ctx.kind === 'data' && !callerSteps(ctx);
+
 /** The sessions of a launch step, planned in the run-map when they are new, and only those still `planned`: a session that already ended (its partner was reset by a resume) is never launched again (`ran -> launching` is not a transition). The sessions of a caller's step are the ones the caller planned in the map, as for the other kinds. */
 function planItems({ ctx, h, step }) {
-  const all = ctx.kind === 'data' && !callerSteps(ctx) ? itemsOf({ ctx, step }) : step.sessions.map(s => ({ session: s, rid: s.rid, mask: h.get().sessions[s.rid].mask }));
+  const all = ownsItems(ctx) ? itemsOf({ ctx, step }) : step.sessions.map(s => ({ session: s, rid: s.rid, mask: h.get().sessions[s.rid].mask }));
   for (const item of all) {
     if (h.get().sessions[item.rid] === undefined) {
       h.apply(planSession(h.get(), { rid: item.rid, pair: ctx.pair, ...item.session, kind: ctx.kind, label: step.label, mask: item.mask }));

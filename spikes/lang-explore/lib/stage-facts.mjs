@@ -1,7 +1,7 @@
 // What a Stage 1 session STORES for the readers that come after the tag (F3.S1 (a), PR 3, item 11). The read-back, the GO table and the record tools can only read what the frozen harness wrote, so this makes sure it is there, per session and
 // per pass, in files of their own that no later step rewrites (each is published once, `publishOnce`):
 //   <session>/argv.json         v1's: the argv and the binds of the agent box, its environment keys (read, never rewritten)
-//   <session>/stage-facts.json  this module's, written when the unit's records are: the sha256 of argv.json and the binds parsed from it, the agent box's environment keys and culture, the cache snapshots' tree hashes and package list,
+//   <session>/stage-facts.json  this module's, written when the unit's records are: the sha256 of argv.json and the binds parsed from it (`{ host, box }`, by v1's `bindPairsOf`), the agent box's environment keys and culture, the cache snapshots' tree hashes and package list,
 //                               the sha256 of the workspace's STATEMENT.md and the affinity the launch read back
 //   <session>/score/build.json  the build record: the sha256 of the scored tree's `run.sh` and whether the restore had to put it back (`build-commit.mjs`)
 //   <session>/score/passes/*    every completed pass: the scoring box's environment keys with the two heap keys and their values and the culture (`box-facts.mjs`), and the affinity read back (`observedCpus`)
@@ -9,6 +9,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+import { bindPairsOf } from '../../minigit-bench/lib/sandbox.mjs';
 import { publishOnce } from './publish-once.mjs';
 
 export const FACTS_FILE = 'stage-facts.json';
@@ -16,11 +17,6 @@ export const FACTS_FILE = 'stage-facts.json';
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const unknown = why => ({ known: false, why });
 const readJsonOr = file => { try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return null; } };
-
-const BIND_FLAGS = new Set(['--bind', '--ro-bind', '--bind-try', '--ro-bind-try', '--dev-bind']);
-
-/** The binds of a bwrap argv as `[{ flag, from, to }]`, in the order the box was built with. */
-export const bindsOf = argv => argv.flatMap((arg, i) => (BIND_FLAGS.has(arg) ? [{ flag: arg, from: argv[i + 1], to: argv[i + 2] }] : []));
 
 /** The agent box: the argv file's hash and binds, the environment keys and the culture it had. */
 function agentFacts(sessionDir) {
@@ -31,7 +27,7 @@ function agentFacts(sessionDir) {
   const keys = argv.envKeys ?? [];
   const both = ['LANG', 'LC_ALL'].every(k => keys.includes(k)) && typeof plan?.locale === 'string';
   return {
-    argv: { known: true, file: 'argv.json', sha256: sha256(readFileSync(file)) }, binds: { known: true, value: bindsOf(argv.bwrap ?? []) }, envKeys: { known: true, value: keys },
+    argv: { known: true, file: 'argv.json', sha256: sha256(readFileSync(file)) }, binds: { known: true, value: bindPairsOf(argv.bwrap ?? []) }, envKeys: { known: true, value: keys },
     culture: both ? { known: true, LANG: plan.locale, LC_ALL: plan.locale, source: 'plan.json locale, which the box\'s environment is built from (`agentEnv`); both keys are in argv.json\'s environment keys' } : unknown('the box environment lacks LANG or LC_ALL, or plan.json names no locale'),
   };
 }

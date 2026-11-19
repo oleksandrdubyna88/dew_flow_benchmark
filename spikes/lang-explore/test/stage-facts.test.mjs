@@ -13,7 +13,7 @@ import { scoringBoxFacts } from '../lib/box-facts.mjs';
 import { commitBuild, runShFact } from '../lib/build-commit.mjs';
 import { passBody } from '../lib/pass-child.mjs';
 import { writeAttempt } from '../lib/score-files.mjs';
-import { FACTS_FILE, STORED_FIELDS, bindsOf, storedProblems, writeSessionFacts } from '../lib/stage-facts.mjs';
+import { FACTS_FILE, STORED_FIELDS, storedProblems, writeSessionFacts } from '../lib/stage-facts.mjs';
 
 const MIB = 1024 * 1024;
 const LIMIT = 512 * MIB;
@@ -50,7 +50,7 @@ test('Every_field_the_read_back_the_GO_table_and_the_record_tools_read_is_in_the
   const { dir } = await fixtureSession();
   assert.deepEqual(storedProblems(dir), [], 'every field is in a file the harness wrote');
   const facts = readJson(path.join(dir, FACTS_FILE));
-  assert.deepEqual(facts.agent.binds.value, [{ flag: '--ro-bind', from: '/usr', to: '/usr' }, { flag: '--bind', from: '/work', to: '/w' }], 'the binds of the agent box, parsed from the argv it ran with');
+  assert.deepEqual(facts.agent.binds.value, [{ host: '/usr', box: '/usr' }, { host: '/work', box: '/w' }], 'the binds of the agent box, parsed from the argv it ran with');
   assert.equal(facts.agent.argv.sha256, sha(readFileSync(path.join(dir, 'argv.json'))));
   assert.deepEqual(facts.cache.packages.value, ['pkg-a@1', 'pkg-b@2']);
   assert.deepEqual([facts.cache.csharp.treeSha256, facts.cache.node.treeSha256], ['c'.repeat(64), 'd'.repeat(64)]);
@@ -91,5 +91,4 @@ test('A_session_stores_the_culture_of_both_boxes_and_the_hash_of_the_run_sh_that
   assert.equal(readJson(path.join(noLocale.dir, FACTS_FILE)).agent.culture.known, false, 'a culture that cannot be taken says why, never a missing key');
   assert.deepEqual(storedProblems(noLocale.dir), [], 'and counts as stored');
   assert.equal(scoringBoxFacts({ stack: 'rust', dirs: DIRS, memoryBytes: LIMIT }).known, false);
-  assert.deepEqual(bindsOf(['--unshare-all', '--bind-try', '/a', '/b']), [{ flag: '--bind-try', from: '/a', to: '/b' }]);
 });
