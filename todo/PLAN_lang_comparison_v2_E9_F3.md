@@ -1399,6 +1399,8 @@ who are asked first for everything else.
 12. **Who decides the Stage 2 line** — *owner*. The parent gives its words and its date (`:851`–`:861`) and says the reason
     must not depend on which stack won (`:831`); it does not say who decides. D76 is the owner's decision, and a *go* leads
     to paid sessions, so the question goes to the owner.
+    **Answered 2026-11-19 by the owner:** the owner decides and dates the line; the team lead prepares the report and a draft
+    of the line, nothing more. PR 15 carries the owner's words.
 14. **The re-run spend line** — *consultants*. D7 and the Definition of Done name pilot, A/A, data, void and re-run lines
     (`:1008`, `:482`); the ledger has no re-run kind. This document derives the line from the attempt number; the
     pre-registration states the split, so it must be confirmed first.
@@ -1418,9 +1420,17 @@ who are asked first for everything else.
     (10.1), so a second would stop the plan for a whole re-review. The owner says either that it is a safeguard of the
     way F3 is run and no change, or that it is to be procedure only; in the second case PR 3 drops the refusal and keeps
     the lines as a record.
+    **Answered 2026-11-19 by the owner:** the refusal stands in code (PR 3, with PR 5's guard). It is part of this stories
+    document as written when the epic starts and changes nothing the parent fixes (no scope, merge condition, task, metric or
+    Definition-of-Done item), so it is no ledger entry.
 20. **No ruleset protects the pre-registration tag** — *owner*, only if a ruleset is wanted. The task repository's rulesets
     cover `spec-frozen-*`. The guard sees a moved tag, because the series pins the commit. A ruleset on this repository
     would need the owner's own go.
+    **Answered 2026-11-19 by the owner: yes, a ruleset.** Before step T's tag push, a ruleset on this repository refuses the
+    update and the deletion of `refs/tags/prereg/*` (creation by the admin only, as the task repository's `spec-frozen-tags`
+    pair), written as data beside `spikes/lang-bench/lib/github-lang.mjs`'s, applied with `--apply` and read back equal; PR 5
+    carries the data, its check and its tests, and step T applies it and records the ids. The owner's go of 2026-11-19
+    covers creating this ruleset once; any later change of it needs its own go.
 
 ## 12. Definition of Done (F3)
 
