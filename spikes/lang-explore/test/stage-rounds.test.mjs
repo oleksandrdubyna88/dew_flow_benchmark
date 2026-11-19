@@ -47,9 +47,11 @@ test('until_round_ends_after_a_read_back_slot_and_says_what_is_awaited_and_goes_
   const [first] = readbackSlots({ seed: SEED });
   const stopped = await round(rig);
   assert.equal(stopped.exit, 3, stopped.message);
-  assert.match(stopped.message, new RegExp(`^slot ${first.slot} \\(round 1, task ${first.task}\\) is a read-back slot: nothing later runs until its two dated read-back lines are on main; the print is .readback.mjs --series ${rig.dir} --pair ${first.slot}.`));
+  assert.match(stopped.message, new RegExp(`^slot ${first.slot} \\(round 1, task ${first.task}\\) is a read-back slot: nothing later runs until its two dated read-back lines are on main; the print is .node research/lang-v2/tools/readback.mjs --series ${rig.dir} --pair ${first.slot}.`));
   assert.equal(rig.log.length, first.slot, 'nothing later ran');
-  assert.equal((await next(rig)).exit, 4, 'and `next` itself says the gate');
+  const gate = await next(rig);
+  assert.equal(gate.exit, 4, 'and `next` itself says the gate');
+  assert.ok(gate.message.includes(`the print is \`node research/lang-v2/tools/readback.mjs --series <dir> --pair ${first.slot}\``), 'with the full command of the tool (PR 7\'s, under research/lang-v2/tools)');
   writeFileSync(rig.files.amendmentsFile, `${BASE.join('\n')}\n${readbackHolds().slice(0, 2).join('\n')}\n`);
   const again = await round(rig);
   assert.equal(again.exit, 0, again.message);

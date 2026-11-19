@@ -44,7 +44,7 @@ const readbackDone = ({ dir, unit, io }) => {
   return unit.readback && series.ok && pairComplete(series.value.map, unit.pair, DATA_KIND);
 };
 
-const readbackStop = ({ dir, unit }) => ({ exit: EXIT.halt, message: `slot ${unit.pair} (round ${unit.round}, task ${unit.task}) is a read-back slot: nothing later runs until its two dated read-back lines are on main; the print is \`readback.mjs --series ${dir} --pair ${unit.pair}\``, unit });
+const readbackStop = ({ dir, unit }) => ({ exit: EXIT.halt, message: `slot ${unit.pair} (round ${unit.round}, task ${unit.task}) is a read-back slot: nothing later runs until its two dated read-back lines are on main; the print is \`node research/lang-v2/tools/readback.mjs --series ${dir} --pair ${unit.pair}\``, unit });
 
 /** The schedule's next unit after one ran, or the reason there is none. */
 function nextAfter({ dir, io }) {

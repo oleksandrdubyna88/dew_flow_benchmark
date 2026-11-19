@@ -188,7 +188,7 @@ function roundThreeProblem({ map, slots, target, lines }) {
 /** The read-back gate: no slot after a read-back slot is offered until each of its sessions that counts has its dated line. */
 function readbackGateProblem({ map, slots, target, lines }) {
   const waiting = awaitingOf({ map, slots, lines, within: s => s.slot < target.slot });
-  return waiting === undefined ? null : `${describe(waiting[0])} is a read-back slot: no later slot is offered until each of its two sessions that counts has its dated read-back line (${READBACK_ROW}, holds or refuted); still unread: ${waiting[1].join(', ')}; the print is \`readback.mjs --series <dir> --pair ${waiting[0].slot}\``;
+  return waiting === undefined ? null : `${describe(waiting[0])} is a read-back slot: no later slot is offered until each of its two sessions that counts has its dated read-back line (${READBACK_ROW}, holds or refuted); still unread: ${waiting[1].join(', ')}; the print is \`node research/lang-v2/tools/readback.mjs --series <dir> --pair ${waiting[0].slot}\``;
 }
 
 const linesProblem = args => roundThreeProblem(args) ?? readbackGateProblem(args);
