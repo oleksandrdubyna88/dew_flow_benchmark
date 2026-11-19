@@ -529,6 +529,20 @@ has no network): `dotnet --version` in the project prints the pin, the program p
 (`.NET 10.0.14`), and the control without the hide list shows two SDKs. The comparability claim is therefore: same SDK, same
 runtime, same packs and templates as before; the one difference is the muxer and `host/fxr` of 11.0.0, which resolve to the
 pinned SDK, and that is recorded in the effect test's output and here.
+*As built (2026-11-19, `a1c8228d`…`474d7e4e`, Fable), three corrections to the text above.* (a) The SCORING box too: the build
+found that `scoreBoxArgv` (`lib/bwrap.mjs`) listed both SDKs and chose `11.0.100` in a folder with no `global.json` (v1's minigit
+workspace has none), so v1's scorer would have built C# with SDK 11. By the gate's own rule (every construction path, one list)
+the scoring box takes the same decision, `boxDotnetHide` in `lib/dotnet-hide.mjs`; the pin reaches it through the run
+(`bare-series` → `score-run`'s `--dotnet-pin` → `score-session.mjs` → `score-deps`), and lang-explore's judge through
+`judgeConfig`; a scorer started by hand falls back to v1's pin read from `inputs/stacks.json` (`lib/stacks-pin.mjs`), as
+`makeSnapshot` does. More construction paths than the text named carry the pin: `cache-snapshot.mjs`, `smoke-run.mjs`, v1's
+`bare-plan`/`bare-phase`/`bare-config`, lang-explore's `prepare.mjs`; `plan.json` records `dotnetPin`. (b) "Shows what it showed
+before" holds for the SDK, the runtimes, the packs, the templates and the manifests; still shown besides `host/fxr` are the files
+`library-packs/*.11.0.0.nupkg` and `metadata/workloads/11.0.100` (one empty file). (c) Of the 7 reds, 6 are green on this branch
+alone; `test/preflight.test.mjs:19` keeps a second, independent cause on `main` (`claude` on PATH is 2.1.328, the pin 2.1.310),
+which the test-leftovers story E6.S6 fixes (its fix 3: the test probes the pinned CLI copy); with both, the preflight answers
+`ok` (`claude` 2.1.310, node 26.12.1, `dotnetSdks` `["10.0.114"]`, typescript 7.0.2). Harness files under `lib/` changed, so a live
+series needs its accept-harness step before its next paid cell.
 
 ### Test scenarios
 
