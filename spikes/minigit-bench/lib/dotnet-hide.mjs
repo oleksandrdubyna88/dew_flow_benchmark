@@ -9,7 +9,7 @@
 // pack folder to look into, should be (`mountable`).
 import { existsSync, readdirSync } from 'node:fs';
 
-/** The distribution's .NET locations: a pinned-SDK box hides them whole (the apphost reads them when DOTNET_ROOT is unset); a box on the distribution's dotnet hides the other versions inside them. */
+/** The distribution's .NET locations: a pinned-SDK box hides them whole (`agentBoxPrefix` does, whatever its caller's `hide` holds; the apphost reads them when DOTNET_ROOT is unset); a box on the distribution's dotnet hides the other versions inside them. */
 export const DISTRIBUTION_DOTNET = Object.freeze(['/usr/lib/dotnet', '/usr/share/dotnet', '/etc/dotnet']);
 
 /** Version folders directly below: `templates/<v>`, `sdk-manifests/<band>`. */
@@ -61,7 +61,7 @@ export function otherDotnetVersions({ pin, roots = DISTRIBUTION_DOTNET, exists =
 
 /**
  * The dotnet version folders ONE box hides, read from the host NOW, when the box is built: the same decision for the agent's box (`agentBoxPrefix`) and the scoring box (`scoreBoxArgv`), so the two
- * cannot drift and no caller can hold a stale list. A box with a pinned SDK directory (`dotnetDir`: the agent's box only, the scoring box has no such switch) gets nothing here (it hides the whole distribution through its caller's `hide`); every
+ * cannot drift and no caller can hold a stale list. A box with a pinned SDK directory (`dotnetDir`: the agent's box only, the scoring box has no such switch) gets nothing here (`agentBoxPrefix` hides the distribution's roots whole for it, by itself); every
  * other box runs the distribution's dotnet and shows only `dotnetPin`'s versions. No pin and no pinned directory is refused (`otherDotnetVersions` throws, naming the shape): skipping would show
  * every SDK of the host, and a tree could be built, or scored, with another one.
  */

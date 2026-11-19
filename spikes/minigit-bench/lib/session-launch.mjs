@@ -136,7 +136,7 @@ function onEvent({ plan, rec, stop }, ev) {
 
 /**
  * The whole argv of a session's box, from its plan. `plan.dotnetPin` is the pinned SDK version: a box on the distribution's dotnet shows only that SDK's versions (E2 amendment 2026-11-19; the list is
- * read from the host here, at the launch, never carried in the plan); a plan with a pinned `dotnetDir` hides the distribution through `plan.hide`. A plan with neither is refused by `agentBoxPrefix`.
+ * read from the host here, at the launch, never carried in the plan); for a plan with a pinned `dotnetDir` the box hides the distribution's roots whole, by itself (`plan.hide` may name them too, or more). A plan with neither is refused by `agentBoxPrefix`.
  * `seams` (`exists`, `listDir`) are the tests'.
  */
 export const sessionBoxArgv = ({ plan, command, seams = {} }) => agentBoxArgv({

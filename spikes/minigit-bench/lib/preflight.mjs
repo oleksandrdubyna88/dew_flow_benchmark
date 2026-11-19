@@ -29,7 +29,7 @@ async function install(plan) {
 }
 
 /**
- * The prefix of the probe box: the agent's box with the TypeScript toolchain, and either the pinned SDK directory (`dotnetDir`, its caller's `hide` over the distribution) or the distribution's
+ * The prefix of the probe box: the agent's box with the TypeScript toolchain, and either the pinned SDK directory (`dotnetDir`: the box hides the distribution's roots whole, by itself) or the distribution's
  * dotnet showing only the pinned SDK's versions (`stacks.pins.dotnetSdk`, E2 amendment 2026-11-19: `agentBoxPrefix` reads the host when it is called). `seams` (`exists`, `listDir`) are the tests'.
  */
 export const probeBoxPrefix = ({ layout, nodeDir, tsDir, dotnetDir = null, hide = [], claudeBinary, stacks, seams = {} }) => agentBoxPrefix({

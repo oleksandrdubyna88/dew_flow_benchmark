@@ -11,7 +11,7 @@ import path from 'node:path';
 import { FIXED_GIT } from '../../policy-ab-quick/lib/env.mjs';
 import { otelEnv } from './otel-receiver.mjs';
 import { bind, chdir, devProc, hiddenPaths, isolation, localeEnv, roBind, roRoot, tmpfs } from './bwrap.mjs';
-import { boxDotnetHide, dirEntriesOf } from './dotnet-hide.mjs';
+import { DISTRIBUTION_DOTNET, boxDotnetHide, dirEntriesOf } from './dotnet-hide.mjs';
 import { fail, ok } from './result.mjs';
 
 export const BOX_PROXY_PORT = 3128;
@@ -163,18 +163,25 @@ export const boxReachable = opts => planView(opts).allow;
 export const boxSkeleton = opts => planView(opts).skeleton;
 
 /**
+ * The paths this box hides whole, besides the shared list: the caller's `hide`, in its order, then, for a box with a pinned SDK directory, every distribution dotnet root the caller did not name. The box
+ * derives the roots ITSELF (a pinned-toolchain program must not find the distribution's dotnet, and the apphost reads it when DOTNET_ROOT is unset): a caller that hands over `dotnetDir` and no `hide`
+ * must not get every SDK of the distribution beside the pinned one. Each path once, so a caller that names the roots too (they all did, E1.S4) gets the argv it always got.
+ */
+const wholeHidden = ({ hide, dotnetDir }) => [...new Set([...hide, ...(dotnetDir ? DISTRIBUTION_DOTNET : [])])];
+
+/**
  * The argv prefix (ending in `--`) of the agent's box: the filesystem read-only; the shared hide list replaced by empty tmpfs; then ONLY an
  * explicit list bound back in, AFTER the tmpfs so it shows. The box's `/tmp` is `box/tmp`, bound before anything else that may live under the
  * host's `/tmp`. Its own network, pid and ipc namespaces. No `--setenv`, no `--clearenv`: the environment is the spawn's `env`.
- * `dotnetPin` is the pinned SDK version (required unless `dotnetDir`, a pinned SDK directory, is given; E2 amendment 2026-11-19, D-9: `boxDotnetHide`, an SDK installed between a preflight and a
+ * `dotnetDir` is a pinned SDK directory: the box then hides the distribution's dotnet roots whole (`wholeHidden`) and lists no version. `dotnetPin` is the pinned SDK version (required unless `dotnetDir` is given; E2 amendment 2026-11-19, D-9: `boxDotnetHide`, an SDK installed between a preflight and a
  * session is hidden too); `listDir` lists a directory's sub-directories, injected as `exists` is.
  */
 export function agentBoxPrefix({ layout, arm, toolchains = [], claudeBinary, nodeDir, extraRo = [], extraRw = [], hide = [], dotnetDir = null, dotnetPin, operatorHome = os.homedir(), exists = existsSync, listDir = dirEntriesOf }) {
   return Object.freeze([
     'bwrap', ...roRoot(), ...devProc(),
     ...hiddenPaths({ operatorHome, exists }).flatMap(tmpfs),
-    // `hide` (E1.S4): host paths this box must not show, each an empty tmpfs when the host has it (a path the host lacks cannot be mounted over); the distribution's dotnet, because a pinned-toolchain program must not find it
-    ...hide.filter(p => exists(p)).flatMap(tmpfs),
+    // `hide` (E1.S4): host paths this box must not show, each an empty tmpfs when the host has it (a path the host lacks cannot be mounted over)
+    ...wholeHidden({ hide, dotnetDir }).filter(p => exists(p)).flatMap(tmpfs),
     ...boxDotnetHide({ dotnetDir, dotnetPin, exists, listDir }).flatMap(tmpfs),
     ...bindPair(writableBinds(layout)[0]),
     ...[nodeDir, ...toolchains, layout.harness, layout.net, ...extraRo].flatMap(roBind),

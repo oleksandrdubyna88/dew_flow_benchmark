@@ -72,6 +72,24 @@ test('A_box_with_a_pinned_sdk_directory_hides_the_whole_distribution_as_before_a
   assert.deepEqual(argv, agentBoxPrefix({ ...base, toolchains: ['/dn'], ...pinned, dotnetPin: PIN, ...neverListed }), 'a pin given beside the pinned directory changes nothing');
 });
 
+test('A_box_with_a_pinned_sdk_directory_hides_every_distribution_root_itself_whether_or_not_its_caller_names_them', () => {
+  const roots = DISTRIBUTION_DOTNET.filter(twoSdks.exists);
+  assert.deepEqual(roots, ['/usr/lib/dotnet', '/etc/dotnet'], 'the invented host holds two of the three roots: a root it lacks is not mounted over');
+  const given = { ...base, toolchains: ['/dn'], dotnetDir: '/dn', ...neverListed };
+  // the refuted state: the box left the roots to its caller's `hide`, so a caller that passed the directory alone got every SDK of the distribution beside the pinned one, and an empty version list
+  const alone = agentBoxPrefix(given);
+  assertHidesWholeDistribution(alone, 'agentBoxPrefix, dotnetDir and no hide');
+  assert.deepEqual(alone, agentBoxPrefix({ ...given, hide: DISTRIBUTION_DOTNET }), 'a caller that names the roots as well gets the same argv: each root once, in the same place');
+  const count = argv => root => tmpfsOf(argv).filter(p => p === root).length;
+  assert.deepEqual(roots.map(count(agentBoxPrefix({ ...given, hide: DISTRIBUTION_DOTNET }))), [1, 1], 'no second tmpfs for a path the caller already hides');
+  assert.deepEqual(tmpfsOf(agentBoxPrefix({ ...given, hide: ['/etc/dotnet', '/x/more'], exists: p => p === '/x/more' || twoSdks.exists(p) })), [HOME, '/etc/dotnet', '/x/more', '/usr/lib/dotnet'], 'the caller\'s own paths first and in its order, then the roots it did not name');
+  assert.deepEqual(tmpfsOf(agentBoxPrefix({ ...base, dotnetPin: PIN, ...oneSdk })), [HOME], 'control: without a pinned directory the roots stay, the box runs the distribution\'s dotnet');
+  // every path that can hand a pinned directory to the box, with no hide list at all
+  assertHidesWholeDistribution(probeBoxPrefix({ layout, nodeDir: '/n', tsDir: '/ts', claudeBinary: '/x/claude', stacks, dotnetDir: '/dn', seams: { ...neverListed, operatorHome: HOME } }), 'preflight, dotnetDir and no hide');
+  assertHidesWholeDistribution(sessionBoxArgv({ plan: { ...bareSessionPlan({ ...planGiven, dotnetPin: PIN }), toolchains: ['/ts', '/dn'], dotnetDir: '/dn' }, command: ['claude'], seams: neverListed }), 'session-launch, dotnetDir and no hide');
+  assertHidesWholeDistribution(snapshotBoxArgv({ layout, nodeDir: '/n', command: ['true'], toolchains: ['/dn'], dotnetDir: '/dn', seams: { ...neverListed, operatorHome: HOME } }), 'cache-snapshot, dotnetDir and no hide');
+});
+
 test('A_box_with_no_pinned_sdk_directory_and_no_pin_is_refused_and_the_refusal_names_the_pin', () => {
   assert.throws(() => agentBoxPrefix({ ...base, ...twoSdks }), /dotnetPin undefined is not an SDK version/);
   assert.throws(() => agentBoxPrefix({ ...base, ...oneSdk }), /dotnetPin undefined/, 'also on a host with one SDK: the refusal does not depend on what the host holds today');
