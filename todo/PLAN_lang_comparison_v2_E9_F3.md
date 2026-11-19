@@ -1373,29 +1373,49 @@ who are asked first for everything else.
    (`:780`). So the web pair is task 04, and the daemon pair and the A/A take 05 and 10 between them. Still free: which of
    the two is the A/A's, and the A/A's stack (D16's A/A was C#, of an olympiad task that is outside Stage 1's claim,
    `:1017`, `:1725`).
+    **Answered 2026-11-19 (consult `a4be62c7`, 2 of 2):** the A/A is task 05 on Node (both twins), and the daemon pilot pair
+    is task 10 in both stacks; the web pair is 04. Task 05's Node sessions of the quick run spread most (937.8 s to 3343.3
+    s, $1.37 to $4.33, `research/lang-v2/EXPLORE_task05_2026-11-05.md`), and task 10 carries G-16's checks of the memory
+    peak, SIGTERM and the timer-driven final reports in both runtimes. Registered in PR 6 (`schedule.json`'s pilot as `{ aa:
+    { task: "05", stack: "node" }, daemon: "10", web: "04" }`), not drawn by the seed; G-9 records the twins' spread and
+    gates on nothing.
 4. **G-14** — *consultants*. §11 keeps G-1 to G-14 (`:1717`), and G-14 is v1's rehearsal of its second phase
    (`todo/PLAN_minigit_stack_bench_E3_bare.md:526`), which a one-phase series does not have. A reading: the free rehearsal of
    a daemon and a web task passes in both stacks on the series' harness. The contract must fix one reading (§3,
    condition 1).
+    **Answered 2026-11-19 (the team lead, the reading above):** G-14 is read as the free rehearsal of one daemon and one web
+    task passing in both stacks on the series' own harness (step T's stub round); the contract (PR 6) writes that reading.
 5. **G-18's cross-check figure** — *consultants*. Its formula (`:1771`–`:1780`) is bounded by `capMax(arm)`, which is defined
    from the superseded $1000 ceiling, and scales by time guesses for tasks that were not piloted. A reading: twice the
    larger settled cost of the pilot pair of the task's kind. It binds nothing either way (`:1745`), and the contract must
    fix it.
+    **Answered 2026-11-19 (the team lead, the reading above):** G-18's cross-check figure is twice the larger settled cost
+    of the pilot pair of the task's kind; it binds nothing (`:1745`), and the contract writes it.
 7. **The prediction** — *consultants*. §9's draft is for ten tasks and two arms (`:1665`); nothing states it for six tasks,
    bare, so there is no text to quote verbatim, and T28 asks `prediction.md` to say when it was written (`:849`). Who writes
    the six-task lines, and whether they go into the parent first, is open.
+    **Answered 2026-11-19 (the team lead):** the team lead writes the six-task bare lines of `prediction.md` in PR 6, dated
+    the day they are written and before the tag (T28), from the quick run's exploratory data and labelled as such; the
+    parent's ten-task draft (`:1665`) stays as history and is not edited, and nothing goes into the parent first.
 8. **Q6, the sign test** — *consultants*. Narrowed: this document writes "not shown", and the parent supports it: the list
    of what the report carries has no test (`:461`–`:464`), and §9 calls no p-value, interval or effect size a finding and
    leaves the sign test to Q6 (`:1661`), which nobody answered (`:2233`). The point stays only for a wish to add the line; it
    would have to be registered before the tag.
+    **Answered 2026-11-19 (the team lead):** "not shown" stands; no sign test is registered, so none is reported.
 10. **The bare prompt's limits sentence** — *consultants*. Narrowed: the wording is F3.S1 (b)'s own to fix, because §4.5
     leaves the final wording to E4.S2 (`:1299`) and E4.S1 to S3 are F3.S1 (b) (`:886`). What is left is the one sentence
     "under registered time and memory limits, never below the floors STATEMENT.md guarantees" (`:1307`): since D72 the
     statement states the limit itself (`:827`). Keep it or reword it, checked against the frozen `STATEMENT.md` texts at W,
     at the document gate of PR 6.
+    **Answered 2026-11-19 (the team lead):** the sentence is reworded to "under the time and memory limits STATEMENT.md
+    states" (D72: the statement states the limit itself), checked against the twelve frozen `STATEMENT.md` texts at W at PR
+    6's document gate.
 11. **The day of the prices** — *consultants*. §8 has them re-read on the series' first day (`:1568`); §9 freezes them with
     the tag before the first launch (`:1578`). They agree only if the tag and the first launch are on one day, and PR 8's
     whole runs stand between them. This document reads the prices on the day the files are generated.
+    **Answered 2026-11-19 (the team lead):** the prices are read on the day the pre-registration files are generated and
+    frozen by the tag (§9, `:1578`); on the series' first day they are read again as a check only, and a change is a dated
+    amendment line before the first paid launch, never a change of the registered figures.
 12. **Who decides the Stage 2 line** — *owner*. The parent gives its words and its date (`:851`–`:861`) and says the reason
     must not depend on which stack won (`:831`); it does not say who decides. D76 is the owner's decision, and a *go* leads
     to paid sessions, so the question goes to the owner.
@@ -1404,16 +1424,29 @@ who are asked first for everything else.
 14. **The re-run spend line** — *consultants*. D7 and the Definition of Done name pilot, A/A, data, void and re-run lines
     (`:1008`, `:482`); the ledger has no re-run kind. This document derives the line from the attempt number; the
     pre-registration states the split, so it must be confirmed first.
+    **Answered 2026-11-19 (the team lead):** the re-run line is derived from the attempt number (attempt 2 of a void is the
+    re-run line), and the contract (PR 6) states the split of the five lines.
 15. **What a `harness` verdict of step 2 does** — *consultants*. E6.S2 puts a revised score beside the primary (`:2795`);
     D71 makes a rejection permanent and never re-run (`:826`); G-16's remedy is "fix, re-score". Whether a failure the
     harness caused changes a session's revised verdict, or is only listed, is not said. Under §3's condition 1 the
     contract must say it, so the tag waits for this answer.
+    **Answered 2026-11-19 (consult `55cf3841`, 2 of 2):** a step-2 `harness` case is listed, never removed: it changes
+    neither the revised verdict nor CPC (only ambiguity exclusions recompute the revised reading, as v1's `revisedFor` reads
+    step 1 only, `spikes/minigit-bench/lib/adjudicate.mjs:152`). The report lists each such case with its session and
+    evidence and says whether it was pivotal (the session's only failing case) or not; a corrected score exists only after
+    an instrument fix and a re-score, recorded as a separate dated amendment beside the primary and the revised results. The
+    contract (PR 6) and `adjudication-rules.json` carry it.
 16. **After a series stop** — *consultants* (a new series would need the owner's O2 and O3 again). §11 says a stop holds
     "until fixed and an A/A is GO" (`:1749`); the engine and v1 refuse a stopped series for good. Whether the slots left run
     in a new series under the same tag, and are read with the first, is not said; nothing is built for it, and the
     parent's box "30 data pairs ran" (`:458`) stays open after a stop.
+    **Answered 2026-11-19 (the team lead; not needed before PR 6):** a stop ends this series for good; the slots left would
+    run only in a new series under a dated amendment of the pre-registration, with the owner's O2 and O3 again, and the
+    parent's box "30 data pairs ran" stays open until then. The owner may decide otherwise when a stop happens.
 17. **The credentials** — *consultants*. The Definition of Done has them torn down after the series (`:501`); E6.S3, which
     does it, comes after the dated decision (`:890`), and a *go* needs them. F3 leaves that box open.
+    **Answered 2026-11-19 (the team lead):** F3 tears nothing down; the parent's credentials box stays open until E6.S3,
+    after the dated decision (`:890`).
 19. **The go line in code** — *owner*, before PR 3. The refusal of a paid launch without its `owner-go` line is a guard this
     document adds for §4; the parent has none. It is no spend limit (D53 adds none). **Its consequence:** if it is counted
     as a change of the plan, it is an entry of the parent's ledger, and the parent's epoch 10 has one entry already
