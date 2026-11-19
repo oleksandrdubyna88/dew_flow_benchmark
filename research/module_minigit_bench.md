@@ -330,8 +330,9 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   shows it). `agentEnv` is a fixed allow-list (`AGENT_ENV_KEYS`; the process arm's `extra` may only ADD keys, and a key is a clash when it equals a base key in ANY case, because `https_proxy` is read by curl beside `HTTPS_PROXY`), `PATH` is constructed (no `/mnt`), and the credential in it is a
   **dummy**; the real token is not a parameter of anything in the box's path. `sessionLayout` claims `<runs root>/<rid>/` with a
   non-recursive `mkdir` and refuses a socket path over 108 bytes (UTF-8 bytes; 109 refused with `EINVAL` on this kernel).
-  **Two more hide lists, both empty tmpfs placed before any bind.** `hide` (E1.S4) is the caller's: a box with a pinned SDK directory
-  (`dotnetDir`) hides the whole distribution's dotnet through it (`DISTRIBUTION_DOTNET`). Every other box runs the distribution's dotnet,
+  **Two more hide lists, both empty tmpfs placed before any bind.** `hide` (E1.S4) is the caller's own paths. A box with a pinned SDK
+  directory (`dotnetDir`) hides the whole distribution's dotnet (`DISTRIBUTION_DOTNET`, each root the host has) BY ITSELF, whatever
+  `hide` holds; a root the caller names too is mounted once. Every other box runs the distribution's dotnet,
   and `agentBoxPrefix` itself hides every dotnet VERSION folder that is not the pinned SDK's (`dotnetPin`, required then; amendment of
   2026-11-19, the dated note below): the list is `otherDotnetVersions` of `lib/dotnet-hide.mjs`, read from the host when the box is built.
   The scoring box (`scoreBoxArgv`) takes the same decision from the same function (`boxDotnetHide`), so the two boxes cannot drift.
@@ -456,8 +457,10 @@ the pins, every `global.json`. *What changed:* the box.
   `shared/*/11.0.0`, seven `packs/*/11.0.0`, `templates/11.0.0`, `sdk-manifests/11.0.100` and `11.0.100-preview.6`.
 - **Where it is computed: in `agentBoxPrefix` and in `scoreBoxArgv`, when the box is built** (both call `boxDotnetHide` of
   `lib/dotnet-hide.mjs`, the one place the decision is made). Never in a plan file or a session plan, so an SDK installed between a
-  preflight and a session, or between a session and its scoring, is hidden too. A box with a pinned `dotnetDir` gets nothing from it (its caller's `hide` covers the whole
-  distribution, unchanged; a test asserts that argv is what it was and that the listing is never read). A box with neither `dotnetDir` nor
+  preflight and a session, or between a session and its scoring, is hidden too. A box with a pinned `dotnetDir` gets nothing from it: `agentBoxPrefix` hides the
+  distribution's roots whole for it, and derives them itself (the code gate's second round: until then the roots came only from the
+  caller's `hide`, so a caller that passed the directory alone would have got every SDK of the distribution beside the pinned one;
+  every caller did pass them, and its argv is unchanged: a test compares it, and asserts the listing is never read). A box with neither `dotnetDir` nor
   `dotnetPin` is refused: skipping would show every SDK of the host, and a measured cell could be built with another one.
 - **How the pin reaches the box, per path.** The preflight: `probeBoxPrefix`, from `stacks.pins.dotnetSdk`. A session: `sessionBoxArgv` of
   `lib/session-launch.mjs` (the one function the launcher builds its argv with) reads `plan.dotnetPin`; v1's plan gets it from
