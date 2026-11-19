@@ -6,7 +6,7 @@
 import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { boxDotnetHide, subdirsOf } from './dotnet-hide.mjs';
+import { boxDotnetHide, dirEntriesOf } from './dotnet-hide.mjs';
 
 export const roRoot = () => ['--ro-bind', '/', '/'];
 export const tmpfs = p => ['--tmpfs', p];
@@ -68,17 +68,18 @@ export function scoreEnv({ home, tmp, toolchainDirs = [], nugetCache, npmCache, 
  * toolchains read-only (node lives under the home); the copy, HOME, TMPDIR and the cache copies read-write; `casesDir` only for the
  * held-out step; `roFiles` read-only OVER the writable copy (the harness test script the tree must not rewrite). No network, own pid
  * namespace, an environment of the allow-list only. A directory the host lacks is not mounted over (bwrap cannot create it on a ro root).
- * The dotnet version folders of another version than the pinned SDK's (`dotnetPin`, required unless a pinned SDK directory `dotnetDir` is given) are empty tmpfs too, as in the agent's box and from
- * the same function (`boxDotnetHide`, read from the host when this is called): a tree is scored by the SDK it was built with, whatever else the host holds. `listDir` is injected as `exists` is.
+ * The dotnet version folders of another version than the pinned SDK's (`dotnetPin`, always required) are empty tmpfs too, as in the agent's box and from the same function (`boxDotnetHide`, read
+ * from the host when this is called): a tree is scored by the SDK it was built with, whatever else the host holds. There is no pinned-directory switch here: this box binds no SDK of its own and
+ * never hid the distribution, so it ALWAYS takes the version list. `listDir` is injected as `exists` is.
  */
-export function scoreBoxArgv({ copyDir, casesDir, home, tmp, toolchainDirs = [], nugetCache, npmCache, roFiles = [], cwd, dotnetDir = null, dotnetPin, operatorHome = os.homedir(), exists = existsSync, listDir = subdirsOf, locale }) {
+export function scoreBoxArgv({ copyDir, casesDir, home, tmp, toolchainDirs = [], nugetCache, npmCache, roFiles = [], cwd, dotnetPin, operatorHome = os.homedir(), exists = existsSync, listDir = dirEntriesOf, locale }) {
   const hidden = hiddenPaths({ operatorHome, exists });
   return Object.freeze([
     'bwrap',
     ...roRoot(),
     ...devProc(),
     ...hidden.flatMap(tmpfs),
-    ...boxDotnetHide({ dotnetDir, dotnetPin, exists, listDir }).flatMap(tmpfs),
+    ...boxDotnetHide({ dotnetPin, exists, listDir }).flatMap(tmpfs),
     ...toolchainDirs.flatMap(roBind),
     ...[copyDir, casesDir, home, tmp, nugetCache, npmCache].filter(Boolean).flatMap(bind),
     ...roFiles.flatMap(roBind),

@@ -11,7 +11,7 @@ import path from 'node:path';
 import { FIXED_GIT } from '../../policy-ab-quick/lib/env.mjs';
 import { otelEnv } from './otel-receiver.mjs';
 import { bind, chdir, devProc, hiddenPaths, isolation, localeEnv, roBind, roRoot, tmpfs } from './bwrap.mjs';
-import { boxDotnetHide, subdirsOf } from './dotnet-hide.mjs';
+import { boxDotnetHide, dirEntriesOf } from './dotnet-hide.mjs';
 import { fail, ok } from './result.mjs';
 
 export const BOX_PROXY_PORT = 3128;
@@ -169,7 +169,7 @@ export const boxSkeleton = opts => planView(opts).skeleton;
  * `dotnetPin` is the pinned SDK version (required unless `dotnetDir`, a pinned SDK directory, is given; E2 amendment 2026-11-19, D-9: `boxDotnetHide`, an SDK installed between a preflight and a
  * session is hidden too); `listDir` lists a directory's sub-directories, injected as `exists` is.
  */
-export function agentBoxPrefix({ layout, arm, toolchains = [], claudeBinary, nodeDir, extraRo = [], extraRw = [], hide = [], dotnetDir = null, dotnetPin, operatorHome = os.homedir(), exists = existsSync, listDir = subdirsOf }) {
+export function agentBoxPrefix({ layout, arm, toolchains = [], claudeBinary, nodeDir, extraRo = [], extraRw = [], hide = [], dotnetDir = null, dotnetPin, operatorHome = os.homedir(), exists = existsSync, listDir = dirEntriesOf }) {
   return Object.freeze([
     'bwrap', ...roRoot(), ...devProc(),
     ...hiddenPaths({ operatorHome, exists }).flatMap(tmpfs),

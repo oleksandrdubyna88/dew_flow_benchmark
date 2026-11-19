@@ -135,11 +135,21 @@ test('The_scoring_box_hides_nothing_of_dotnet_on_a_host_with_only_the_pin_and_it
   assert.deepEqual(now.slice(10, 13), ['--ro-bind', '/t/node', '/t/node'], 'the binds follow the tmpfs directly, as before');
 });
 
-test('A_scoring_box_with_a_pinned_sdk_directory_lists_nothing_and_one_with_neither_is_refused', () => {
-  const pinnedDir = scoreBoxArgv({ ...score, dotnetDir: '/dn', ...neverListed });
-  assert.deepEqual(pinnedDir, scoreBoxArgv({ ...score, dotnetPin: PIN, ...oneSdk }), 'a pinned SDK directory: the argv the scoring box always had');
+test('The_scoring_box_always_takes_the_version_list_it_has_no_pinned_directory_switch_and_none_without_a_pin', () => {
+  // the scoring box binds no SDK of its own and never hid the distribution: a `dotnetDir` there would only have switched the list OFF, so it has none
+  assertHidesOtherVersions(scoreBoxArgv({ ...score, dotnetPin: PIN, dotnetDir: '/dn', ...twoSdks }), 'scoreBoxArgv, a dotnetDir given');
+  assert.throws(() => scoreBoxArgv({ ...score, dotnetDir: '/dn', ...twoSdks }), /dotnetPin undefined is not an SDK version/, 'a directory is no substitute for the pin');
   assert.throws(() => scoreBoxArgv({ ...score, ...twoSdks }), /dotnetPin undefined is not an SDK version/);
   assert.throws(() => scoreBoxArgv({ ...score, ...oneSdk }), /dotnetPin undefined/, 'also on a host with one SDK');
+});
+
+test('Both_boxes_refuse_to_be_built_on_a_host_where_a_version_folder_they_must_hide_is_a_link', () => {
+  const link = `${ROOT}/sdk/${SDK_11.sdk}`;
+  const host = fakeDirs(twoSdkHost(), { links: [link] });
+  const refusal = e => e.message.startsWith(`${link} is a symbolic link`);
+  assert.throws(() => agentBoxPrefix({ ...base, dotnetPin: PIN, ...host }), refusal, 'the agent\'s box');
+  assert.throws(() => scoreBoxArgv({ ...score, dotnetPin: PIN, ...host }), refusal, 'the scoring box');
+  assert.doesNotThrow(() => agentBoxPrefix({ ...base, toolchains: ['/dn'], ...pinned, exists: host.exists, listDir: neverListed.listDir }), 'a box with a pinned SDK directory hides the roots whole and never looks');
 });
 
 /** The scorer's context as a step sees it: the plan's folders and the dependencies `defaultDeps` builds (the held-out slot is not asked here). */

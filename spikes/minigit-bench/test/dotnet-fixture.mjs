@@ -4,10 +4,14 @@ import path from 'node:path';
 
 const selfAndAncestors = p => p.split('/').filter(Boolean).map((_, i, parts) => `/${parts.slice(0, i + 1).join('/')}`);
 
-/** `{ exists, listDir }` over the given directories and their ancestors; `listDir` names the sub-directories of one, sorted. A directory that is not there lists nothing. */
-export function fakeDirs(dirs) {
-  const all = new Set(dirs.flatMap(selfAndAncestors));
-  return Object.freeze({ exists: p => all.has(p), listDir: dir => [...all].filter(p => path.dirname(p) === dir && p !== dir).map(p => path.basename(p)).sort() });
+/**
+ * `{ exists, listDir }` over the given directories and their ancestors; `listDir` gives the entries of one as the real listing does (`{ name, link }`), sorted by name. A directory that is not there
+ * lists nothing. `links` are the paths, among them, that are symbolic links on this invented host.
+ */
+export function fakeDirs(dirs, { links = [] } = {}) {
+  const all = new Set([...dirs, ...links].flatMap(selfAndAncestors));
+  const entry = p => ({ name: path.basename(p), link: links.includes(p) });
+  return Object.freeze({ exists: p => all.has(p), listDir: dir => [...all].filter(p => path.dirname(p) === dir && p !== dir).sort().map(entry) });
 }
 
 export const PIN = '10.0.114';

@@ -3,13 +3,13 @@
 // in the same box WITHOUT the computed tmpfs sees the other SDK. The hidden paths are read from `otherDotnetVersions`, never typed. Every folder is an owned one (`ownedDir`), removed with its test.
 // The last test is the SCORING box (`scoreBoxArgv`): the same list, so a tree is scored by the SDK it was built with.
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { scoreBoxArgv } from '../lib/bwrap.mjs';
 import { makeSnapshot, makeWritable } from '../lib/cache-snapshot.mjs';
-import { DISTRIBUTION_DOTNET, otherDotnetVersions, subdirsOf } from '../lib/dotnet-hide.mjs';
+import { DISTRIBUTION_DOTNET, dirEntriesOf, otherDotnetVersions } from '../lib/dotnet-hide.mjs';
 import { agentBoxPrefix } from '../lib/sandbox.mjs';
 import { DOTNET_PIN, boxOptions, envFor, hostHas, newSession, probeArgv, withoutPair } from './box-helpers.mjs';
 import { hostLacks, sandboxGate } from './helpers.mjs';
@@ -83,7 +83,7 @@ function writeProject(layout) {
 
 /** The pin's runtime on this host: the one `Microsoft.NETCore.App` folder of the pin's major (read from the disk, so a patch upgrade of the runtime does not need this test edited). */
 function pinRuntime(t) {
-  const versions = DISTRIBUTION_DOTNET.map(root => `${root}/shared/Microsoft.NETCore.App`).filter(existsSync).flatMap(subdirsOf).filter(v => major(v) === major(DOTNET_PIN));
+  const versions = DISTRIBUTION_DOTNET.map(root => `${root}/shared/Microsoft.NETCore.App`).filter(existsSync).flatMap(dirEntriesOf).map(e => e.name).filter(v => major(v) === major(DOTNET_PIN));
   assert.equal(versions.length, 1, `this host holds exactly one runtime of the pin's major ${major(DOTNET_PIN)}: ${versions.join(', ')}`);
   t.diagnostic(`host: the runtime of the pin's major is ${versions[0]}`);
   return versions[0];
@@ -164,4 +164,17 @@ test('The_real_scoring_box_lists_exactly_the_pinned_sdk_and_gives_a_folder_with_
   t.diagnostic(`control (no dotnet tmpfs): dotnet --list-sdks -> ${JSON.stringify(listed(open.out))}; dotnet --version -> ${lineOf(open.out, 'version')}`);
   assert.equal(listed(open.out).length, 1 + otherSdks(hidden).length, `control: without the hide list the scoring box lists every SDK of the host: ${open.out}`);
   assert.equal(lineOf(open.out, 'version'), newestOf([DOTNET_PIN, ...otherSdks(hidden).map(p => path.basename(p))]), 'control: and gives the same folder the newest of them');
+});
+
+test('The_real_listing_reports_a_version_folder_that_is_a_link_and_the_list_refuses_it_naming_the_path', t => {
+  // no box: this is the listing's own effect. The fixture tests inject `{ name, link: true }`; here the disk says it, over a root of this test's own
+  const root = owned.ownedDir(t, 'link');
+  for (const dir of [`sdk/${DOTNET_PIN}`, 'elsewhere/11.0.100']) mkdirSync(path.join(root, dir), { recursive: true });
+  const link = path.join(root, 'sdk', '11.0.100');
+  symlinkSync(path.join(root, 'elsewhere', '11.0.100'), link);
+  assert.deepEqual(dirEntriesOf(path.join(root, 'sdk')).sort((a, b) => a.name.localeCompare(b.name)), [{ name: DOTNET_PIN, link: false }, { name: '11.0.100', link: true }]);
+  assert.throws(() => otherDotnetVersions({ pin: DOTNET_PIN, roots: [root] }), e => e.message.startsWith(`${link} is a symbolic link`), 'the real listing, the real refusal');
+  rmSync(link);
+  mkdirSync(link);
+  assert.deepEqual(otherDotnetVersions({ pin: DOTNET_PIN, roots: [root] }), [link], 'control: the same name as a folder is listed to be hidden');
 });

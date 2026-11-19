@@ -134,7 +134,10 @@ test('The_scorer_takes_the_runs_pinned_sdk_as_dotnet_pin_refuses_a_word_that_is_
   assert.equal(given.ok, true, given.reason);
   assert.equal(scorerDeps(given.value, {}).box.dotnetPin, '10.0.403', 'the scoring box is told the pin the run handed over');
   assert.equal(scorerDeps(parseCli(good).value, {}).box.dotnetPin, DOTNET_PIN, 'run by hand with no pin: the one of inputs/stacks.json');
-  for (const bad of ['undefined', 'latest', '10']) assert.match(parseCli([...good, '--dotnet-pin', bad]).reason, /--dotnet-pin .* is not an SDK version/, bad);
+  for (const bad of ['undefined', 'latest', '10', '10.0.114typo', '10.0.114.x']) assert.match(parseCli([...good, '--dotnet-pin', bad]).reason, /--dotnet-pin .* is not an SDK version/, bad);
+  assert.equal(parseCli([...good, '--dotnet-pin', '11.0.100-preview.6']).ok, true, 'a prerelease version is one');
+  const typo = await runCli([...good, '--dotnet-pin', '10.0.114typo']);
+  assert.deepEqual([typo.code, /usage error: --dotnet-pin 10\.0\.114typo is not an SDK version/.test(typo.stdout)], [4, true], typo.stdout);
   // what a run with no pin sends (score-run.mjs puts the text `undefined` on the argv): the real command refuses it as a usage error, and nothing is scored
   const r = await runCli([...good, '--dotnet-pin', 'undefined']);
   assert.equal(r.code, 4);
