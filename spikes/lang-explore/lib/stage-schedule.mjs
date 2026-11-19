@@ -2,10 +2,13 @@
 // PURE: nothing here reads a file, the clock or the environment. The caller hands in the seed (a data slot exists only after the seed is revealed), the run-map and the dated lines it parsed; the answer is a value.
 // A slot's number is the run-map's `pair`, so v1's pair files and every reader of `pair` work unchanged.
 import { sha256Of } from '../../minigit-bench/lib/inputs.mjs';
-import { MAX_ATTEMPTS, MASKS, STACK_ORDER } from './series.mjs';
+import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { MAX_ATTEMPTS, MASKS, STACK_ORDER, openSessions, pairComplete, sessionsOf, stackState } from './series.mjs';
 import { FREEZE_TASKS } from './workspaces-sources.mjs';
 
 export const STAGE_ROUNDS = 5;
+/** The run-map kind of a data session: the slot's number is its `pair`. */
+export const DATA_KIND = 'data';
 const ATTEMPTS = Array.from({ length: MAX_ATTEMPTS }, (_, i) => i + 1);
 
 const digest = text => sha256Of(text);
@@ -71,3 +74,89 @@ export function seedProblem(seed) {
 }
 
 const ridsOfSeed = seed => FREEZE_TASKS.flatMap(task => STACK_ORDER.flatMap(stack => Array.from({ length: STAGE_ROUNDS }, (_, i) => i + 1).flatMap(round => ATTEMPTS.map(attempt => [`task ${task} ${stack} round ${round} attempt ${attempt}`, ridOfSlot({ seed, task, stack, round, attempt })]))));
+
+// ---- which slot is next: the barrier, the round rule, the re-run and the gates ---------------------------------------------------------------------------------------------------------------------------------
+
+const finished = (map, n) => pairComplete(map, n, DATA_KIND);
+const describe = slot => `slot ${slot.slot} (round ${slot.round}, task ${slot.task})`;
+const stateLine = (map, n) => STACK_ORDER.map(stack => `${stack}: ${stackState(map, n, stack, DATA_KIND)}`).join(', ');
+const voidStacks = (map, n) => STACK_ORDER.filter(stack => stackState(map, n, stack, DATA_KIND) === 'void-rerunnable');
+
+const hasSlots = slots => Array.isArray(slots) && slots.length > 0;
+
+/** The sentence refusing every data slot, or null: the pilot is GO (a dated line of the registered amendments, read by the caller) and the seed is revealed (there are slots only after it). */
+function gateProblem({ pilotGo, seedRevealed, slots }) {
+  if (pilotGo !== true) return 'no data slot before the pilot is GO: a dated `pilot | GO` line of the registered amendments comes first';
+  return seedRevealed === true && hasSlots(slots) ? null : 'no data slot before the seed is revealed: seed-reveal comes after the pilot, and the slots are made from it';
+}
+
+const rerunHint = (map, n) => (voidStacks(map, n).length > 0 ? '; a void is re-run once, alone, before the next slot: stage-run --what next' : '');
+
+/** The sentence for an earlier slot that is not finished: across a round boundary it is the round rule, inside a round the barrier. */
+function behindSentence({ map, behind, target }) {
+  const state = `${describe(behind)} is not finished (${stateLine(map, behind.slot)})`;
+  if (behind.round < target.round) return `${describe(target)}: round ${target.round} never starts while a pair of round ${behind.round} is unscored; ${state}${rerunHint(map, behind.slot)}`;
+  return `${state}: both sessions of a slot are scored, or void after the one re-run, before any later slot${rerunHint(map, behind.slot)}`;
+}
+
+/**
+ * The sentence refusing slot number `slot` now, or null: the gates, then the order (a slot is offered only when every earlier slot is finished, and round r + 1 never starts while a pair of round r is unscored), and a finished slot is
+ * never offered again. `slots` is `slotsOf({ seed })`, absent before the seed is revealed.
+ */
+export function slotProblem({ map, slots, slot, pilotGo, seedRevealed }) {
+  const gate = gateProblem({ pilotGo, seedRevealed, slots });
+  if (gate) return gate;
+  const target = slots.find(s => s.slot === slot);
+  return target === undefined ? `slot ${slot}: Stage 1 has slots 1 to ${slots.length}` : orderProblem({ map, slots, target });
+}
+
+function orderProblem({ map, slots, target }) {
+  const behind = slots.find(s => s.slot < target.slot && !finished(map, s.slot));
+  if (behind !== undefined) return behindSentence({ map, behind, target });
+  return finished(map, target.slot) ? `${describe(target)} is finished: a finished slot is never run again` : null;
+}
+
+const sessionOf = ({ slot, stack, attempt, label }) => ({ rid: slot.rids[stack][attempt - 1], pair: slot.slot, stack, attempt, kind: DATA_KIND, label, mask: slot.masks[stack], task: slot.task, round: slot.round });
+
+/** The stacks of a slot in launch order: the one that leads first. */
+const launchOrder = slot => [slot.first, ...STACK_ORDER.filter(stack => stack !== slot.first)];
+
+const offer = (slot, action, extra) => ok({ ...slot, action, ...extra });
+
+/** A stack that ended with a stop: the series' launches end for good (v1's and the engine's rule), so the schedule offers nothing. */
+function stoppedProblem({ map, slot }) {
+  const stopped = STACK_ORDER.find(stack => stackState(map, slot.slot, stack, DATA_KIND) === 'stopped');
+  return stopped === undefined ? null : `${describe(slot)} ${stopped} ended with a stop (${sessionsOf(map, slot.slot, stopped, DATA_KIND).at(-1).class}): a stopped series is never run again`;
+}
+
+/** What to do with the first unfinished slot: refuse a stop, resume what a halt left open, re-run a void once alone, or plan the slot. */
+function offerFor({ map, slot }) {
+  const stopped = stoppedProblem({ map, slot });
+  return stopped ? fail(stopped) : openOffer({ map, slot });
+}
+
+function openOffer({ map, slot }) {
+  const open = openSessions(map, slot.slot, DATA_KIND);
+  return open.length > 0 ? offer(slot, 'resume', { resumed: open.map(x => x.rid) }) : voidOffer({ map, slot });
+}
+
+function voidOffer({ map, slot }) {
+  const stack = launchOrder(slot).find(x => voidStacks(map, slot.slot).includes(x));
+  return stack === undefined ? planOffer({ map, slot }) : offer(slot, 'rerun', { rerun: stack, attempt: 2, sessions: [sessionOf({ slot, stack, attempt: 2, label: 'ran unpaired' })] });
+}
+
+function planOffer({ map, slot }) {
+  if (sessionsOf(map, slot.slot, undefined, DATA_KIND).length > 0) return fail(`${describe(slot)} holds sessions of one stack only (${stateLine(map, slot.slot)}): the schedule plans both stacks of a slot together`);
+  return offer(slot, 'plan', { sessions: launchOrder(slot).map(stack => sessionOf({ slot, stack, attempt: 1, label: 'paired' })) });
+}
+
+/**
+ * The next step of the series: `ok(slot + { action: 'plan' | 'resume' | 'rerun', sessions | resumed })` for the first slot that is not finished, `ok(null)` when the series is done, `fail(sentence)` when nothing may run. The slot is the first
+ * unfinished one, so the barrier holds by construction; `slotProblem` states the same order as a sentence for a verb that is asked for a slot by number.
+ */
+export function nextSlot({ map, slots, pilotGo, seedRevealed }) {
+  const gate = gateProblem({ pilotGo, seedRevealed, slots });
+  if (gate) return fail(gate);
+  const slot = slots.find(s => !finished(map, s.slot));
+  return slot === undefined ? ok(null) : offerFor({ map, slot });
+}
