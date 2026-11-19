@@ -3,7 +3,7 @@
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
@@ -396,4 +396,26 @@ test('A_record_that_is_valid_JSON_but_malformed_refuses_every_registration_and_s
   }
   const good = { packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: statesFile({ text: JSON.stringify({ freeze: GOOD_FREEZE, specs: { '04': GOOD_ROW } }) }) };
   assert.equal(register({ p, pkg, files: good }).ok, true, 'the control: a well-formed record that does not hold task 05 guards nothing');
+});
+
+test('A_dangling_link_or_an_unreadable_folder_in_place_of_the_record_refuses_and_only_a_missing_file_is_no_freeze', () => {
+  const p = writePackage();
+  const pkg = load(p);
+  const dangling = path.join(tmpDir('pkg-states-link'), 'spec-states.json');
+  symlinkSync(path.join(path.dirname(dangling), 'gone.json'), dangling);
+  const locked = path.join(tmpDir('pkg-states-locked'), 'inner');
+  mkdirSync(locked);
+  writeFileSync(path.join(locked, 'spec-states.json'), JSON.stringify({ freeze: GOOD_FREEZE, specs: { '05': GOOD_ROW } }));
+  chmodSync(locked, 0o000);
+  try {
+    for (const [name, file] of [['a dangling link', dangling], ['a folder that cannot be read', path.join(locked, 'spec-states.json')]]) {
+      const files = { packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: file };
+      const r = register({ p, pkg, files });
+      assert.ok(r.ok === false && /spec-states\.json cannot be read/.test(r.reason), `${name}: ${r.reason}`);
+      assert.equal(existsSync(files.packagesFile), false, `${name}: nothing is written`);
+    }
+  } finally {
+    chmodSync(locked, 0o700);
+  }
+  assert.equal(register({ p, pkg, files: { packagesFile: packagesFile(), frozenFile: frozenFile(), statesFile: NO_FREEZE } }).ok, true, 'the control: a missing file is no freeze');
 });
