@@ -1306,9 +1306,13 @@ only F2.S1.
       before the tag, on W″ before the push and on W before W is accepted; `workspace-diff` and the push check clean; T1 and T2
       merged by merge condition 5; both order scenarios (a failed proof stops before the push; a failure after the push leads
       to the superseding tag) red, green, red.
-- [ ] F2.S2 (f): the spec hashes in `inputs/specs.json`; the archives', clear trees' and trap tables' hashes registered; the
+- [x] F2.S2 (f): the spec hashes in `inputs/specs.json`; the archives', clear trees' and trap tables' hashes registered; the
       workspace commit named; `PINNED_TASK_SHA` at W; the engine's pins at the tag and cross-checked; FORMAT's class check reads
       B's frozen classification.
+      Done 2026-11-19 on bench PR 5 (its merge is the condition): the record `spec-states.json` says `accepted`, `PINNED_TASK_SHA` is W
+      `f3d256e`, the engine's six spec pins are at C `502b65a` and held equal to the record by `The_engine_pins_of_the_six_specs_equal_the_freeze_record`,
+      the freeze's gated hashes are read from the registered packages, a registered row of a frozen task cannot be replaced, and
+      `specs-record.mjs`, `pin-runner.mjs` and `pin-exec-layer.mjs` `--check` exit 0.
 - [ ] `leakcheck` over both repositories and the candidate publication commits clean, its planted-needle check failing as it must;
       the line scan clean on both; the private aid lists nothing uncaught (F2.S1).
 - [ ] The specs and workspaces are public at the freeze; the references and the trap coverage table are not (change 9.2).
