@@ -1,5 +1,5 @@
 // The material of one quick task's package (F2.S1, section 3): `loadPackage` reads the held-out side (`loadHeldoutQuick`), the manifest (`package-manifest.mjs`), the pinned spec text (its sha256 checked against the pin of
-// `inputs/explore.json`, so the package validates the text that will freeze), the two stack references and the witness overlays by `lstat` (a link is listed, never read through), and the hashes of all of them. `assembleReference`
+// `inputs/explore.json`: the gated text before the freeze, the frozen text after it, so the package validates the text the engine builds from; after an accepted freeze the registry's rows are guarded, `package-freeze-guard.mjs`), the two stack references and the witness overlays by `lstat` (a link is listed, never read through), and the hashes of all of them. `assembleReference`
 // lays a reference on its stack's template in an owned temporary folder (a file the reference holds that the template freezes is refused); `packageIdentity` is the sha256 P8 names. Pure but for reading; no box here.
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
@@ -40,7 +40,7 @@ export const treeHashOf = dir => (existsSync(dir) ? treeHash(dir) : null);
 const referenceOf = dir => ({ dir, ...listFolder(dir), treeSha256: treeHashOf(dir) });
 
 /** The sentence refusing a spec text that is not the pinned one, or null. */
-const specProblem = ({ task, text }) => (typeof text === 'string' && sha256(text) === task.spec.sha256 ? null : `the spec text of task ${task.id} has sha256 ${typeof text === 'string' ? sha256(text).slice(0, 12) : '(none)'} and the pin of inputs/explore.json says ${task.spec.sha256.slice(0, 12)}: the package validates the text that will freeze, so it is refused before any scoring`);
+const specProblem = ({ task, text }) => (typeof text === 'string' && sha256(text) === task.spec.sha256 ? null : `the spec text of task ${task.id} has sha256 ${typeof text === 'string' ? sha256(text).slice(0, 12) : '(none)'} and the pin of inputs/explore.json says ${task.spec.sha256.slice(0, 12)}: the package validates the text the engine pins (the gated text before the freeze, the frozen text after it), so it is refused before any scoring`);
 
 /**
  * `ok(pkg)` | `fail`. `pkg` = `{ task, home, held, dir, casesDir, manifest, manifestSha256, specText, specSha256, formatSha256, refs: { csharp, node }, mutantsDir, witnessesTreeSha256, twinsDir, twinsTreeSha256 }`, each `refs[stack]` being

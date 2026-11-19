@@ -130,7 +130,7 @@ function freezeFindings({ read, blobs, pins }) {
   return { problems, tag: results[0].tag };
 }
 
-/** `check-commit`: the rule above, for the commits `before` and `after` of the repository. `facts` are FORMAT's, read at `before`; `pins` are the engine's gated hashes. */
+/** `check-commit`: the rule above, for the commits `before` and `after` of the repository. `facts` are FORMAT's, read at `before`; `pins` are the gated hashes of the registered packages (`freeze-pins.mjs`: each package's `specSha256`), not the engine's pins, which hold the frozen hashes after the freeze. */
 export async function checkFreezeCommit({ repo, before, after, pins }) {
   const read = await readSides({ repo, before, after });
   if (!read.ok) return read;

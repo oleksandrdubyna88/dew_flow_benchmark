@@ -15,6 +15,7 @@ import { materialOf, packageIdentity } from './package-quick.mjs';
 import { sOfSuite } from './package-record.mjs';
 import { taskPaths } from './tasks.mjs';
 import { replaceJson } from './package-write.mjs';
+import { STATES_FILE, frozenRowProblem } from './package-freeze-guard.mjs';
 
 export const PACKAGES_FILE = path.join(INPUTS, 'packages.json');
 const SPECS_D = path.join(INPUTS, '..', '..', 'lang-bench', 'inputs', 'specs.d');
@@ -83,24 +84,26 @@ export function registrationProblem({ record, pkg, task, home, tasks, frozenFile
 /**
  * Register the package of `task`: `record` is a complete run's `record.json`, `pkg` `loadPackage`'s value now. -> `ok({ state: 'registered' | 'unchanged', identity })` | `fail(sentence)`. The entry is written whole, the file rewritten with sorted
  * keys; an entry with the same identity is a no-op. The archive's hash joins the entry once the task is sealed (`heldout-frozen.json` is the registry of the seal): the entry then has a new identity and replaces the old one (a re-seal is a
- * new identity, never an edit of one).
+ * new identity, never an edit of one). After an accepted freeze the row of a frozen task is never replaced or added (`package-freeze-guard.mjs`; `statesFile` is lang-bench's `spec-states.json`).
  */
-export function registerPackage({ home, task, tasks, record, pkg, packagesFile = PACKAGES_FILE, frozenFile = FROZEN_FILE, pinsFn = pinsNow, now = systemClock, hooks = {} }) {
+export function registerPackage({ home, task, tasks, record, pkg, packagesFile = PACKAGES_FILE, frozenFile = FROZEN_FILE, statesFile = STATES_FILE, pinsFn = pinsNow, now = systemClock, hooks = {} }) {
   const problem = registrationProblem({ record, pkg, task, home, tasks, frozenFile, packagesFile, pinsFn });
   if (problem) return fail(problem);
   const sealed = registeredEntry({ frozenFile, task });
   if (!sealed.ok) return sealed;
   const material = { ...materialOf(pkg), archiveSha256: sealed.value?.archiveSha256 };
   const identity = packageIdentity({ ...material, gate: record.gate, memoryBytes: record.memoryBytes, loadDurationS: record.load?.durationS ?? null, pins: record.pins });
-  return lockedWrite({ task, packagesFile, hooks, identity, entry: entryOf({ record, material, archiveSha256: material.archiveSha256, identity, now }) });
+  return lockedWrite({ task, packagesFile, statesFile, hooks, identity, entry: entryOf({ record, material, archiveSha256: material.archiveSha256, identity, now }) });
 }
 
 /** Write the entry of `task` unless the registry already holds one with this identity. -> `ok({ state, identity })` | `fail`. */
-function writeEntryOf({ task, packagesFile, hooks, identity, entry }) {
+function writeEntryOf({ task, packagesFile, statesFile, hooks, identity, entry }) {
   const packages = readPackagesFile(packagesFile);
   hooks.afterRead?.();
   if (packages === null) return fail(`${path.basename(packagesFile)} cannot be read: nothing is written over it`);
   if (packages[task.id]?.identity === identity) return ok({ state: 'unchanged', identity });
+  const frozen = frozenRowProblem({ task, row: packages[task.id], identity, statesFile });
+  if (frozen !== null) return fail(frozen);
   replaceJson({ file: packagesFile, value: withEntry(packages, task.id, entry) });
   return ok({ state: 'registered', identity });
 }

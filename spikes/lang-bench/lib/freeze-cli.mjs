@@ -78,7 +78,7 @@ function failed(verb, spec, result) {
 }
 
 const paths = values => ({ repo: path.resolve(values.repo), inputs: inputsDirOf(values.inputs) });
-/** ok(the engine's spec pins) from `--pins` or lang-explore's `inputs/explore.json`; a fail is the verb's refusal. */
+/** ok(the gated hashes of the six specs) from `--pins` or lang-explore's registered packages (`inputs/packages.json`, each package's `specSha256`); a fail is the verb's refusal. */
 const pinsOf = values => loadSpecPins(values.pins === undefined ? undefined : path.resolve(values.pins));
 const recordFileOf = ({ inputs }, values) => path.resolve(values.record ?? path.join(inputs, 'specs.d', 'format.json'));
 
@@ -104,7 +104,7 @@ async function localTagVerb({ values }) {
   return checked.ok ? ok({ stdout: `check-local-tag ok: ${values.tag} is annotated, local only, on C ${checked.value.commit}, with the intended message\n` }) : checked;
 }
 
-/** ok({ pin, pins, message }): FORMAT's pin, the engine's spec pins and the intended message when `--message-file` is given. */
+/** ok({ pin, pins, message }): FORMAT's pin, the gated hashes of the specs and the intended message when `--message-file` is given. */
 function tagInputs({ values, where }) {
   const pin = loadPin(recordFileOf(where, values));
   const pins = pinsOf(values);

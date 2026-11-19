@@ -1,7 +1,7 @@
 // The command `package` (F2.S1, section 2.7, scenarios 34 and 35, and the plan round's finding 5): the lock, the quiet check, the resume from the records and the order register, then seal, over an INVENTED package and fake seams. No box.
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { main } from '../explore.mjs';
@@ -10,6 +10,7 @@ import { ok } from '../../minigit-bench/lib/result.mjs';
 import { casesTreeHash } from '../lib/heldout-quick.mjs';
 import { exploreRoot } from '../lib/paths.mjs';
 import { packageRoot } from '../lib/package-record.mjs';
+import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { TOKEN, commandEnv, filesOf, sealSeams } from './quick-package-fixture.mjs';
 
 const ALL_CAUGHT = ({ id, n }) => (id === 'MXX-alpha-c' || id === 'MXX-alpha-n' ? { failing: { h001: 'wrong answer', h002: 'wrong answer' } } : (id === 'MXX-beta-n' ? (n % 5 === 1 ? { failing: { h003: 'wrong answer' } } : 'clean') : 'clean'));
@@ -244,4 +245,43 @@ test('The_plan_lock_is_held_through_the_registration_and_the_seal_and_by_a_seal_
   assert.equal(await main(argv('--seal'), resumed), 0, env.lines.join('\n'));
   assert.equal(heldAt.slice(before).length > 0 && heldAt.slice(before).every(Boolean), true, 'a seal alone holds the lock too');
   assert.equal(existsSync(path.join(exploreRoot(env.io.home), 'series.lock')), false, 'and releases it');
+});
+
+// ---- after the freeze: the registration is refused before the run starts (F2.S2 (f), fix round 2) -------------------------------------------------------------------
+
+const frozenStates = text => {
+  const file = path.join(tmpDir('pkg-states'), 'spec-states.json');
+  writeFileSync(file, text ?? JSON.stringify({ freeze: { state: 'accepted', tag: 'spec-frozen-B-20261118' }, specs: { '05': { state: 'frozen', sha256: 'f'.repeat(64) } } }));
+  return file;
+};
+
+test('package_register_of_a_frozen_task_is_refused_at_once_before_any_gate_suite_reference_or_load_runs', async () => {
+  for (const flags of [['--register'], ['--register', '--seal'], ['--only', 'refs', '--register']]) {
+    const env = commandEnv({ plan: ALL_CAUGHT, over: { package: { statesFile: frozenStates() } } });
+    let quiet = 0;
+    env.io.quietFn = async () => { quiet += 1; return ok({ quiet: true }); };
+    const code = await main(argv(...flags), env.io);
+    assert.equal(code, 4, `${flags}: ${env.lines.join('\n')}`);
+    assert.ok(env.lines.some(l => /task 05 is in the accepted freeze spec-frozen-B-20261118/.test(l) && /superseding freeze/.test(l)), env.lines.join('\n'));
+    assert.equal(env.world.log.length, 0, `${flags}: nothing was built or scored`);
+    assert.equal(quiet, 0, `${flags}: the quiet check did not start`);
+    assert.equal(existsSync(packageRoot(env.io.home, env.p.task)), false, `${flags}: no run folder was made`);
+    assert.equal(existsSync(env.files.packagesFile), false, `${flags}: nothing registered`);
+  }
+});
+
+test('package_without_register_a_task_outside_the_freeze_and_a_missing_record_are_not_preflighted_and_a_malformed_record_is', async () => {
+  const run = async (statesFile, flags) => {
+    const env = commandEnv({ plan: ALL_CAUGHT, over: { package: { statesFile } } });
+    return { code: await main(argv(...flags), env.io), env };
+  };
+  const checkOnly = await run(frozenStates(), []);
+  assert.equal(checkOnly.code, 0, `the check without --register still runs after the freeze: ${checkOnly.env.lines.join('\n')}`);
+  assert.ok(checkOnly.env.world.log.length > 0);
+  const other = await run(frozenStates(JSON.stringify({ freeze: { state: 'accepted', tag: 'spec-frozen-B-20261118' }, specs: { '04': { state: 'frozen', sha256: 'f'.repeat(64) } } })), ['--register']);
+  assert.equal(other.code, 0, other.env.lines.join('\n'));
+  const bad = await run(frozenStates('{"freeze": {}}'), ['--register']);
+  assert.equal(bad.code, 4);
+  assert.ok(bad.env.lines.some(l => /malformed/.test(l)), bad.env.lines.join('\n'));
+  assert.equal(bad.env.world.log.length, 0, 'a malformed record stops it before the run too');
 });

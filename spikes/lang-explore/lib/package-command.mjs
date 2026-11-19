@@ -24,6 +24,7 @@ import { materialOf, loadPackage, packageIdentity } from './package-quick.mjs';
 import { PACKAGES_FILE, pinsNow } from './package-registry.mjs';
 import { latestRecord, openRun, sweepOwnedTrees, writeHalt, writeRecord } from './package-record.mjs';
 import { loadStep, refsStep, suiteStep, witnessesStep } from './package-steps.mjs';
+import { frozenTaskProblem } from './package-freeze-guard.mjs';
 import { acquirePlanLock } from './plan-lock.mjs';
 import { quickCalibration, isQuick } from './quick.mjs';
 import { taskFromValues, taskPaths } from './tasks.mjs';
@@ -222,11 +223,14 @@ function runOf({ args, io, world }) {
 /** The arguments that cannot go together. */
 const clash = (args, values) => (args.seal && !args.register && values.only !== undefined ? '--seal alone seals the package of its latest record; it takes no --only' : null);
 
+/** The sentence refusing `--register` of a task whose spec is in an accepted freeze, or null: said before the world is loaded or any step starts (`registerPackage` holds the same guard). */
+const frozenPreflight = (args, io) => (args.register ? frozenTaskProblem({ task: args.task, ...maybe(io.package?.statesFile !== undefined, { statesFile: io.package?.statesFile }) }) : null);
+
 /** The arguments and the world of a command: `ok({ args, world })` | `fail`. */
 async function prepared(values, io) {
   const args = argsOf(values, io);
   if (!args.ok) return args;
-  const wrong = clash(args.value, values);
+  const wrong = clash(args.value, values) ?? frozenPreflight(args.value, io);
   if (wrong) return fail(wrong);
   const world = await worldOf({ io, task: args.value.task });
   return world.ok ? ok({ args: args.value, world: world.value }) : world;
