@@ -1,12 +1,11 @@
 // ONE unit of Stage 1, from the choice to the records (F3.S1 (a), PR 3). In order, and each refusal leaves the run-map as it was: the series and the dated lines, the unit the schedule offers, the owner's go line for its scope, the guard, the task and
 // its pins, the series' pinned price file and policy, the plan. Then the one body both verbs share, `run.mjs`'s `runUnit`. No pause point is asked (D7, D53).
-import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { reclassifyByHand } from '../../minigit-bench/lib/bare-reclass.mjs';
 import { appendLedger } from '../../minigit-bench/lib/ledger.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { systemClock } from './clock.mjs';
+import { sha256OfFile } from './file-sha.mjs';
 import { REPO } from './paths.mjs';
 import { pinsMoved, runUnit } from './run.mjs';
 import { CANONICAL_SERIES, isRehearsal, ledgerFileOf, seriesInputs, seriesRootProblem } from './series.mjs';
@@ -23,7 +22,6 @@ import { runSteps } from './workspaces-pipeline.mjs';
 
 export const EXIT = Object.freeze({ done: 0, stop: 2, halt: 3, config: 4, failed: 5 });
 const refused = message => ({ exit: EXIT.config, message });
-const sha256File = file => createHash('sha256').update(readFileSync(file)).digest('hex');
 
 const canonicalName = (dir, io) => (io.seriesNameOk ?? (n => CANONICAL_SERIES.test(n)))(path.basename(dir));
 const NAME_SENTENCE = dir => `${path.basename(dir)} is not a canonical series name (x-yyyymmdd-4 hex): a paid slot runs on a series made by \`explore.mjs stage-init\`, never on a copy or a rename`;
@@ -90,15 +88,22 @@ async function guardStep({ series, unit, io }) {
 const taskStep = ({ unit, io }) => taskFromValues({ task: unit.task }, io.exploreFn);
 
 const pinnedFiles = pin => ({ prices: path.join(REPO, pin.prices), policy: path.join(REPO, pin.policy) });
-const movedPin = (pin, files) => [['price file', files.prices, pin.pricesSha256], ['crosscheck policy', files.policy, pin.policySha256]].find(([, file, want]) => sha256File(file) !== want);
+const pinChecks = (pin, files) => [['price file', files.prices, pin.pricesSha256], ['crosscheck policy', files.policy, pin.policySha256]];
+
+/** The sentence for a pinned file that cannot be read or is not the one the series pinned, or null. */
+function movedPin([label, file, want]) {
+  const got = sha256OfFile(file);
+  if (!got.ok) return `the ${label} ${got.reason}: nothing was changed`;
+  return got.value === want ? null : `the ${label} ${file} is not the one the series pinned (${String(want).slice(0, 12)}): a change is a dated amendment, never a quiet one`;
+}
 
 /** The price file and the crosscheck policy the series pinned, as absolute paths, checked against the sha256 the series recorded. -> `ok({ policyFiles })` | `fail`. */
 function policyStep({ series }) {
   const inputs = seriesInputs(series.dir);
   const pin = inputs.ok ? inputs.value.policy : undefined;
   if (pin === undefined) return fail(`${series.dir}/inputs.json pins no price file and policy: make the series with \`explore.mjs stage-init\``);
-  const moved = movedPin(pin, pinnedFiles(pin));
-  return moved ? fail(`the ${moved[0]} ${moved[1]} is not the one the series pinned (${String(moved[2]).slice(0, 12)}): a change is a dated amendment, never a quiet one`) : ok({ policyFiles: pinnedFiles(pin) });
+  const moved = pinChecks(pin, pinnedFiles(pin)).map(movedPin).find(Boolean);
+  return moved ? fail(moved) : ok({ policyFiles: pinnedFiles(pin) });
 }
 
 const pinsStep = ({ series, task }) => { const moved = pinsMoved({ series, task }); return moved ? fail(moved) : ok({}); };

@@ -2,12 +2,12 @@
 // blobs: PR 5's, handed in as `io.stage.initGuardFn`; THE DEFAULT REFUSES EVERY SERIES BUT A REHEARSAL, so no paid series can be made before PR 5 merges), the harness identity against the manifest's, the check of the task repository's twelve
 // published workspaces (`checkWorkspaces`; the commit is recorded) and every task's slice (`stage-slices.mjs`; a held-out side that is not the registered one refuses the whole series and names the task). `--rehearsal` makes an `r-`
 // series for the free stub round: no tag, fixture held-out cases, a seed of its own.
-import { createHash, randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { harnessIdentity } from '../../minigit-bench/lib/prereg-guard.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { systemClock } from './clock.mjs';
+import { sha256OfFile } from './file-sha.mjs';
 import { subjectOf } from './commands.mjs';
 import { harnessPinsNow } from './harness-pin.mjs';
 import { loadExplore } from './inputs.mjs';
@@ -83,17 +83,21 @@ async function workspacesStep({ values, io, base }) {
 
 const makeSlices = ({ io, base, rehearsal }) => slicesOf({ io, base, make: seam(io, 'sliceFn', rehearsal ? rehearsalSlice : realSlice) });
 
-const sha256File = file => createHash('sha256').update(readFileSync(file)).digest('hex');
 const V1_POLICY = Object.freeze({ prices: 'spikes/minigit-bench/inputs/prices-2026-10-29.json', policy: 'spikes/minigit-bench/inputs/crosscheck-policy.json' });
 
-/** The price file and the crosscheck policy a session is priced with, pinned by their sha256: the pre-registration's (`pre.policy`, repo-relative), else v1's. */
+/** The price file and the crosscheck policy a session is priced with, pinned by their sha256: the pre-registration's (`pre.policy`, repo-relative), else v1's. -> `ok(pin)` | `fail` naming the file that cannot be read. */
 function policyOf(pre) {
   const rel = pre.policy ?? V1_POLICY;
-  return { ...rel, pricesSha256: sha256File(path.join(REPO, rel.prices)), policySha256: sha256File(path.join(REPO, rel.policy)) };
+  const [prices, policy] = [sha256OfFile(path.join(REPO, rel.prices)), sha256OfFile(path.join(REPO, rel.policy))];
+  if (!prices.ok || !policy.ok) return fail(`the price file or the crosscheck policy the pre-registration names cannot be pinned: ${(prices.ok ? policy : prices).reason}`);
+  return ok({ ...rel, pricesSha256: prices.value, policySha256: policy.value });
 }
 
-async function wideOf({ base, pre, taskRepo, harnessIdentity: identity }) {
-  return { subject: await subjectOf(), python3: base.python3, cli: base.cli, specs: base.specs, ...harnessPinsNow(), harnessIdentity: identity, taskRepo, preregManifestSha256: pre.manifestSha256 ?? null, policy: policyOf(pre) };
+/** The pinned price file and policy, made before the series is: a file that cannot be read refuses and nothing is written. */
+const policyPinStep = ({ pre }) => { const pin = policyOf(pre); return pin.ok ? ok({ policyPin: pin.value }) : pin; };
+
+async function wideOf({ base, pre, taskRepo, harnessIdentity: identity, policyPin }) {
+  return { subject: await subjectOf(), python3: base.python3, cli: base.cli, specs: base.specs, ...harnessPinsNow(), harnessIdentity: identity, taskRepo, preregManifestSha256: pre.manifestSha256 ?? null, policy: policyPin };
 }
 
 const randomText = () => randomBytes(4).toString('hex');
@@ -116,7 +120,7 @@ const slicesStep = async s => makeSlices(s);
 export async function stageInit({ values, io }) {
   const base = (io.exploreFn ?? loadExplore)();
   if (!base.ok) return { exit: EXIT.config, message: base.reason };
-  const done = await runSteps([guardStep, identityStep, workspacesStep, slicesStep, makeStep], { base: base.value, rehearsal: values.rehearsal === true, values, io });
+  const done = await runSteps([guardStep, identityStep, workspacesStep, slicesStep, policyPinStep, makeStep], { base: base.value, rehearsal: values.rehearsal === true, values, io });
   if (!done.ok) return { exit: EXIT.config, message: done.reason };
   const { made, rehearsal } = done.value;
   return { exit: EXIT.done, dir: made.dir, message: `Stage 1 series ${made.state.seriesId} created at ${made.dir}${rehearsal ? ' (a rehearsal: the stub CLI, fixture held-out cases, a seed of its own)' : ''}; the verbs are stage-run and stage-status` };

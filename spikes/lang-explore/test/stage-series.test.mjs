@@ -128,6 +128,16 @@ test('stage_init_refuses_and_writes_nothing_for_a_task_whose_held_out_side_is_no
   }
 });
 
+test('A_pinned_price_or_policy_file_that_is_missing_refuses_stage_init_with_its_path_and_writes_nothing', async () => {
+  for (const [what, policy] of [['price file', { prices: 'spikes/nonexistent/prices.json', policy: 'spikes/minigit-bench/inputs/crosscheck-policy.json' }], ['policy', { prices: 'spikes/minigit-bench/inputs/prices-2026-10-29.json', policy: 'spikes/nonexistent/policy.json' }]]) {
+    const io = initIo({ stage: { initGuardFn: async () => ok({ ...PRE, policy }) } });
+    const r = await stageInit({ values: { 'task-repo': '/t' }, io });
+    assert.equal(r.exit, 4, `${what}: ${r.message}`);
+    assert.match(r.message, /spikes\/nonexistent\/(prices|policy)\.json cannot be read \(.*ENOENT/, what);
+    assert.deepEqual(readdirSyncOrEmpty(io.home), [], `${what}: no series directory`);
+  }
+});
+
 test('A_harness_identity_that_is_not_the_manifests_refuses_stage_init_unless_a_dated_line_accepts_it', async () => {
   const wrong = { ...PRE, harnessIdentity: 'f'.repeat(64) };
   const refused = await stageInit({ values: { 'task-repo': '/t' }, io: initIo({ stage: { initGuardFn: async () => ok(wrong) } }) });

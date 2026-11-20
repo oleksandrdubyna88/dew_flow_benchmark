@@ -122,6 +122,18 @@ test('stage_run_and_stage_status_report_every_malformed_Stage_1_line_and_every_h
   assert.deepEqual(quiet.filter(l => l.startsWith('amendments: ')), [], 'the control: a clean file reports nothing');
 });
 
+test('A_pinned_price_or_policy_file_that_is_missing_at_stage_run_is_refused_with_its_path_and_nothing_changes', async () => {
+  const rig = await runRig();
+  const inputs = JSON.parse(readFileSync(path.join(rig.dir, 'inputs.json'), 'utf8'));
+  writeFileSync(path.join(rig.dir, 'inputs.json'), `${JSON.stringify({ ...inputs, policy: { ...inputs.policy, prices: 'spikes/nonexistent/prices.json' } }, null, 2)}\n`);
+  const before = [ledgerBytes(rig.dir), snapshot(rig.dir)];
+  const r = await next(rig);
+  assert.equal(r.exit, 4, r.message);
+  assert.match(r.message, /the price file .*spikes\/nonexistent\/prices\.json cannot be read \(.*ENOENT/);
+  assert.deepEqual([ledgerBytes(rig.dir), snapshot(rig.dir)], before, 'the run-map and the ledger are as they were');
+  assert.deepEqual(rig.log, []);
+});
+
 test('An_owner_go_for_rounds_1_to_2_does_not_cover_round_3_and_one_for_the_pilot_covers_no_round_at_stage_run', async () => {
   const rig = await runRig({ lines: [GO_PILOT, '2026-11-21 | owner-go | rounds:1-2 | the owner: rounds 1 and 2', PILOT_GO_LINE, ...readbackHolds()] });
   for (let i = 0; i < 12; i += 1) assert.equal((await next(rig)).exit, 0, `slot ${i + 1}`);
