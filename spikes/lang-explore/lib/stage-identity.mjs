@@ -12,10 +12,11 @@ export const IDENTITY_NAMES = Object.freeze(READERS.map(([name]) => name));
 const SHORT = 12;
 const short = value => String(value).slice(0, SHORT);
 
-/** One identity, read: `{ value }` or `{ unknown: why }` (a reader that throws is a unit of its own: the others are still read). */
+/** One identity, read: `{ value }` or `{ unknown: why }` (a reader that throws is a unit of its own: the others are still read). A reader that answers `undefined` or `null` has no value: it is unreadable, never the text "undefined". */
 async function readOne({ name, read, ctx }) {
   try {
-    return { value: String(await (ctx.readers?.[name] ?? read)(ctx)) };
+    const value = await (ctx.readers?.[name] ?? read)(ctx);
+    return value === undefined || value === null ? { unknown: `${name} has no value: its reader answered ${value}` } : { value: String(value) };
   } catch (e) {
     return { unknown: e.message };
   }

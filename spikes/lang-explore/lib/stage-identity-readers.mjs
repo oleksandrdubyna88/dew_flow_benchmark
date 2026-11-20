@@ -64,10 +64,13 @@ function heldoutText(ctx, id) {
   return `archive:${sha256OfFile(archive)}|tree:${e.treeSha256}|manifest:${e.manifestSha256}|cases:${e.caseCount}|traps:${e.trapCount}`;
 }
 
+/** The memory limit's bytes of the record file. A missing value is no identity. */
+const memoryBytes = limit => need(limit.bytes, 'memory-limit.json holds no bytes');
+
 function memoryText(ctx) {
   const limit = readJson(inRepo(ctx, RECORD_PATHS.memoryLimit));
   const refs = need(limit.registration?.references, 'the memory value has no registration');
-  return `bytes:${limit.bytes}|date:${limit.registration.date}|refs:${sha256Text(canonical(refs))}`;
+  return `bytes:${memoryBytes(limit)}|date:${limit.registration.date}|refs:${sha256Text(canonical(refs))}`;
 }
 
 function pidsMax() {
@@ -106,7 +109,8 @@ function policyHash(ctx) {
 
 function seriesDefaults(ctx) {
   const { quick, tasks } = need(ctx.explore, 'explore.json cannot be loaded');
-  return sha256Text(canonical({ limits: quick.limits, caseWallMs: quick.caseWallMs, runCeilingMs: quick.runCeilingMs, memory: readJson(inRepo(ctx, RECORD_PATHS.memoryLimit)).bytes, overrides: Object.fromEntries(FREEZE_TASKS.map(id => [id, tasks[id]?.limits ?? null])) }));
+  const hashed = { limits: need(quick.limits, 'explore.json holds no quick.limits'), caseWallMs: need(quick.caseWallMs, 'explore.json holds no quick.caseWallMs'), runCeilingMs: need(quick.runCeilingMs, 'explore.json holds no quick.runCeilingMs'), memory: memoryBytes(readJson(inRepo(ctx, RECORD_PATHS.memoryLimit))) };
+  return sha256Text(canonical({ ...hashed, overrides: Object.fromEntries(FREEZE_TASKS.map(id => [id, tasks[id]?.limits ?? null])) }));
 }
 
 const hostText = () => sha256Text([os.hostname(), os.release(), existsSync('/sys/fs/cgroup/cgroup.controllers') ? 'cgroup2' : 'cgroup1'].join('|'));
@@ -116,7 +120,7 @@ const perTask = (prefix, read) => FREEZE_TASKS.map(id => [`${prefix}.${id}`, ctx
 /** `[[name, reader]]`: every identity of the pre-registration, in the order the guard names them. */
 export const READERS = Object.freeze([
   ['harness', () => { throw new Error('the Stage 1 harness identity is PR 5\'s list of folders (STAGE_HARNESS_DIRS): no reader was given'); }],
-  ['runnerManifest', ctx => runnerPinNow(inRepo(ctx, 'spikes/lang-bench/inputs/specs.d/runner.json')).manifestSha256],
+  ['runnerManifest', ctx => need(runnerPinNow(inRepo(ctx, 'spikes/lang-bench/inputs/specs.d/runner.json')).manifestSha256, 'runner.json holds no manifestSha256: the runner pin is not complete')],
   ['execLayerTree', () => execLayerTree()],
   ['memoryPolicy', () => sha256OfFile(POLICY_FILE)],
   ['pidsMax', () => pidsMax()],
@@ -134,7 +138,7 @@ export const READERS = Object.freeze([
   ['statement', ctx => sha256OfFile(preregFile(ctx, 'statement.md'))],
   ['prices', ctx => pricesHash(ctx)],
   ['policy', ctx => policyHash(ctx)],
-  ['caps', ctx => `capUsd:${need(ctx.explore, 'explore.json cannot be loaded').caps.capUsd}`],
+  ['caps', ctx => `capUsd:${need(need(ctx.explore, 'explore.json cannot be loaded').caps?.capUsd, 'explore.json holds no caps.capUsd')}`],
   ['locale', ctx => sha256Text(canonical({ locale: need(ctx.explore, 'explore.json cannot be loaded').locale, base: BASE_ENV, allowList: ALLOW_LIST }))],
   ['seriesDefaults', ctx => seriesDefaults(ctx)],
   ...perTask('trapAid', (ctx, id) => sha256OfFile(taskPaths(taskOf(ctx, id), ctx.home).notesFile)),

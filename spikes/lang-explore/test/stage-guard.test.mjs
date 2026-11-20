@@ -244,6 +244,53 @@ test('The_live_identities_are_read_from_the_places_that_own_them_and_one_that_ca
   for (const name of ['runnerManifest', 'execLayerTree', 'memoryPolicy', 'pidsMax', 'toolchains', 'memoryValue', 'contract', 'templates', 'locale', 'seriesDefaults', 'host']) assert.equal(typeof real[name].value, 'string', `${name} reads from this repository: ${real[name].unknown}`);
 });
 
+// ---- Opus review (PR 4), O4: a missing value is never an identity -------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/** An identity that must be unreadable: no value, and a sentence that names what is missing. */
+function assertUnreadable({ now, name, missing }) {
+  assert.equal(now[name].value, undefined, `${name} gave the text "${now[name].value}": a missing value is never hashed or compared`);
+  assert.match(now[name].unknown, missing, `${name} says what is missing: ${now[name].unknown}`);
+}
+
+/** A bench root with a memory limit file (`over` replaces its fields) and the runner pin file (`runnerFields`), a home, and the reader of the identities over them. */
+function identityWorld(t, { memory = {}, runnerFields = { version: '1.0.0', manifestSha256: hex(64, '5') } } = {}) {
+  const repo = folder(t, 'idroot');
+  put(path.join(repo, RECORD_PATHS.memoryLimit), { bytes: 536870912, registration: { date: '2026-11-18', references: [] }, ...memory });
+  put(path.join(repo, 'spikes/lang-bench/inputs/specs.d/runner.json'), { runner: runnerFields });
+  const explore = loadExplore().value;
+  const home = folder(t, 'idhome');
+  return { explore, read: (over = {}) => liveIdentities({ repo, home, explore, record: {}, ...over }) };
+}
+
+test('The_runner_manifest_identity_is_unreadable_when_the_pin_has_no_manifest_hash', async t => {
+  const w = identityWorld(t, { runnerFields: { version: '1.0.0' } });
+  assertUnreadable({ now: await w.read(), name: 'runnerManifest', missing: /manifestSha256/ });
+  assert.equal((await identityWorld(t).read()).runnerManifest.value, hex(64, '5'), 'the control: with the field the identity is read');
+});
+
+test('The_caps_identity_is_unreadable_when_the_cap_is_missing', async t => {
+  const w = identityWorld(t);
+  assertUnreadable({ now: await w.read({ explore: { ...w.explore, caps: { ...w.explore.caps, capUsd: undefined } } }), name: 'caps', missing: /capUsd/ });
+  assert.equal((await w.read()).caps.value, `capUsd:${w.explore.caps.capUsd}`, 'the control: with the cap the identity is read');
+});
+
+test('The_memory_value_identity_is_unreadable_when_the_memory_limit_has_no_bytes', async t => {
+  assertUnreadable({ now: await identityWorld(t, { memory: { bytes: undefined } }).read(), name: 'memoryValue', missing: /bytes/ });
+  assert.equal(typeof (await identityWorld(t).read()).memoryValue.value, 'string', 'the control: with the bytes the identity is read');
+});
+
+test('The_series_defaults_identity_is_unreadable_when_any_field_it_hashes_is_missing', async t => {
+  assertUnreadable({ now: await identityWorld(t, { memory: { bytes: undefined } }).read(), name: 'seriesDefaults', missing: /bytes/ });
+  const w = identityWorld(t);
+  assert.equal(typeof (await w.read()).seriesDefaults.value, 'string', 'the control: with every field the identity is read');
+  for (const field of ['limits', 'caseWallMs', 'runCeilingMs']) assertUnreadable({ now: await w.read({ explore: { ...w.explore, quick: { ...w.explore.quick, [field]: undefined } } }), name: 'seriesDefaults', missing: new RegExp(field) });
+});
+
+test('A_reader_that_answers_undefined_or_null_is_unreadable_and_never_the_text_of_it', async t => {
+  const w = identityWorld(t);
+  for (const value of [undefined, null]) assertUnreadable({ now: await w.read({ readers: { host: () => value } }), name: 'host', missing: /no value/ });
+});
+
 test('The_guard_names_an_identity_that_differs_from_the_manifest_and_asks_the_paid_checks_only_for_a_paid_launch', async t => {
   const w = await world(t);
   const moved = { ...LIVE, contract: { value: sha256('the contract moved') } };
