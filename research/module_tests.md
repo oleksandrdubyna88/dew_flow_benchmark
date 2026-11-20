@@ -1187,6 +1187,8 @@ The admin role's id (5) is the integrations provider's documented value; whether
 
 ## F3.S1 (b), bench PR 5: the pre-registration tools, the guard over Stage 1's lists and the wiring into `stage-run` and `stage-init` (`spikes/lang-explore/`, three seams in `spikes/minigit-bench/`, the bench ruleset data in `spikes/lang-bench/`)
 
+*The commit shas named in this section are of the local working branch `feat/lang-v2-f3s1-prereg-tools`, which was never pushed. PR 5 is published as one commit on `feat/lang-v2-f3s1-prereg` because a test fixture in that history held a string the v1 leak check names (D41); the fixture was changed before the commit, and the tree is the one these runs tested.*
+
 Nothing here pays, calls a model, pushes a tag or applies a ruleset. Every git test builds a temporary repository with a bare origin (`test/stage-prereg-fixture.mjs`; `test/stage-prereg-wiring-fixture.mjs` makes it complete: PR 4's invented record, a manifest, the registered prompts, a schedule with its pilot, the price file and the policy; its "tag" is annotated, pushed to the temporary origin and means nothing); the wiring tests then go through `stage-run` and `stage-init` with the fakes of the existing stage tests (the loop, the launch checks, PR 4's identities). The price tool is run with a fake `fetch`, never the network; the CLI pin with a temporary home; the seed verbs with a temporary home and tree. Nothing real is read or written, no held-out value is in any fixture.
 
 ```bash
