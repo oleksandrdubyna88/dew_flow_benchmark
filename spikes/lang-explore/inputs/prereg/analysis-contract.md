@@ -203,8 +203,12 @@ say the same, and the rule files hold exactly the GO rows and the adjudication r
 - After the A/A, by a dated line of `amendments.md`, for both stacks alike, these may change:
   - the **instrument**: the harness identity, the quiet thresholds (`quiet.json`) and the package flags
     (`package-flags.json`);
-  - the policy of the cost checks **T3 and T5**, in the policy's free fields `t3`, `t5`, `decidedOn` and `reason`;
+  - the policy of the cost checks **T3 and T5**, in the policy's free fields `t3`, `t5`, `decidedOn` and `reason`, each
+    change by its dated `input:crosscheck-policy.json:<12 hex>` line;
   - **once**, the wall and the stall, by one `caps` line.
+- **The prices have an earlier deadline.** On the series' first day the pricing page is read again, as a check only. A
+  changed price is recorded as a dated amendment line **before the first paid launch, which is the A/A's**. The
+  registered figures of the price file never change.
 - **Never** amended: the cap in dollars, a prompt, a spec, a limit, or the treatment of one stack.
 - **Nothing of the instrument changes after the first data session** has been planned.
 
