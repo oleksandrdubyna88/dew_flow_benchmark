@@ -15,6 +15,7 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { systemClock } from './clock.mjs';
 import { diskRuleVerdict, growthProblem } from './growth.mjs';
 import { MAX_ATTEMPTS, STACK_ORDER, isVoid, stateOfSessions } from './series.mjs';
+import { lstatOf } from './safe-place.mjs';
 import { FREED_FILE } from './stage-archive.mjs';
 import { DATA_SLOTS, pilotPlan } from './stage-schedule.mjs';
 import { walkEntries } from './workspaces-tree.mjs';
@@ -175,6 +176,12 @@ const eventOf = ({ verdict, args, now }) => ({ event: verdict.halt, t: now().toI
 export function diskGate(args) {
   const sized = sizing(args);
   const verdict = [reserveGate, ruleGate].map(gate => gate(args, sized)).find(v => !v.go) ?? { go: true };
-  if (verdict.halt !== undefined && args.ledgerFile) appendLedger(args.ledgerFile, eventOf({ verdict, args, now: args.now ?? systemClock }));
+  return verdict.halt !== undefined && args.ledgerFile ? recordHalt({ verdict, args }) : verdict;
+}
+
+/** The halt's event line appended to the ledger; a ledger that is a link is never appended through, and the verdict is then a refusal that says so (no line is written). */
+function recordHalt({ verdict, args }) {
+  if (lstatOf(args.ledgerFile)?.isSymbolicLink()) return refused(`the ledger ${args.ledgerFile} is a link: an event line is never appended through a link`);
+  appendLedger(args.ledgerFile, eventOf({ verdict, args, now: args.now ?? systemClock }));
   return verdict;
 }

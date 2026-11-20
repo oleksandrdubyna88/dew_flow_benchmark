@@ -7,13 +7,14 @@
 //   restoreSeries  copies a freed session's files back from the archive, verifies them against `freed.json`'s list and removes `freed.json`.
 // Who needs a freed folder: nothing between the halt and the report reads `FREEABLE` (the scoring builds from `work/` over the registered snapshot, never the session's cache). The final hash list of the record (PR 13) and the last archive
 // after the series ended do need the whole tree, and each refuses a series that still holds a `freed.json` (`freedSessionProblem`), naming `stage-restore`.
-import { chmodSync, constants, copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync, rmSync, rmdirSync } from 'node:fs';
 import path from 'node:path';
 import { acquireSeriesLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { makeWritable } from '../../minigit-bench/lib/cache-snapshot.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { readRunMap } from '../../minigit-bench/lib/run-map.mjs';
 import { systemClock } from './clock.mjs';
+import { linkOnWay, lstatOf, placeFile, placeLink } from './safe-place.mjs';
 import { isVoid, pairComplete, runMapFileOf } from './series.mjs';
 import { DATA_SLOTS } from './stage-schedule.mjs';
 import { mapSaying } from './stage-progress.mjs';
@@ -27,11 +28,8 @@ export const FREED_FILE = 'freed.json';
 const sessionsDir = series => path.join(series, 's');
 const sessionDir = (series, rid) => path.join(sessionsDir(series), rid);
 
-const writeJson = (file, value) => {
-  const tmp = `${file}.${process.pid}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
-  renameSync(tmp, file);
-};
+/** A JSON file `rel` of the series, through `placeFile` (a link on the way refuses; the temporary file is exclusive). -> `ok(file)` | `fail`. */
+const writeJson = ({ series, rel, value }) => placeFile({ root: series, rel, text: `${JSON.stringify(value, null, 2)}\n` });
 
 /** `fn()` under the series lock `run` takes (a held lock is a refusal naming the holder), released on every path. */
 function withSeriesLock(series, fn) {
@@ -66,27 +64,17 @@ function finishedSlots(series) {
 
 // ---- archive ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-/** Copy one listed entry under `dest` (a link as a link): a file already there with the listed hash is left alone, so a killed archive finishes where it stopped. */
+/** Copy one listed entry under `dest` (a link as a link) through `placeFile` / `placeLink`: a file already there with the listed hash is left alone, so a killed archive finishes where it stopped. -> `ok` | `fail`. */
 function copyEntry({ series, dest, entry }) {
-  const target = path.join(dest, entry.rel);
-  if (hashAt(target) === entry.hash) return;
-  mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
-  rmSync(target, { force: true });
-  if (entry.kind === 'link') { symlinkSync(entry.target, target); return; }
-  const tmp = `${target}.${process.pid}.tmp`;
-  rmSync(tmp, { force: true }); // a link planted at the temporary name is removed, never written through
-  copyFileSync(path.join(series, entry.rel), tmp, constants.COPYFILE_EXCL);
-  chmodSync(tmp, entry.mode);
-  renameSync(tmp, target); // a link at the target is replaced by the file, never followed
+  if (hashAt(path.join(dest, entry.rel)) === entry.hash) return ok(null);
+  const place = { root: dest, rel: entry.rel, dirMode: 0o700, withRoot: true };
+  return entry.kind === 'link' ? placeLink({ ...place, linkTo: entry.target }) : placeFile({ ...place, copyFrom: path.join(series, entry.rel), mode: entry.mode });
 }
 
-/** Every folder from the copy's root down to the folders of the listed entries, as paths from the root (`.` is the root itself). */
-const foldersOf = entries => [...new Set(entries.flatMap(e => path.dirname(e.rel).split('/').map((_, i, parts) => parts.slice(0, i + 1).join('/'))).concat('.'))].sort();
-
-/** The sentence for the first folder on the way from `dest` to a listed entry that is a link (`dest` itself included), or null: a copy is never written through a link, so an archive into a backup that holds one is refused whole. */
+/** The sentence for the first folder on the way from `dest` (itself included) to a listed entry that is a link, or null: an archive into a backup that holds one is refused whole, before anything is copied. */
 function linkInCopyRoot({ dest, entries }) {
-  const link = foldersOf(entries).map(folder => path.join(dest, folder)).find(folder => lstatOf(folder)?.isSymbolicLink());
-  return link === undefined ? null : `the archive's copy folder holds a link on the way to a listed file (${link}): a copy is never written through a link, so nothing is copied or recorded; remove the link or choose another backup folder`;
+  const link = linkOnWay({ root: dest, folders: entries.map(e => path.posix.dirname(e.rel)), withRoot: true });
+  return link === null ? null : `the archive's copy folder holds a link on the way to a listed file (${link}): a copy is never written through a link, so nothing is copied or recorded; remove the link or choose another backup folder`;
 }
 
 /** The real path of `p` as far as it exists (every link resolved); the part that is not there yet is appended as written. A link cannot hide where a folder really is. */
@@ -115,16 +103,17 @@ function locationProblem({ series, to }) {
 /** The sentence refusing an archive before anything is read, or null. The last archive's own refusal (a freed session) is asked under the series lock, in `archiveLocked`. */
 const archiveRefusal = ({ series, to }) => locationProblem({ series, to });
 
+/** The archive's record in `archive.json`: the list's identity, the size, the place, the date and the slots finished. */
+const archiveEntryOf = ({ to, dest, entries, text, now, listFile, slots }) => ({ listSha256: sha256Text(text), listFile, files: entries.length, bytes: entries.reduce((n, e) => (e.kind === 'file' ? n + e.size : n), 0), to, copy: dest, date: now().toISOString(), slotsFinished: slots });
+
 function recordArchive({ series, to, dest, entries, text, now }) {
   const listFile = `${dest}.${sha256Text(text).slice(0, 12)}.sha256list`;
-  writeFileSync(listFile, text);
-  const slots = finishedSlots(series);
-  if (!slots.ok) return slots;
-  const entry = { listSha256: sha256Text(text), listFile, files: entries.length, bytes: entries.reduce((n, e) => (e.kind === 'file' ? n + e.size : n), 0), to, copy: dest, date: now().toISOString(), slotsFinished: slots.value };
-  const known = readArchives(series);
-  if (!known.ok) return known;
-  writeJson(path.join(series, ARCHIVE_FILE), { archives: [...known.value, entry] });
-  return ok(entry);
+  const facts = [placeFile({ root: to, rel: path.basename(listFile), text }), finishedSlots(series), readArchives(series)];
+  const failed = facts.find(fact => !fact.ok);
+  if (failed !== undefined) return failed;
+  const entry = archiveEntryOf({ to, dest, entries, text, now, listFile, slots: facts[1].value });
+  const recorded = writeJson({ series, rel: ARCHIVE_FILE, value: { archives: [...facts[2].value, entry] } });
+  return recorded.ok ? ok(entry) : recorded;
 }
 
 /** The refusals that are asked under the lock, before the listing: the last archive's freed session, and an `archive.json` that holds no list. -> a sentence or null. */
@@ -149,7 +138,8 @@ function archiveLocked({ series, to, now, hooks, report, final }) {
   const prepared = listedUnderLock({ series, to, final, report });
   if (!prepared.ok) return prepared;
   const { listed, dest } = prepared.value;
-  mapSaying({ items: listed, phase: 'copying', report, fn: entry => copyEntry({ series, dest, entry }) });
+  const refusedCopy = mapSaying({ items: listed, phase: 'copying', report, fn: entry => copyEntry({ series, dest, entry }) }).find(copied => !copied.ok);
+  if (refusedCopy !== undefined) return refusedCopy;
   hooks.afterCopy?.(dest);
   const problems = copyProblems({ entries: listed, root: dest, report });
   if (problems.length > 0) return fail(`the copy differs from the source (${problems.length} file(s)): ${problems.slice(0, 5).join('; ')}; nothing is recorded`);
@@ -214,13 +204,8 @@ function unproven({ series, rel, archive }) {
   return hashAt(path.join(archive.entry.copy, rel)) === listed ? null : 'the archived copy no longer has the listed hash';
 }
 
-const lstatOf = file => { try { return lstatSync(file); } catch { return undefined; } };
-
-/** The first link on the way from the series to `rel` (every folder on it is `lstat`ed, none is followed): its path from the series, or null. */
-const linkOnWay = ({ series, rel }) => rel.split('/').map((_, i, parts) => parts.slice(0, i + 1).join('/')).find(part => lstatOf(path.join(series, part))?.isSymbolicLink()) ?? null;
-
 /** A session's FREEABLE roots that are there: `{ rel, link }`, `link` the first link on the way to the root (the root itself included), else null. A root behind a link is outside what a free may touch. */
-const rootsOf = ({ series, rid }) => FREEABLE.map(root => `s/${rid}/${root}`).map(rel => ({ rel, link: linkOnWay({ series, rel }) })).filter(r => r.link !== null || lstatOf(path.join(series, r.rel)) !== undefined);
+const rootsOf = ({ series, rid }) => FREEABLE.map(root => `s/${rid}/${root}`).map(rel => ({ rel, link: linkOnWay({ root: series, folders: [rel] }) })).filter(r => r.link !== null || lstatOf(path.join(series, r.rel)) !== undefined);
 
 const plainRoots = ({ series, rid }) => rootsOf({ series, rid }).filter(r => r.link === null).map(r => r.rel);
 
@@ -228,7 +213,7 @@ const plainRoots = ({ series, rid }) => rootsOf({ series, rid }).filter(r => r.l
 const cacheEntriesOf = ({ series, rid }) => plainRoots({ series, rid }).flatMap(root => walkEntries(path.join(series, root)).map(e => ({ ...e, rel: `${root}/${e.rel}` })));
 
 /** The roots a link leads to or hides, named as kept: they are never walked, chmodded or removed. */
-const linkedRoots = ({ series, rid }) => rootsOf({ series, rid }).filter(r => r.link !== null).map(r => ({ path: r.rel, why: `${r.link} is a link and ${r.rel} is, or lies under, it: a link is never followed, so nothing behind it is walked, changed or removed` }));
+const linkedRoots = ({ series, rid }) => rootsOf({ series, rid }).filter(r => r.link !== null).map(r => ({ path: r.rel, why: `${path.relative(series, r.link)} is a link and ${r.rel} is, or lies under, it: a link is never followed, so nothing behind it is walked, changed or removed` }));
 
 const freedItem = (rid, e, hash) => ({ path: e.rel.slice(`s/${rid}/`.length), kind: e.kind, bytes: e.size, mode: e.mode, sha256: hash, ...(e.kind === 'link' ? { target: e.target } : {}) });
 
@@ -243,7 +228,7 @@ const oldFreed = dir => (existsSync(path.join(dir, FREED_FILE)) ? JSON.parse(rea
 /** `freed.json`, written BEFORE anything is removed (a kill in between leaves a list that covers more than was removed, never less). It names ONE archive and the whole list that archive holds: a session that already has one is never freed again (`freeLocked`). */
 function writeFreed({ series, rid, archive, removable, now }) {
   const removed = removable.map(r => freedItem(rid, r.entry, r.hash)).sort((a, b) => (a.path < b.path ? -1 : 1));
-  writeJson(path.join(sessionDir(series, rid), FREED_FILE), { archive: { listSha256: archive.entry.listSha256, to: archive.entry.to, copy: archive.entry.copy, listFile: archive.entry.listFile, date: archive.entry.date }, freedOn: now().toISOString(), removed });
+  return writeJson({ series, rel: `s/${rid}/${FREED_FILE}`, value: { archive: { listSha256: archive.entry.listSha256, to: archive.entry.to, copy: archive.entry.copy, listFile: archive.entry.listFile, date: archive.entry.date }, freedOn: now().toISOString(), removed } });
 }
 
 const subFolders = dir => readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => path.join(dir, e.name));
@@ -261,12 +246,15 @@ function removeFiles({ series, rid, removable, report }) {
   roots.filter(existsSync).forEach(removeEmptyDirs);
 }
 
+/** A session left whole because its `freed.json` could not be written (a link on the way): nothing of it is removed, and the reason is named. */
+const keptWhole = ({ rid, kept, reason }) => ({ rid, removed: [], bytes: 0, kept: [...kept, { path: `s/${rid}`, why: `${reason}: nothing of it is removed` }] });
+
 function freeSession({ series, rid, archive, now, report }) {
   const { removable, kept } = judgeSession({ series, rid, archive, report });
-  if (removable.length > 0) {
-    writeFreed({ series, rid, archive, removable, now });
-    removeFiles({ series, rid, removable, report });
-  }
+  if (removable.length === 0) return { rid, removed: [], bytes: 0, kept };
+  const written = writeFreed({ series, rid, archive, removable, now });
+  if (!written.ok) return keptWhole({ rid, kept, reason: written.reason });
+  removeFiles({ series, rid, removable, report });
   return { rid, removed: removable.map(r => r.entry.rel), bytes: removable.reduce((n, r) => n + r.entry.size, 0), kept };
 }
 
@@ -305,23 +293,30 @@ const copyOf = ({ freed, rid, item }) => path.join(freed.archive.copy, 's', rid,
 /** The sentences for every listed file whose archived copy does not have the listed hash (nothing is placed before every copy is verified). */
 const restoreProblems = ({ freed, rid, report }) => mapSaying({ items: freed.removed, phase: `verifying ${rid} (archive copy)`, report, fn: item => (hashAt(copyOf({ freed, rid, item })) === item.sha256 ? null : `${item.path}: the archived copy is missing or differs from the listed sha256`) }).filter(line => line !== null);
 
+/** Place one freed item back through `placeFile` / `placeLink`, under the series (so `s/<rid>` and every folder on the way are looked at): a file already there with the listed hash is left alone. -> `ok` | `fail`. */
 function placeItem({ series, freed, rid, item }) {
-  const target = path.join(sessionDir(series, rid), item.path);
-  if (hashAt(target) === item.sha256) return;
-  mkdirSync(path.dirname(target), { recursive: true });
-  rmSync(target, { force: true });
-  if (item.kind === 'link') { symlinkSync(item.target, target); return; }
-  const tmp = `${target}.${process.pid}.tmp`;
-  copyFileSync(copyOf({ freed, rid, item }), tmp);
-  chmodSync(tmp, item.mode);
-  renameSync(tmp, target);
+  if (hashAt(path.join(sessionDir(series, rid), item.path)) === item.sha256) return ok(null);
+  const place = { root: series, rel: `s/${rid}/${item.path}` };
+  return item.kind === 'link' ? placeLink({ ...place, linkTo: item.target }) : placeFile({ ...place, copyFrom: copyOf({ freed, rid, item }), mode: item.mode });
+}
+
+/** The sentence for the first link on the way from the series to the session folder and to every folder the freed files go to, or null: nothing is placed before every one of them is looked at. */
+function restoreLinkProblem({ series, rid, freed }) {
+  const link = linkOnWay({ root: series, folders: [`s/${rid}`, ...freed.removed.map(item => path.posix.dirname(`s/${rid}/${item.path}`))] });
+  return link === null ? null : `${link} is a link on the way to a freed file: nothing is written through a link, so nothing of session ${rid} is placed`;
 }
 
 function restoreSession({ series, rid, report }) {
   const freed = oldFreed(sessionDir(series, rid));
-  const problems = restoreProblems({ freed, rid, report });
+  const problems = [...restoreProblems({ freed, rid, report }), restoreLinkProblem({ series, rid, freed })].filter(line => line !== null);
   if (problems.length > 0) return fail(`session ${rid} is not restored: ${problems.join('; ')}`);
-  mapSaying({ items: freed.removed, phase: `restoring ${rid}`, report, fn: item => placeItem({ series, freed, rid, item }) });
+  const refused = mapSaying({ items: freed.removed, phase: `restoring ${rid}`, report, fn: item => placeItem({ series, freed, rid, item }) }).find(placed => !placed.ok);
+  if (refused !== undefined) return fail(`session ${rid} is not restored: ${refused.reason}`);
+  return restoredChecked({ series, rid, freed, report });
+}
+
+/** After the files are placed: each has its listed bytes, then `freed.json` is removed. -> `ok(count)` | `fail`. */
+function restoredChecked({ series, rid, freed, report }) {
   const wrong = mapSaying({ items: freed.removed, phase: `verifying ${rid} (restored)`, report, fn: item => (hashAt(path.join(sessionDir(series, rid), item.path)) === item.sha256 ? null : item) }).filter(item => item !== null);
   if (wrong.length > 0) return fail(`session ${rid}: ${wrong.map(w => w.path).join(', ')} do not match the listed bytes after the copy`);
   rmSync(path.join(sessionDir(series, rid), FREED_FILE));

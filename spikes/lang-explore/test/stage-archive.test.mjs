@@ -480,3 +480,91 @@ test('The_archive_listing_says_it_started_before_the_walk_and_a_line_every_N_ent
   assert.deepEqual(walked.map(([line]) => line), Array.from({ length: Math.floor(total / 10) }, (_, i) => `listing: ${(i + 1) * 10} entries walked`), 'a line every 10 entries');
   assert.ok(walked.every(([, i]) => i < lines.indexOf(`listing: 0 of ${total} file(s)`)), 'all of them before the first hashing line');
 });
+
+// ---- coai code round 3 (PR 4), the link audit: every site that writes under a root the operator does not control, with a planted link ------------------------------------------------------------------------------------
+
+/** A file outside the series and the backup, with its bytes, for a link to point at. */
+const outsideFile = t => { const file = path.join(backupFolder(t), 'outside-file'); writeFileSync(file, 'outside original'); return file; };
+const outsideIntact = file => readFileSync(file, 'utf8') === 'outside original';
+
+test('A_restore_refuses_a_link_planted_in_a_folder_on_the_way_to_a_freed_file_and_writes_nothing_outside_the_series', t => {
+  const { series } = archived(t);
+  assert.equal(freeSeries({ series, reading: readingOf(series) }).ok, true);
+  const rid = ridOf(1, 'csharp');
+  const outside = path.join(backupFolder(t), 'outside');
+  mkdirSync(path.join(outside, '_cacache'), { recursive: true });
+  writeFileSync(path.join(outside, '_cacache', 'c.tgz'), 'outside original');
+  const inside = path.join(series, 's', rid, 'box', 'npm');
+  mkdirSync(path.dirname(inside), { recursive: true });
+  symlinkSync(outside, inside);
+  const before = snapshotOf(outside);
+  const refused = restoreSeries({ series, rid });
+  assert.equal(refused.ok, false, 'the restore is refused');
+  assert.ok(refused.reason.includes(inside), `the link is named: ${refused.reason}`);
+  assert.deepEqual(snapshotOf(outside), before, 'nothing outside the series was written or replaced');
+  assert.equal(existsSync(path.join(series, 's', rid, 'freed.json')), true, 'the session stays freed');
+});
+
+test('A_restore_replaces_a_link_planted_at_a_temporary_name_or_at_a_target_and_never_writes_through_it', t => {
+  const { series } = archived(t);
+  const before = snapshotOf(series, { skip: SKIP });
+  assert.equal(freeSeries({ series, reading: readingOf(series) }).ok, true);
+  const rid = ridOf(1, 'csharp');
+  const outside = outsideFile(t);
+  const [first, second] = cacheFilesOf(rid).map(rel => path.join(series, rel));
+  mkdirSync(path.dirname(first), { recursive: true });
+  symlinkSync(outside, `${first}.${process.pid}.tmp`);
+  mkdirSync(path.dirname(second), { recursive: true });
+  symlinkSync(outside, second);
+  const restored = restoreSeries({ series, rid });
+  assert.equal(restored.ok, true, restored.reason);
+  assert.equal(outsideIntact(outside), true, 'nothing was written through a link');
+  const after = snapshotOf(series, { skip: SKIP });
+  for (const file of cacheFilesOf(rid)) assert.equal(after[file], before[file], `${file} is back with its listed bytes`);
+});
+
+test('The_hash_list_is_written_through_an_exclusive_temporary_file_so_a_link_at_its_predictable_name_is_replaced_and_never_followed', t => {
+  const series = seriesFolder(t, MAP, { cacheBytes: 50 });
+  const to = backupFolder(t);
+  const outside = outsideFile(t);
+  symlinkSync(outside, path.join(series, 'planted'));
+  const text = Object.entries(snapshotOf(series, { skip: SKIP })).sort(([a], [b]) => byCode(a, b)).map(([file, hash]) => `${hash}  ${file}`).join('\n').concat('\n');
+  const listFile = `${path.join(to, path.basename(series))}.${sha256Text(text).slice(0, 12)}.sha256list`;
+  symlinkSync(outside, listFile);
+  const made = archiveSeries({ series, to, now: NOW });
+  assert.equal(made.ok, true, made.reason);
+  assert.equal(outsideIntact(outside), true, 'the file the link pointed at was not truncated');
+  assert.equal(lstatSync(listFile).isSymbolicLink(), false, 'the link was replaced');
+  assert.equal(readFileSync(listFile, 'utf8'), text, 'by the list');
+});
+
+test('archive_json_and_freed_json_are_written_through_an_exclusive_temporary_file_and_a_link_at_a_temporary_name_is_never_followed', t => {
+  const series = seriesFolder(t, MAP, { cacheBytes: 50 });
+  const to = backupFolder(t);
+  const outside = outsideFile(t);
+  symlinkSync(outside, path.join(series, `archive.json.${process.pid}.tmp`));
+  const made = archiveSeries({ series, to, now: NOW });
+  assert.equal(made.ok, true, made.reason);
+  assert.equal(outsideIntact(outside), true, 'archive.json: nothing written through the link');
+  assert.equal(archiveEntries(series).length, 1, 'and the record is there');
+  const rid = ridOf(1, 'csharp');
+  symlinkSync(outside, path.join(series, 's', rid, `freed.json.${process.pid}.tmp`));
+  const freed = freeSeries({ series, reading: readingOf(series) });
+  assert.equal(freed.ok, true, freed.reason);
+  assert.equal(outsideIntact(outside), true, 'freed.json: nothing written through the link');
+  assert.equal(freedFileOf(series, rid).removed.length, 4, 'and the list is there');
+});
+
+test('A_session_folder_that_is_a_link_is_never_freed_into_or_restored_into_and_nothing_outside_changes', t => {
+  const { series } = archived(t);
+  const rid = ridOf(1, 'csharp');
+  const folder = path.join(series, 's', rid);
+  const moved = path.join(backupFolder(t), 'moved-session');
+  renameSync(folder, moved);
+  symlinkSync(moved, folder);
+  const before = snapshotOf(moved);
+  const freed = freeSeries({ series, reading: readingOf(series) });
+  assert.equal(freed.ok, true, freed.reason);
+  assert.deepEqual(snapshotOf(moved), before, 'a session folder that is a link: nothing behind it is freed or written');
+  assert.ok(freed.value.kept.some(k => k.path.startsWith(`s/${rid}/`)), 'and its roots are named as kept');
+});

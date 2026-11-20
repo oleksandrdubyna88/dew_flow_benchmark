@@ -1,7 +1,7 @@
 // The disk side of a paid launch of Stage 1 (F3.S1 (a), PR 4, scenarios 51 to 54h of the stories document): the reserve recomputed before every launch over what is still to run, the per-pair rule before every slot with its `disk-rule`
 // event line, the refusal of a missing or zero size, and the session size read live (the larger of the registered floor and this series' own largest ended session) and written nowhere. Fakes and temporary folders only.
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { readLedger, isOwnCharge } from '../../minigit-bench/lib/ledger.mjs';
@@ -202,4 +202,25 @@ test('One_disk_gate_call_walks_each_ended_session_folder_once_for_the_reserve_an
   assert.equal(verdict.go, true, verdict.reason);
   assert.equal(walked.length, ended, 'every ended session folder is sized once per gate call');
   assert.equal(new Set(walked).size, walked.length, 'and no folder twice');
+});
+
+// ---- coai code round 3 (PR 4), the link audit: the ledger's halt line is never appended through a link ------------------------------------------------------------------------------------------------------------------
+
+test('A_halt_does_not_append_its_event_line_through_a_link_at_the_ledger_and_is_refused_instead', t => {
+  const map = withPilot(mapWith(finished(29)));
+  const series = seriesFolder(t, map, { cacheBytes: 100 });
+  const ledgerFile = path.join(series, 'ledger.ndjson');
+  const outside = path.join(series, '..', `outside-ledger-${path.basename(series)}`);
+  writeFileSync(outside, 'outside original\n');
+  try {
+    rmSync(ledgerFile);
+    symlinkSync(outside, ledgerFile);
+    const verdict = diskGate({ series, map, pilot: PILOT, growth, floorBytes: FLOOR, ledgerFile, now: () => new Date('2026-11-25T10:00:00.000Z'), freeBytes: 1_000_000_000, slot: 30 });
+    assert.equal(verdict.go, false);
+    assert.equal(verdict.exit, 4, 'a refusal: the ledger is a link');
+    assert.match(verdict.reason, /ledger.*is a link/, verdict.reason);
+    assert.equal(readFileSync(outside, 'utf8'), 'outside original\n', 'nothing was appended through the link');
+  } finally {
+    rmSync(outside, { force: true });
+  }
 });
