@@ -1522,6 +1522,55 @@ Counts after the change (each file alone, all green): `read-prices-real-page.tes
 - The old behaviour back, one mutation each (both test files, 46 tests): the tier check off: pass 44, fail 2 (`true !== false` in the tier test; the tiered sentence in the noted-rows test); the spanning check off (`if (false) return`): pass 45, fail 1 (`true !== false`, spanning test); the duplicate-number refusal off: pass 45, fail 1 (`true !== false`); list items taken as footnotes (`FOOTNOTE` loosened): the footnote-form tests fail (2 of 13 in the new file). Each fix restored after.
 - **PR 5b, coai code round (two findings accepted; commits c73b73a0 test (red), the fix commit after it, and this docs commit).** *C1:* the footnote numbers are sorted with `toSorted((a, b) => a - b)`, not the mutating `sort` (convention fix; no red test, the existing tests stay green). *C2:* a tier row is found by the part of the name before the FIRST `(`, its whitespace collapsed and trimmed, compared EXACTLY with the base model's display name (only names that have a `(`, so an unreadable clean row is not a tier). New test `A_tier_row_with_two_spaces_or_no_space_before_the_parenthesis_...` (two spaces, no space, a tab and spaces: each refused as tiered; `Claude Opus 5.55 (...)` is not a tier). RED on the code before the fix: `read-prices-real-page.test.mjs` 14 tests, pass 13, fail 1: `AssertionError: two spaces`, `true !== false` (the clean row was used). A first version of the fix, without the `(` test, also failed 2 old tests (`... the pricing is tiered` named an unreadable clean row), and was corrected. GREEN: `read-prices-real-page.test.mjs` 14/14, `stage-prereg-tools.test.mjs` 33/33, `code-shape.test.mjs` 177/177, `network.test.mjs` 3/3. Mutation (the old prefix check `name.startsWith(\`${wanted.name} (\`)` back, both test files, 47 tests): pass 46, fail 1, `AssertionError: two spaces`, `true !== false`; the fix restored.
 
+### PR 5c: the smoke on the pinned CLI (2026-11-20, branch `feat/lang-v2-smoke-pinned`, cut from main 2003e134; same method: tests first, RED on the current code, the change, GREEN, the old code back as one mutation, RED again, the change restored)
+
+Why: the language comparison's pilot row G-4 has v1's B-T1 over a committed smoke fixture of the PINNED CLI as its replacing evidence, and the only fixture is v1's, on CLI 2.1.310; Stage 1 pins 2.1.329. v1's smoke took its CLI pin from `inputs/stacks.json` for the preflight, the plan and `meta.json`, so it could not capture a fixture on 2.1.329. Two commits: `1acbbfac` (the v1 seam and its tests) and `1d01aa8b` (the wrapper `spikes/lang-explore/prereg/smoke-pinned.mjs` and its tests). No test here uses a real CLI, the network or a token: the stub `claude` of the smoke tests (now `test/smoke-stub.mjs`, its version a parameter), a stub upstream, a temporary home with a fake token, and a fake of v1's `main` where a test reads what the wrapper asked of it.
+
+**The v1 seam** (`spikes/minigit-bench/test/smoke-pin.test.mjs`, 6 tests).
+- `A_CLI_pin_and_a_binary_given_to_the_smoke_inputs_are_the_pin_and_the_binary_the_preflight_receives`: `smokeInputs({ claude, cliPin })` into `runSmoke` with a preflight that records its arguments and refuses (nothing launches).
+- `Without_a_CLI_pin_or_a_binary_the_smoke_inputs_are_v1s_own_stacks_and_the_claude_on_PATH`: the stacks are deep-equal to `loadStacks` of the file. It is the baseline: green before and after, so v1 without the seam is proven unchanged.
+- `A_binary_alone_does_not_move_the_pin_and_a_pin_alone_does_not_move_the_binary`.
+- `A_smoke_session_on_the_given_CLI_records_that_version_in_its_plan_and_in_meta_json`: a full stub session in the real box, the stub reporting 2.1.329: `plan.cliVersion` and `meta.cliVersion` are 2.1.329 and the read-back finds the outcome `ok`.
+- `The_smoke_CLI_given_a_home_a_pin_and_a_binary_plans_with_all_three_and_launches_nothing_on_a_dry_run` and `The_verdicts_verb_writes_the_command_it_is_given_and_v1s_own_line_when_it_is_given_none` (the second also holds that without a command `verdicts` rewrites the committed `SMOKE.md` byte for byte).
+
+RED (tests only, v1 as it was; the baseline test passes, five do not):
+```
+✖ A_CLI_pin_and_a_binary_given_to_the_smoke_inputs_are_the_pin_and_the_binary_the_preflight_receives
+  AssertionError: the preflight checks the binary against the given version, not v1's pin
+  + '2.1.310'   - '2.1.329'
+✖ A_binary_alone_does_not_move_the_pin_and_a_pin_alone_does_not_move_the_binary
+  [ '2.1.310', '/tmp/testsToDelete-mgb-pin-bin-WlPjAw/claude' ]  expected  [ '2.1.329', ... ]
+✖ A_smoke_session_on_the_given_CLI_records_that_version_in_its_plan_and_in_meta_json
+  AssertionError: the plan carries the given version: the broker prices and the read-back checks by it   actual '2.1.310', expected '2.1.329'
+✖ The_smoke_CLI_given_a_home_a_pin_and_a_binary_plans_with_all_three_and_launches_nothing_on_a_dry_run
+  Error: the token reader was called under the test runner with the operator's real home: a test must run with a fake HOME ...   (main ignored the home it was given)
+✖ The_verdicts_verb_writes_the_command_it_is_given_and_v1s_own_line_when_it_is_given_none
+  AssertionError: The input did not match the regular expression /^- Command: `node pinned-smoke\.mjs --out <dir>`$/m
+```
+GREEN: `smoke-pin.test.mjs` 6 of 6. The old code back (`smoke-run.mjs` and `smoke-session.mjs` from `HEAD`): the same five RED with the same messages; the fix restored (`cmp` against the saved copy) and 6 of 6 again.
+
+**The wrapper** (`spikes/lang-explore/test/smoke-pinned.test.mjs`, 11 tests): the three verbs in order with the pinned copy and version and the fixture named `claude-<version>-bare-smoke`; a copy whose sha256 differs, and a copy that is missing, each refused (exit 3) with v1 never called; a version that is not x.y.z refused; an out dir inside a git tree refused by v1's own check (v1's real `main`, exit 3, nothing made); `--dry-run` asks v1 for its dry run only (fake) and, through v1's real `main`, plans 2.1.329 and the copy and makes no directory; a failing session stops before `sanitise`; a fixture folder that is not empty refuses before the session, dry run too; a missing `--out`, an unknown flag and `--check` are exit 4; the fixture folder is v1's `test/fixtures/real`. The `explore.json` of each test is the registered one with its `cli` entry replaced and is loaded through `loadExplore`, so the real validator accepts the fixture.
+
+RED (the tests first, no wrapper yet):
+```
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '.../spikes/lang-explore/prereg/smoke-pinned.mjs' imported from .../test/smoke-pinned.test.mjs
+✖ spikes/lang-explore/test/smoke-pinned.test.mjs     tests 1, fail 1
+```
+GREEN: 11 of 11 on the first run. A test that passes the first time proves nothing alone, so three mutations followed, each red on the line it names and green again when restored (`cmp` against the saved copy):
+- v1's old code back (`smoke-run.mjs` and `smoke-session.mjs` from `1acbbfac~1`): 10 of 11 pass and `A_dry_run_through_v1_plans_the_pinned_version_and_binary_and_makes_no_session_directory` fails with `Error: the token reader was called under the test runner with the operator's real home` (old `main` ignores the home and the pin). The tests that use the fake of `main` stay green by design: they read what the wrapper asked for.
+- The sha256 check removed (`return [fixtureProblem(fixture)]` for `[...cliPinProblems({ explore, home }), fixtureProblem(fixture)]`): `The_wrapper_refuses_a_copy_whose_sha256_differs_from_the_pin_and_runs_nothing` fails with `0 !== 3`, and `The_wrapper_refuses_when_the_pinned_copy_is_not_there_and_runs_nothing` the same; 9 pass.
+- The version pattern and the fixture-folder check removed: `The_wrapper_refuses_a_version_that_is_not_x_y_z_before_it_becomes_a_folder_name` and `A_fixture_folder_that_is_not_empty_refuses_before_the_paid_session_and_a_dry_run_says_so_too` fail; 9 pass.
+
+**Counts after the work** (each file alone, `node .agents/conventions/tools/low-priority.mjs taskset -c 0-5 node --test --test-concurrency=1 <file>`, all green): `smoke-pin.test.mjs` 6, `smoke-run.test.mjs` 2, `smoke-real.test.mjs` 7 (the committed fixture's table, unchanged), `smoke-k2.test.mjs` 4, `box-dotnet-paths.test.mjs` 19 and `stream-calls.test.mjs` 2 (they name the smoke files), v1 `code-shape.test.mjs` 65 (`smoke-session.mjs` and `smoke-run.mjs` are owned by E2, left as they are: no function got a decision or a line more), `reuse-scan.test.mjs` 7, `repo-scan.test.mjs` 8; lang-explore `smoke-pinned.test.mjs` 11, `code-shape.test.mjs` 178 (the wrapper's functions are all under 50 lines and a complexity of 4: the highest is `usageProblem`, 4), `network.test.mjs` 3 (the wrapper is in `prereg/`, which the scan does not read, and it imports no networking module and runs no git verb: nothing was widened), `stage-prereg-tools.test.mjs` 33 (the CLI pin's tests, which share `pin-cli.mjs`'s `cliPinProblems`).
+
+**The command of the one paid use** (the team lead; the owner's approval of 2026-11-20, about $0.11, cap $0.20). `explore.json` on `main` still pins 2.1.310, so the run names the file that pins 2.1.329 (PR 6's branch):
+```
+node spikes/lang-explore/prereg/smoke-pinned.mjs --explore <PR 6 checkout>/spikes/lang-explore/inputs/explore.json --out ~/rsd/lang-v2/smoke/<UTC stamp, e.g. 20261120T150000Z> --dry-run
+node spikes/lang-explore/prereg/smoke-pinned.mjs --explore <PR 6 checkout>/spikes/lang-explore/inputs/explore.json --out ~/rsd/lang-v2/smoke/<the same stamp>
+```
+It leaves `spikes/minigit-bench/test/fixtures/real/claude-2.1.329-bare-smoke/` (with `SMOKE.md`) in the checkout it runs from: commit it by path. What it does not do: it does not move v1's other pins (node, SDK, TypeScript stay v1's), and it prices the session with `inputs/prices-2026-10-29.json`, which holds CLI-billed rates for 2.1.289 and 2.1.310 only, so 2.1.329 is billed as published.
+
+
 ## Test leftovers — the C# helper, the start-of-run sweep, the audit, the container pass (E6)
 
 Every test that makes a folder outside its own process keeps the four promises of the leftovers rule: a name from one helper, an owner record, removal by its run, and collection by the next run when this one was killed. The tests of this repository get that from a helper in `tests/Bench.Tests/Leftovers/`. This section says what the helper is, what runs at the start and the end of a run, and what it does not cover.
