@@ -3,6 +3,7 @@
 // is removed. The tests of this file run one after the other: each uses the two CPU masks. A host that lacks the toolchains, bwrap or the snapshots is `hostLacks`.
 import { realHome as operatorHome } from '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -29,10 +30,21 @@ const REAL = loadExplore().value;
 const realHome = rigHome(operatorHome);
 const subject = { branch: 'test', sha: 'a'.repeat(40), harnessPath: 'spikes/lang-explore/explore.mjs', harnessIdentity: 'b'.repeat(12), pilotIdentity: 'c'.repeat(40) };
 
-/** A toy world for `ids`, or null (`hostLacks`) when this host cannot score here (no bwrap, or the real toolchains and snapshots are not prepared). */
-async function toyOrNull(t, ids, planTasks) {
+/**
+ * A copy of the pins whose CLI pin names `version`: the pinned copy is a script of its own that answers `--version` with it (the preflight asks the pinned copy, never the stub), in a folder the test owns,
+ * and the pin carries that script's path parts from the home and its sha256. Nothing else of the pins moves.
+ */
+function withCliVersion(explore, version) {
+  const file = path.join(tmpDir('o-cli-copy'), `claude-${version}`);
+  const text = `#!/bin/sh\necho "${version} (Claude Code)"\n`;
+  writeFileSync(file, text, { mode: 0o755 });
+  return { ...explore, cli: { ...explore.cli, version, pathParts: path.relative(realHome, file).split(path.sep), sha256: createHash('sha256').update(text).digest('hex') } };
+}
+
+/** A toy world for `ids`, or null (`hostLacks`) when this host cannot score here (no bwrap, or the real toolchains and snapshots are not prepared). `real` is the pins the toy copies. */
+async function toyOrNull(t, ids, planTasks, real = REAL) {
   if (!sandboxGate(t)) return null;
-  const toy = toyExplore({ real: REAL, home: realHome, ids, planTasks });
+  const toy = toyExplore({ real, home: realHome, ids, planTasks });
   const probe = await toy.worldFn({ home: realHome, work: tmpDir('o-toy-world'), task: resolveTask(toy.explore, ids[0]).value });
   if (!probe.ok) return hostLacks(t, probe.reason) && null;
   for (const id of ids) writeToyHeldout({ home: realHome, task: resolveTask(toy.explore, id).value });
@@ -56,6 +68,23 @@ test('The_rehearsal_runs_a_pair_end_to_end_for_free_for_each_of_tasks_02_03_and_
     assert.ok(note.startsWith(`# Exploratory pilot: task ${id} on the v1 bare harness, 2 session(s) (2031-02-03)`), `${id}: the task and the injected clock's day are in the note's title`);
     assert.ok(note.includes(bannerOf(task)), `${id}: the note carries its task's banner`);
     assert.match(note, new RegExp(`- Task: spec ${id} at `), `${id}: the note names the task's spec pin`);
+  }
+});
+
+test('A_rehearsal_whose_explore_pins_another_CLI_version_gets_a_stub_that_reports_that_version_and_its_init_read_back_holds', { timeout: 600_000 }, async t => {
+  const pinned = '2.1.329';
+  assert.notEqual(REAL.cli.version, pinned, 'the pins on main name another version, so a stub fixed at one version cannot pass both');
+  const toy = await toyOrNull(t, ['02'], undefined, withCliVersion(REAL, pinned));
+  if (!toy) return;
+  const said = [];
+  const r = await rehearse({ task: resolveTask(toy.explore, '02').value, io: { home: realHome, say: l => said.push(l), abort: { reason: null, exit: 130 }, signal: undefined, worldFn: toy.worldFn, subject } });
+  t.after(() => r.seriesDir && removeArea(r.seriesDir));
+  assert.equal(r.exit, 0, `${r.message}\n${JSON.stringify(r.checks)}\n${said.join('\n')}`);
+  const sessions = Object.values(loadSeries(r.seriesDir).value.map.sessions);
+  assert.equal(sessions.length, 2, 'both stacks ran');
+  for (const s of sessions) {
+    const meta = JSON.parse(readFileSync(path.join(r.seriesDir, 's', s.rid, 'meta.json'), 'utf8'));
+    assert.equal(meta.cliVersion, pinned, `${s.stack}: the stub's init event reported the pinned version`);
   }
 });
 

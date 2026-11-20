@@ -35,9 +35,9 @@ const prerequisitesOf = ({ io, series, task, heldout, loaded }) => async () => {
   return pins.ok ? ok({ calibration, heldout, world: { ...world, calibration }, token: `sk-ant-fake-${randomBytes(8).toString('hex')}`, prompts }) : pins;
 };
 
-/** The stub rig: v1's stub CLI behind a loopback stub upstream, a fake token home, the scripted quiet machine, the hello program as the work and one pass of scoring. */
-function seamsOf({ series, stub, fake, fill }) {
-  return { claudeBinary: stubClaude(path.join(series.dir, 'rehearsal')), planOver: { upstream: stub.upstream, ...PLAN_OVER }, preflightHome: fake, stub: true, machine: scriptedMachine(series.dir), scoreOver: { singlePass: true }, ...(fill ? { fill } : {}) };
+/** The stub rig: v1's stub CLI (reporting the CLI version the series pins, when its world loaded) behind a loopback stub upstream, a fake token home, the scripted quiet machine, the hello program as the work and one pass of scoring. */
+function seamsOf({ series, stub, fake, fill, cliVersion }) {
+  return { claudeBinary: stubClaude(path.join(series.dir, 'rehearsal'), 'claude-stub', { version: cliVersion }), planOver: { upstream: stub.upstream, ...PLAN_OVER }, preflightHome: fake, stub: true, machine: scriptedMachine(series.dir), scoreOver: { singlePass: true }, ...(fill ? { fill } : {}) };
 }
 
 /** The `io` of a rehearsal unit and its `close`. `task` is the pins entry of the unit's task. */
@@ -48,8 +48,9 @@ export async function rehearsalIo({ series, io, task }) {
   const heldout = rehearsalHeldout({ dir: path.join(exploreRoot(io.home), 'rehearsal-fixtures', task.id), task });
   const loaded = await (io.worldFn ?? loadWorld)({ home: io.home, work: path.join(series.dir, 'private'), task });
   const fill = loaded.ok ? quickReferenceFill({ world: loaded.value, task }) : null;
+  const cliVersion = loaded.ok ? loaded.value.explore.cli.version : undefined;
   return {
-    io: { ...io, seams: { ...seamsOf({ series, stub, fake, fill }), ...(io.seams ?? {}) }, runSeams: { prerequisitesFn: prerequisitesOf({ io, series, task, heldout, loaded }), ...(io.runSeams ?? {}) } },
+    io: { ...io, seams: { ...seamsOf({ series, stub, fake, fill, cliVersion }), ...(io.seams ?? {}) }, runSeams: { prerequisitesFn: prerequisitesOf({ io, series, task, heldout, loaded }), ...(io.runSeams ?? {}) } },
     close: async () => { await stub.close(); rmSync(fake, { recursive: true, force: true }); },
   };
 }

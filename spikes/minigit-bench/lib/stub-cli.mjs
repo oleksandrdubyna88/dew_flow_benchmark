@@ -57,7 +57,7 @@ const stubTranscriptLine = () => ({
   },
 });
 
-const STUB = (otlpBody, transcriptLine) => `#!/usr/bin/env node
+const STUB = (otlpBody, transcriptLine, version) => `#!/usr/bin/env node
 const fs = require('node:fs'); const http = require('node:http');
 const argv = process.argv.slice(2);
 const tools = argv[argv.indexOf('--tools') + 1].split(',').filter(t => t !== 'TodoWrite').map(t => (t === 'Agent' ? 'Task' : t));
@@ -68,7 +68,7 @@ const post = (url, body, headers) => new Promise((resolve, reject) => {
   req.on('error', reject); req.end(body);
 });
 (async () => {
-  say({ type: 'system', subtype: 'init', cwd: process.cwd(), session_id: 'stub-session', tools, mcp_servers: [], model: 'claude-sonnet-5-5', permissionMode: 'default', apiKeySource: 'none', claude_code_version: '2.1.310', memory_paths: { auto: process.env.CLAUDE_CONFIG_DIR + '/projects/-p/memory/' } });
+  say({ type: 'system', subtype: 'init', cwd: process.cwd(), session_id: 'stub-session', tools, mcp_servers: [], model: 'claude-sonnet-5-5', permissionMode: 'default', apiKeySource: 'none', claude_code_version: ${JSON.stringify(version)}, memory_paths: { auto: process.env.CLAUDE_CONFIG_DIR + '/projects/-p/memory/' } });
   const r = await post(process.env.ANTHROPIC_BASE_URL + '/v1/messages?beta=true', '{"model":"claude-sonnet-5-5","stream":true}', { authorization: 'Bearer ' + process.env.CLAUDE_CODE_OAUTH_TOKEN, 'anthropic-beta': 'oauth-2025-04-20' });
   await post(process.env.OTEL_EXPORTER_OTLP_ENDPOINT + '/v1/logs', ${JSON.stringify(otlpBody)}, {});
   fs.mkdirSync(process.env.CLAUDE_CONFIG_DIR + '/projects/-p', { recursive: true });
@@ -81,9 +81,15 @@ const post = (url, body, headers) => new Promise((resolve, reject) => {
 })();
 `;
 
-/** Write the stub into `dir` and return its path (executable). */
-export function stubClaude(dir, name = 'claude-stub') {
+const VERSION = /^\d+\.\d+\.\d+$/;
+
+/**
+ * Write the stub into `dir` and return its path (executable). Its init event reports `version` (v1's own pin by default): a rehearsal of a series that pins another CLI passes that pin, or the init read-back refuses the stub.
+ * The version goes into the stub's source, so it is `x.y.z` or the call throws and writes nothing (a caller that passes a pin gets a clear stop, never a stub that runs what the pin holds).
+ */
+export function stubClaude(dir, name = 'claude-stub', { version = '2.1.310' } = {}) {
+  if (!VERSION.test(version)) throw new Error(`the stub's version must be x.y.z, not ${JSON.stringify(version)}`);
   const file = path.join(dir, name);
-  writeFileSync(file, STUB(JSON.stringify(otlpPayload([{ name: 'api_request', tsMs: Date.now(), attrs: stubApiAttrs() }])), JSON.stringify(stubTranscriptLine())), { mode: 0o755 });
+  writeFileSync(file, STUB(JSON.stringify(otlpPayload([{ name: 'api_request', tsMs: Date.now(), attrs: stubApiAttrs() }])), JSON.stringify(stubTranscriptLine()), version), { mode: 0o755 });
   return file;
 }
