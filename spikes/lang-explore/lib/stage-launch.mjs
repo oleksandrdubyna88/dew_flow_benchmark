@@ -18,6 +18,7 @@ import { agentEnvVerdict, hostProbe, memoryCertification } from './stage-certify
 import { diskGate, freeBytesOf } from './stage-disk.mjs';
 import { withSlotHeldout } from './stage-heldout.mjs';
 import { PREREG_DIR } from './stage-record.mjs';
+import { quickExplore } from './quick.mjs';
 import { resolveTask } from './tasks.mjs';
 import { FREEZE_TASKS } from './workspaces-sources.mjs';
 
@@ -27,13 +28,13 @@ const seam = (io, name, fallback) => io.stage?.[name] ?? fallback;
 
 // ---- D15's environment -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-/** The environment the agent box is launched with (`agentEnv`, as `session-launch.mjs` builds it): the pins' `envExtra` and culture over the base. The paths in it are placeholders: only its keys and the registered values are judged. */
-const agentBoxEnv = explore => agentEnv({ layout: layoutPaths('/stage-env-check', 'check'), dummyToken: dummyToken('check'), cellId: 'check', nodeDir: '/node', locale: explore.locale, extra: explore.envExtra });
+/** The environment the agent box is launched with (`agentEnv`, as `session-launch.mjs` builds it) from `explore` as the box's world has it, the quick profile (`quickExplore`): its `envExtra` and culture over the base. The paths in it are placeholders: only its keys and the registered values are judged. */
+export const agentBoxEnv = explore => agentEnv({ layout: layoutPaths('/stage-env-check', 'check'), dummyToken: dummyToken('check'), cellId: 'check', nodeDir: '/node', locale: explore.locale, extra: explore.envExtra });
 
-/** `ok(env)` | `fail` for an environment that cannot even be built (an extra that clashes with a base key). */
+/** `ok(env)` | `fail` for an environment that cannot even be built (an extra that clashes with a base key). The pins are turned into the quick profile first, as the agent box's world is (`run-ctx.mjs`), so the keys the profile adds are judged too. */
 function envOf({ explore, io }) {
   try {
-    return ok(seam(io, 'agentEnvFn', agentBoxEnv)(explore));
+    return ok(seam(io, 'agentEnvFn', agentBoxEnv)(quickExplore(explore, io.home)));
   } catch (e) {
     return fail(`the agent box's environment cannot be built: ${e.message}`, { exit: CONFIG_EXIT });
   }

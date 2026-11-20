@@ -6,6 +6,8 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { readLedger } from '../../minigit-bench/lib/ledger.mjs';
+import { loadExplore } from '../lib/inputs.mjs';
+import { agentBoxEnv, envStep } from '../lib/stage-launch.mjs';
 import { exploreRoot } from '../lib/paths.mjs';
 import { ledgerFileOf, runMapFileOf } from '../lib/series.mjs';
 import { stageInit } from '../lib/stage-init.mjs';
@@ -226,4 +228,21 @@ test('stage_init_checks_the_task_repository_at_the_records_W_for_a_paid_series_a
   assert.equal((await stageInit({ values: { rehearsal: true, 'task-repo': '/fake/task-repo' }, io: rehearsal })).exit, 0, 'a rehearsal holds no record to compare with');
   const changed = initIo({ stage: { recordFn: () => at(COMMIT), workspacesFn: async () => ok({ commit: COMMIT, findings: ['node/06-blog-api tree hash differs'] }) } });
   assert.match((await stageInit({ values: { 'task-repo': '/fake/task-repo' }, io: changed })).message, /node\/06-blog-api tree hash differs/, 'a changed workspace is still named');
+});
+
+// ---- Opus review (PR 4), O5: the checked environment is the one the agent box is built from ----------------------------------------------------------------------------------------------------------------------
+
+test('The_environment_check_judges_the_quick_profile_the_agent_box_is_built_from_and_a_heap_key_that_only_that_profile_adds_is_refused', () => {
+  const explore = loadExplore().value;
+  const seen = [];
+  const io = (agentEnvFn, home = '/invented/home') => ({ home, stage: { agentEnvFn } });
+  const clean = envStep({ explore, io: io(e => { seen.push(e); return agentBoxEnv(e); }) });
+  assert.equal(clean.ok, true, clean.reason);
+  assert.equal(seen[0].quickProfile, true, 'the environment is built from the quick profile (`quickExplore`), as the agent box is');
+  const real = envStep({ explore, io: { home: '/invented/home' } });
+  assert.equal(real.ok, true, real.reason);
+  assert.ok(real.value.boxKeys.agent.includes('DOTNET_ROOT'), `the default builder judges the keys the box really has (the quick profile's DOTNET_ROOT): ${real.value.boxKeys.agent.join(", ")}`);
+  const refused = envStep({ explore, io: io(e => ({ ...agentBoxEnv(e), ...(e.quickProfile ? { DOTNET_GCHeapHardLimit: '0x1c000000' } : {}) })) });
+  assert.equal(refused.ok, false, 'a heap key that only the quick profile adds is refused');
+  assert.ok(refused.problems.some(p => p.includes('DOTNET_GCHeapHardLimit')), refused.problems?.join(' | '));
 });
