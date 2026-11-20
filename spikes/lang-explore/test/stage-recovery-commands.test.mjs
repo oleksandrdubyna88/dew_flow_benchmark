@@ -10,7 +10,8 @@ import { readRunMap, writeRunMap } from '../../minigit-bench/lib/run-map.mjs';
 import { acquireSeriesLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { runMapFileOf } from '../lib/series.mjs';
 import { stageRun } from '../lib/stage-run.mjs';
-import { GO_ALL, GO_PILOT, PILOT_GO_LINE, readbackHolds, runRig } from './stage-run-fixture.mjs';
+import { readbackSlots } from '../lib/stage-schedule.mjs';
+import { GO_ALL, GO_PILOT, PILOT_GO_LINE, SEED, SLOTS, readbackHolds, runRig } from './stage-run-fixture.mjs';
 import { backupFolder, cacheFilesOf, writeSession } from './stage-fixture.mjs';
 
 /** One command through `main`: `{ exit, lines }`. The seams are the rig's own (its home, its registered amendments file). */
@@ -147,4 +148,20 @@ test('Each_recovery_verb_takes_the_series_lock_and_a_held_lock_refuses_it_naming
     held.value.release();
   }
   assert.equal((await verb(rig, ['stage-archive', '--series', rig.dir, '--to', backup])).exit, 0, 'the control: with the lock free the same call goes through');
+});
+
+// ---- Opus review (PR 4), O3: the free judges the run-map as `stage-run` reads it, under the series lock -----------------------------------------------------------------------------------------------------------
+
+test('stage_free_keeps_every_session_of_a_read_back_slot_whose_one_session_is_refuted_and_owes_its_re_run', async t => {
+  const { rig, sessionsOf } = await seriesWith(3);
+  const slot = readbackSlots({ seed: SEED })[0].slot;
+  const rids = sessionsOf(slot);
+  assert.equal(rids.length, 2, 'the read-back slot has both sessions scored');
+  const line = (verdict, stack) => `2026-11-23 | G-1 | ${verdict} | ${SLOTS[slot - 1].rids[stack][0]} | ~/rsd/lang-v2/e.md | the judge`;
+  appendFileSync(rig.files.amendmentsFile, `${line('holds', 'csharp')}\n${line('refuted', 'node')}\n`);
+  assert.equal((await verb(rig, ['stage-archive', '--series', rig.dir, '--to', backupFolder(t)])).exit, 0);
+  const freed = await verb(rig, ['stage-free', '--series', rig.dir]);
+  assert.equal(freed.exit, 0, freed.text);
+  assert.deepEqual(rids.map(rid => cacheLeft(rig.dir, rid)), [4, 4], 'a refuted session is a void whose re-run is owed: the slot is not finished, so neither of its sessions is freed');
+  assert.deepEqual(sessionsOf(1).map(rid => cacheLeft(rig.dir, rid)), [0, 0], 'a finished slot is freed as usual');
 });

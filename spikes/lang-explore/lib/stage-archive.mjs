@@ -238,24 +238,31 @@ function freeSession({ series, rid, archive, now }) {
   return { rid, removed: removable.map(r => r.entry.rel), bytes: removable.reduce((n, r) => n + r.entry.size, 0), kept };
 }
 
-function freeLocked({ series, unreadSlots, now }) {
+/** `ok({ map, unreadSlots })` the caller's `reading` gave under the lock, or a `fail`: `unreadSlots` must be an array (a reading that does not say which slots wait is no reading). */
+function readUnderLock(reading) {
+  const read = reading();
+  return !read.ok || Array.isArray(read.value?.unreadSlots) ? read : fail('stage-free: the reading did not say which read-back slots still wait (unreadSlots is not a list): nothing is freed');
+}
+
+function freeLocked({ series, reading, now }) {
   const archive = verifiedArchive(series);
-  const map = archive.ok ? readRunMap(runMapFileOf(series)) : archive;
-  if (!map.ok) return map;
-  const eligible = eligibleRids({ map: map.value, unreadSlots });
+  const read = archive.ok ? readUnderLock(reading) : archive;
+  if (!read.ok) return read;
+  const eligible = eligibleRids(read.value);
   const held = new Set(freedRids(series));
   const done = eligible.filter(rid => !held.has(rid)).map(rid => freeSession({ series, rid, archive: archive.value, now }));
   return ok({ sessions: done.filter(d => d.removed.length > 0).map(d => d.rid), removed: done.flatMap(d => d.removed), bytes: done.reduce((n, d) => n + d.bytes, 0), kept: done.flatMap(d => d.kept), alreadyFreed: eligible.filter(rid => held.has(rid)) });
 }
 
 /**
- * `stage-free`: remove the three cache folders (`FREEABLE`) of sessions that are final in a finished slot, each file only when the newest verified archive lists it with the same sha256 and its archived copy has it too. `unreadSlots` (REQUIRED, an array: a call without it is refused) are the
- * read-back slots whose dated lines do not exist yet (`unreadReadbackSlots`): such a slot is no finished slot for this verb. A session that already holds a `freed.json` is not freed again (its list names the one archive that holds its files): it is named in
+ * `stage-free`: remove the three cache folders (`FREEABLE`) of sessions that are final in a finished slot, each file only when the newest verified archive lists it with the same sha256 and its archived copy has it too. `reading` (REQUIRED, a function: a call without it is refused) is
+ * called UNDER the series lock and gives `ok({ map, unreadSlots })`: the run-map as `stage-run` reads it (`mapAsRead`: a session a dated `refuted` line names is a void whose re-run is owed, so its slot is not finished) and the read-back slots whose dated
+ * lines do not exist yet (`unreadReadbackSlots`); such a slot is no finished slot for this verb. A `fail` of the reading ends the free with its sentence. A session that already holds a `freed.json` is not freed again (its list names the one archive that holds its files): it is named in
  * `alreadyFreed`. A final session's caches do not change after it ends, so nothing is lost; `stage-restore` it first to free it again. -> `ok({ sessions, removed, bytes, kept, alreadyFreed })` (`kept` names every file left, with the reason) | `fail`.
  */
-export function freeSeries({ series, unreadSlots, now = systemClock }) {
-  if (!Array.isArray(unreadSlots)) return fail('stage-free needs unreadSlots, the read-back slots whose dated lines do not exist yet (an empty list says none wait): without it a slot that still awaits its judge could be freed');
-  return withSeriesLock(series, () => freeLocked({ series, unreadSlots, now }));
+export function freeSeries({ series, reading, now = systemClock }) {
+  if (typeof reading !== 'function') return fail('stage-free needs a reading (a function that gives the run-map as `stage-run` reads it and the unreadSlots, the read-back slots whose dated lines do not exist yet): without it a slot that still awaits its judge could be freed');
+  return withSeriesLock(series, () => freeLocked({ series, reading, now }));
 }
 
 // ---- restore -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -73,13 +73,19 @@ export function cmdStageArchive(values, io) {
   return finish({ io, result: archiveSeries({ series: dir, to: path.resolve(values.to), now: io.now ?? systemClock, final: openReasonOf({ dir, io }) === null, progress: io.say }), lines: archiveLines });
 }
 
-/** The read-back slots whose dated lines are not there yet (a slot `stage-free` leaves alone): `ok([slot])` | `fail` (gates that cannot be read). */
-function unreadSlotsOf({ series, io }) {
-  const read = readGates({ series, io });
-  if (!read.ok) return read;
-  const { seed, seedRevealed, readbackLines } = read.value.gates;
-  return ok(unreadReadbackSlots({ map: mapAsRead({ series, read: read.value }), slots: seedRevealed ? slotsOf({ seed }) : [], readbackLines }).map(row => row.slot));
+/** `ok({ map, unreadSlots })` of a series and its gates as read now: the run-map as `stage-run` reads it (`mapAsRead`, a dated `refuted` line applied) and the read-back slots whose dated lines are not there yet. */
+function readingFrom({ series, read }) {
+  const { seed, seedRevealed, readbackLines } = read.gates;
+  const map = mapAsRead({ series, read });
+  return ok({ map, unreadSlots: unreadReadbackSlots({ map, slots: seedRevealed ? slotsOf({ seed }) : [], readbackLines }).map(row => row.slot) });
 }
+
+/** The reading `stage-free` takes under the series lock: the series and its gates are opened again there, so what may be freed is judged from the files as they are when the lock is held. -> `() => ok({ map, unreadSlots }) | fail` */
+const readingOf = ({ dir, io }) => () => {
+  const series = openStage({ seriesDir: dir, io });
+  const read = series.ok ? readGates({ series: series.value, io }) : series;
+  return read.ok ? readingFrom({ series: series.value, read: read.value }) : read;
+};
 
 const alreadyLine = r => (r.alreadyFreed.length === 0 ? [] : [`already freed, left alone (stage-restore first to free again): ${r.alreadyFreed.join(', ')}`]);
 
@@ -88,9 +94,9 @@ const freeLines = r => [`freed ${r.removed.length} file(s), ${r.bytes} bytes, of
 /** `stage-free --series <dir>`: remove the three cache folders of final sessions in finished slots, each file only when the verified archive proves it; a read-back slot waits for its dated lines. */
 export function cmdStageFree(values, io) {
   const series = seriesOfValues({ values, io, verb: 'stage-free' });
-  const unread = series.ok ? unreadSlotsOf({ series: series.value, io }) : series;
-  if (!unread.ok) return refused(io, unread.reason);
-  return finish({ io, result: freeSeries({ series: series.value.dir, unreadSlots: unread.value, now: io.now ?? systemClock }), lines: freeLines });
+  if (!series.ok) return refused(io, series.reason);
+  const dir = series.value.dir;
+  return finish({ io, result: freeSeries({ series: dir, reading: readingOf({ dir, io }), now: io.now ?? systemClock }), lines: freeLines });
 }
 
 const restoreLines = r => [`restored ${r.restored.length} session(s): ${r.restored.join(', ') || 'none'}`];

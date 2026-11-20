@@ -7,6 +7,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { appendLedger, readLedger } from '../../minigit-bench/lib/ledger.mjs';
 import { openSeries, planSession, readRunMap, transition, writeRunMap } from '../../minigit-bench/lib/run-map.mjs';
+import { ok } from '../../minigit-bench/lib/result.mjs';
 import { loadGrowth } from '../lib/growth.mjs';
 import { ledgerFileOf, runMapFileOf } from '../lib/series.mjs';
 import { FREEABLE, archiveSeries, freeSeries, freedSessionProblem, restoreSeries } from '../lib/stage-archive.mjs';
@@ -30,6 +31,8 @@ const archived = t => {
 const archiveEntries = series => JSON.parse(readFileSync(path.join(series, 'archive.json'), 'utf8')).archives;
 const flipByte = file => { const bytes = readFileSync(file); bytes[0] ^= 0xff; writeFileSync(file, bytes); };
 const freedFiles = rids => rids.flatMap(cacheFilesOf);
+/** The reading a caller gives `freeSeries`: the run-map as it is on disk and the read-back slots that wait. */
+const readingOf = (series, unreadSlots = []) => () => { const map = readRunMap(runMapFileOf(series)); return map.ok ? ok({ map: map.value, unreadSlots }) : map; };
 const freedFileOf = (series, rid) => JSON.parse(readFileSync(path.join(series, 's', rid, 'freed.json'), 'utf8'));
 
 test('A_copy_that_differs_from_the_source_in_one_byte_fails_the_archives_verification', t => {
@@ -61,7 +64,7 @@ test('stage_free_removes_only_the_three_cache_folders_of_final_sessions_in_finis
   assert.deepEqual([...FREEABLE], ['box/nuget', 'box/npm', 'box/home/.dotnet'], 'the closed list');
   const { series } = archived(t);
   const before = snapshotOf(series, { skip: SKIP });
-  const freed = freeSeries({ series, unreadSlots: [] });
+  const freed = freeSeries({ series, reading: readingOf(series) });
   assert.equal(freed.ok, true, freed.reason);
   const after = snapshotOf(series, { skip: SKIP });
   const gone = freedFiles([ridOf(1, 'csharp'), ridOf(1, 'node')]);
@@ -85,7 +88,7 @@ test('stage_free_removes_nothing_that_is_not_in_the_verified_archive_with_the_sa
   appendFileSync(changed, 'changed after the archive');
   const copied = path.join(archiveEntries(series)[0].copy, 's', ridOf(1, 'node'), 'box', 'npm', '_cacache', 'c.tgz');
   flipByte(copied);
-  const freed = freeSeries({ series, unreadSlots: [] });
+  const freed = freeSeries({ series, reading: readingOf(series) });
   assert.equal(freed.ok, true, freed.reason);
   assert.equal(existsSync(added), true, 'a file the archive does not list is kept');
   assert.equal(existsSync(changed), true, 'a file whose hash is not the listed one is kept');
@@ -99,7 +102,7 @@ test('stage_free_removes_nothing_that_is_not_in_the_verified_archive_with_the_sa
 
 test('stage_free_refuses_when_the_archive_is_not_at_its_place_or_no_longer_verifies', t => {
   const bare = seriesFolder(t, MAP, { cacheBytes: 50 });
-  const none = freeSeries({ series: bare, unreadSlots: [] });
+  const none = freeSeries({ series: bare, reading: readingOf(bare) });
   assert.equal(none.ok, false, 'no archive recorded');
   assert.match(none.reason, /stage-archive/, 'it names the verb that makes one');
   const cases = [
@@ -111,7 +114,7 @@ test('stage_free_refuses_when_the_archive_is_not_at_its_place_or_no_longer_verif
     const { series } = archived(t);
     const before = snapshotOf(series, { skip: SKIP });
     damage(archiveEntries(series)[0]);
-    const refused = freeSeries({ series, unreadSlots: [] });
+    const refused = freeSeries({ series, reading: readingOf(series) });
     assert.equal(refused.ok, false, `${what}: refused`);
     assert.deepEqual(snapshotOf(series, { skip: SKIP }), before, `${what}: nothing was removed and nothing was written`);
   }
@@ -120,7 +123,7 @@ test('stage_free_refuses_when_the_archive_is_not_at_its_place_or_no_longer_verif
 test('stage_restore_brings_a_freed_session_back_to_its_listed_bytes_and_a_copy_that_differs_is_refused', t => {
   const { series } = archived(t);
   const before = snapshotOf(series, { skip: SKIP });
-  assert.equal(freeSeries({ series, unreadSlots: [] }).ok, true);
+  assert.equal(freeSeries({ series, reading: readingOf(series) }).ok, true);
   const rid = ridOf(1, 'csharp');
   const restored = restoreSeries({ series, rid });
   assert.equal(restored.ok, true, restored.reason);
@@ -132,7 +135,7 @@ test('stage_restore_brings_a_freed_session_back_to_its_listed_bytes_and_a_copy_t
   assert.equal(bad.ok, true, 'a second session restores on its own');
   assert.deepEqual(snapshotOf(series, { skip: SKIP }), before, 'every byte of the series is as it was before anything was freed');
   const again = archived(t);
-  assert.equal(freeSeries({ series: again.series, unreadSlots: [] }).ok, true);
+  assert.equal(freeSeries({ series: again.series, reading: readingOf(again.series) }).ok, true);
   const copy = path.join(archiveEntries(again.series)[0].copy, 's', rid, 'box', 'npm', '_cacache', 'c.tgz');
   flipByte(copy);
   const refused = restoreSeries({ series: again.series, rid });
@@ -184,7 +187,7 @@ test('A_series_that_halted_on_the_disk_rule_was_archived_freed_and_resumed_ends_
   assert.equal(stopped.go, false, 'the disk rule halts before slot 3');
   const to = backupFolder(t);
   assert.equal(archiveSeries({ series: halted, to, now: NOW }).ok, true);
-  const freed = freeSeries({ series: halted, unreadSlots: [] });
+  const freed = freeSeries({ series: halted, reading: readingOf(halted) });
   assert.equal(freed.ok, true, freed.reason);
   assert.equal(freed.value.sessions.length, 4, 'the four sessions of slots 1 and 2');
   assert.equal(diskGate({ ...gate, freeBytes: 10 ** 13 }).go, true, 'the space is there: the series goes on');
@@ -201,7 +204,7 @@ test('A_series_that_halted_on_the_disk_rule_was_archived_freed_and_resumed_ends_
 test('The_final_hash_list_and_the_last_archive_refuse_a_series_that_still_holds_a_freed_session', t => {
   const { series, to } = archived(t);
   assert.equal(freedSessionProblem(series), null, 'nothing is freed yet');
-  assert.equal(freeSeries({ series, unreadSlots: [] }).ok, true);
+  assert.equal(freeSeries({ series, reading: readingOf(series) }).ok, true);
   const problem = freedSessionProblem(series);
   assert.match(problem, /stage-restore/, 'it names the verb that brings the folders back');
   assert.ok(problem.includes(ridOf(1, 'csharp')) && problem.includes(ridOf(1, 'node')), `and the sessions: ${problem}`);
@@ -229,14 +232,14 @@ test('stage_free_leaves_a_read_back_slot_alone_until_its_dated_lines_exist', t =
   const rbRids = [ridOf(rb.slot, 'csharp'), ridOf(rb.slot, 'node')];
   const ofSlot = snap => Object.fromEntries(Object.entries(snap).filter(([file]) => rbRids.some(rid => file.startsWith(`s/${rid}/`))));
   const before = snapshotOf(series, { skip: SKIP });
-  const held = freeSeries({ series, unreadSlots: unread.map(u => u.slot) });
+  const held = freeSeries({ series, reading: readingOf(series, unread.map(u => u.slot)) });
   assert.equal(held.ok, true, held.reason);
   assert.deepEqual(ofSlot(snapshotOf(series, { skip: SKIP })), ofSlot(before), 'no file of the read-back slot is touched: the judge\'s reading comes first');
   assert.equal(held.value.sessions.some(rid => rbRids.includes(rid)), false, 'and the verb says it freed none of its sessions');
   assert.equal(rb.slot > 1 ? held.value.sessions.length > 0 : true, true, 'the finished slots before it are freed as usual');
   const read = unreadReadbackSlots({ map, slots: SLOTS, readbackLines: [line('csharp'), line('node')] });
   assert.deepEqual(read, [], 'with both dated lines the slot no longer awaits');
-  const freed = freeSeries({ series, unreadSlots: read.map(u => u.slot) });
+  const freed = freeSeries({ series, reading: readingOf(series, read.map(u => u.slot)) });
   assert.deepEqual(freed.value.sessions.sort(), rbRids.sort(), 'and the verb frees its sessions');
 });
 
@@ -281,7 +284,7 @@ test('Two_paths_overlap_when_they_are_equal_or_one_is_inside_the_other_and_a_lon
 test('A_session_that_is_already_freed_is_named_and_left_alone_by_the_next_free_and_stage_restore_still_brings_it_back_from_its_own_archive', t => {
   const { series } = archived(t);
   const before = snapshotOf(series, { skip: SKIP });
-  assert.equal(freeSeries({ series, unreadSlots: [] }).ok, true, 'archive A, then the first free');
+  assert.equal(freeSeries({ series, reading: readingOf(series) }).ok, true, 'archive A, then the first free');
   const rids = [ridOf(1, 'csharp'), ridOf(1, 'node')];
   const late = path.join(series, 's', rids[0], 'box', 'npm', 'late.tgz');
   mkdirSync(path.dirname(late), { recursive: true });
@@ -289,7 +292,7 @@ test('A_session_that_is_already_freed_is_named_and_left_alone_by_the_next_free_a
   const second = archiveSeries({ series, to: backupFolder(t), now: NOW });
   assert.equal(second.ok, true, `archive B at another place: ${second.reason}`);
   const named = freedFileOf(series, rids[0]);
-  const again = freeSeries({ series, unreadSlots: [] });
+  const again = freeSeries({ series, reading: readingOf(series) });
   assert.equal(again.ok, true, again.reason);
   assert.equal(existsSync(late), true, 'the second free removes nothing in a session that is already freed');
   assert.deepEqual(again.value.sessions, [], 'it frees no session');
@@ -303,16 +306,17 @@ test('A_session_that_is_already_freed_is_named_and_left_alone_by_the_next_free_a
 
 // ---- coai code round 1 (PR 4), C1: a free that is not told the unread slots is refused ------------------------------------------------------------------------------------------------------------------------------------
 
-test('A_free_that_is_not_given_the_unread_slots_is_refused_with_a_sentence_and_removes_nothing', t => {
+test('A_free_that_is_not_given_a_reading_with_the_unread_slots_is_refused_with_a_sentence_and_removes_nothing', t => {
   const { series } = archived(t);
   const before = snapshotOf(series, { skip: SKIP });
-  for (const args of [{ series }, { series, unreadSlots: undefined }, { series, unreadSlots: '3' }]) {
+  const noList = () => ok({ map: readRunMap(runMapFileOf(series)).value, unreadSlots: '3' });
+  for (const [what, args] of [['no reading', { series }], ['a reading that is not a function', { series, reading: [] }], ['a reading without a list of unread slots', { series, reading: noList }]]) {
     const refused = freeSeries(args);
-    assert.equal(refused.ok, false, `${JSON.stringify(args.unreadSlots)}: refused`);
-    assert.match(refused.reason, /unreadSlots/, 'the sentence names the missing argument');
-    assert.deepEqual(snapshotOf(series, { skip: SKIP }), before, 'nothing was removed and nothing was written');
+    assert.equal(refused.ok, false, `${what}: refused`);
+    assert.match(refused.reason, /reading|unreadSlots/, `${what}: the sentence names what is missing`);
+    assert.deepEqual(snapshotOf(series, { skip: SKIP }), before, `${what}: nothing was removed and nothing was written`);
   }
-  assert.equal(freeSeries({ series, unreadSlots: [] }).ok, true, 'an empty list is an answer: no slot waits');
+  assert.equal(freeSeries({ series, reading: readingOf(series) }).ok, true, 'an empty list is an answer: no slot waits');
 });
 
 // ---- coai code round 1 (PR 4), C2: a long operation says its progress ----------------------------------------------------------------------------------------------------------------------------------------------------
@@ -333,7 +337,7 @@ test('Stage_archive_says_its_progress_in_the_listing_the_copying_and_the_verifyi
     assert.equal(own.at(-1), `${phase}: ${total} of ${total} file(s)`, `${phase} ends at the total`);
   }
   assert.ok(indexOfPhase(lines, 'listing') < indexOfPhase(lines, 'copying') && indexOfPhase(lines, 'copying') < indexOfPhase(lines, 'verifying'), 'in the order of the work');
-  assert.equal(freeSeries({ series, unreadSlots: [] }).ok, true);
+  assert.equal(freeSeries({ series, reading: readingOf(series) }).ok, true);
   const rid = ridOf(1, 'csharp');
   const restoring = [];
   assert.equal(restoreSeries({ series, rid, progress: line => restoring.push(line), progressEvery: 3 }).ok, true);
@@ -344,7 +348,7 @@ test('Stage_archive_says_its_progress_in_the_listing_the_copying_and_the_verifyi
 
 test('Without_a_progress_callback_a_long_operation_says_nothing_and_does_the_same_work', t => {
   const { series } = archived(t);
-  assert.equal(freeSeries({ series, unreadSlots: [] }).ok, true);
+  assert.equal(freeSeries({ series, reading: readingOf(series) }).ok, true);
   assert.equal(restoreSeries({ series }).ok, true, 'a restore without a callback goes through');
 });
 
@@ -365,7 +369,7 @@ test('A_cache_folder_that_is_a_link_out_of_the_series_or_lies_under_one_is_kept_
     for (const name of readdirSync(outside, { recursive: true }).map(String).filter(n => lstatSync(path.join(outside, n)).isFile())) chmodSync(path.join(outside, name), 0o444);
     const before = stateOf(outside);
     const bytesBefore = snapshotOf(outside);
-    const freed = freeSeries({ series, unreadSlots: [] });
+    const freed = freeSeries({ series, reading: readingOf(series) });
     assert.equal(freed.ok, true, `${linked}: the free does not throw or fail: ${freed.reason}`);
     assert.deepEqual(stateOf(outside), before, `${linked}: nothing outside the series changed its mode, and its empty folder is still there`);
     assert.deepEqual(snapshotOf(outside), bytesBefore, `${linked}: and no file outside was removed`);
