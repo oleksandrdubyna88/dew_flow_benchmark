@@ -146,6 +146,24 @@ test('A_size_that_cannot_be_read_is_a_refusal_with_exit_4_and_no_ledger_line_and
   assert.deepEqual(readLedger(ledgerFile).map(l => l.event), ['disk-reserve'], 'and writes its event line');
 });
 
+// ---- Opus review (PR 4), O7: a freed.json whose sizes are missing or damaged is named and refused, never counted as 0 ---------------------------------------------------------------------------------------------------
+
+test('A_freed_json_with_a_missing_or_damaged_size_is_named_and_the_gate_refuses_instead_of_counting_it_as_zero', t => {
+  const map = withPilot(mapWith(finished(2)));
+  const args = { ...gateArgs(t, map), freeBytes: 10 ** 13, slot: 3 };
+  const file = path.join(args.series, 's', ridOf(1, 'csharp'), 'freed.json');
+  const item = over => ({ path: 'box/npm/_cacache/gone.tgz', bytes: 1000, sha256: 'a'.repeat(64), mode: 420, ...over });
+  writeFileSync(file, `${JSON.stringify({ removed: [item({})] })}\n`);
+  assert.equal(diskGate(args).go, true, 'the control: a freed.json with its sizes is counted');
+  for (const [what, text] of [['a size missing', { removed: [item({ bytes: undefined })] }], ['a size that is text', { removed: [item({ bytes: '1000' })] }], ['a negative size', { removed: [item({ bytes: -1 })] }], ['no list at all', { archive: {} }]]) {
+    writeFileSync(file, `${JSON.stringify(text)}\n`);
+    const refused = diskGate(args);
+    assert.equal(refused.go, false, `${what}: refused`);
+    assert.equal(refused.exit, 4, `${what}: a refusal, not a halt`);
+    assert.ok(refused.reason.includes(file), `${what}: the file is named: ${refused.reason}`);
+  }
+});
+
 test('The_session_size_the_disk_rule_reads_is_the_larger_of_the_registered_floor_and_this_series_own_largest_and_no_file_is_written', t => {
   const map = slotsDone(2);
   const series = seriesFolder(t, map, { cacheBytes: 100 });

@@ -49,7 +49,7 @@ function freedOf(dir) {
 /** The bytes a freed session's list still owes: the listed files that are no longer on disk, at their listed size. */
 function freedBytes(dir) {
   const freed = freedOf(dir);
-  return (freed?.removed ?? []).filter(f => !existsSync(path.join(dir, f.path))).reduce((n, f) => n + (Number.isSafeInteger(f.bytes) ? f.bytes : 0), 0);
+  return (freed?.removed ?? []).filter(f => !existsSync(path.join(dir, f.path))).reduce((n, f) => n + f.bytes, 0);
 }
 
 /** One session folder's size: what it holds plus what its `freed.json` lists as removed (a freed session counts at the size it had). */
@@ -57,9 +57,26 @@ export const sessionBytesOf = dir => folderBytes(dir) + freedBytes(dir);
 
 const isEnded = s => s.status === 'ran' || s.status === 'scored';
 
-/** The sentences for a `freed.json` that cannot be read (its sizes would be missing from the count). */
-const freedListProblems = ({ series, map }) => Object.values(map?.sessions ?? {}).filter(isEnded)
-  .filter(s => freedOf(sessionDir(series, s.rid))?.unreadable !== undefined).map(s => `${path.join(sessionDir(series, s.rid), FREED_FILE)} cannot be read: what the session held is unknown`);
+const hasSize = f => Number.isSafeInteger(f?.bytes) && f.bytes >= 0;
+
+/** The files a freed list holds with a missing or damaged size, or null when it holds no list. */
+const badSizes = freed => (Array.isArray(freed.removed) ? freed.removed.filter(f => !hasSize(f)) : null);
+
+function freedSentence({ file, freed }) {
+  if (freed.unreadable !== undefined) return `${file} cannot be read: what the session held is unknown`;
+  const bad = badSizes(freed);
+  if (bad === null) return `${file} holds no list of removed files: what the session held is unknown`;
+  return bad.length === 0 ? null : `${file} lists ${bad.length} file(s) with a missing or damaged size (${bad.slice(0, 3).map(f => f?.path).join(', ')}): what the session held is unknown`;
+}
+
+/** The sentence for one session folder's `freed.json` whose sizes cannot be counted (it cannot be read, holds no list, or lists a file with a missing or damaged size), or null: such a size is never counted as 0. */
+function freedProblem(dir) {
+  const freed = freedOf(dir);
+  return freed === null ? null : freedSentence({ file: path.join(dir, FREED_FILE), freed });
+}
+
+/** The sentences for every `freed.json` of an ended session whose sizes cannot be counted. */
+const freedListProblems = ({ series, map }) => Object.values(map?.sessions ?? {}).filter(isEnded).map(s => freedProblem(sessionDir(series, s.rid))).filter(problem => problem !== null);
 
 /** The size the rule reads for one session folder, from the registered floor and this series: `{ bytes, source: 'floor' | 'series' }`. A session that has not ended is not read. Written nowhere. `bytesOf(dir)` is the seam that sizes a session folder (`sessionBytesOf`). */
 export function sessionFloor({ floorBytes, series, map, bytesOf = sessionBytesOf }) {
