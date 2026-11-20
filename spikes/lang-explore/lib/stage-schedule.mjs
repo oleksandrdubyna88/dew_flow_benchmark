@@ -13,6 +13,8 @@ export const TASK_KINDS = Object.freeze({ '04': 'web', '05': 'daemon', '06': 'we
 export const READBACK_ROW = 'G-1';
 
 export const STAGE_ROUNDS = 5;
+/** The data slots of Stage 1: every task once in every round. */
+export const DATA_SLOTS = STAGE_ROUNDS * FREEZE_TASKS.length;
 /** The run-map kind of a data session: the slot's number is its `pair`. */
 export const DATA_KIND = 'data';
 const ATTEMPTS = Array.from({ length: MAX_ATTEMPTS }, (_, i) => i + 1);

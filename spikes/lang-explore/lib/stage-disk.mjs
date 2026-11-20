@@ -13,15 +13,13 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { systemClock } from './clock.mjs';
 import { diskRuleVerdict, growthProblem } from './growth.mjs';
 import { MAX_ATTEMPTS, STACK_ORDER, isVoid, stateOfSessions } from './series.mjs';
-import { STAGE_ROUNDS, pilotPlan } from './stage-schedule.mjs';
-import { FREEZE_TASKS } from './workspaces-sources.mjs';
+import { FREED_FILE } from './stage-archive.mjs';
+import { DATA_SLOTS, pilotPlan } from './stage-schedule.mjs';
 import { walkEntries } from './workspaces-tree.mjs';
 
 export const HALT_EXIT = 3;
 export const RESERVE_HALT = 'disk-reserve';
 export const RULE_HALT = 'disk-rule';
-const FREED_FILE = 'freed.json';
-const DATA_SLOTS = STAGE_ROUNDS * FREEZE_TASKS.length;
 const FINAL_STATES = new Set(['done', 'void-final', 'stopped']);
 
 const wholePositive = n => Number.isSafeInteger(n) && n > 0;

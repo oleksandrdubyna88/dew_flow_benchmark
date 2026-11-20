@@ -15,17 +15,15 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { readRunMap } from '../../minigit-bench/lib/run-map.mjs';
 import { systemClock } from './clock.mjs';
 import { isVoid, pairComplete, runMapFileOf } from './series.mjs';
-import { STAGE_ROUNDS } from './stage-schedule.mjs';
+import { DATA_SLOTS } from './stage-schedule.mjs';
 import { mapSaying } from './stage-progress.mjs';
 import { copyProblems, hashAt, listSeries, listText, parseList, sha256Text } from './stage-list.mjs';
-import { FREEZE_TASKS } from './workspaces-sources.mjs';
 import { walkEntries } from './workspaces-tree.mjs';
 
 /** The closed list a recovery may free: the cache copies inside a session's box. Nothing else is ever removed. */
 export const FREEABLE = Object.freeze(['box/nuget', 'box/npm', 'box/home/.dotnet']);
 export const ARCHIVE_FILE = 'archive.json';
 export const FREED_FILE = 'freed.json';
-const DATA_SLOTS = STAGE_ROUNDS * FREEZE_TASKS.length;
 const sessionsDir = series => path.join(series, 's');
 const sessionDir = (series, rid) => path.join(sessionsDir(series), rid);
 
