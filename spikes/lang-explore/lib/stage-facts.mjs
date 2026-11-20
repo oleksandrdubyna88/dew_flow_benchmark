@@ -34,18 +34,23 @@ function agentFacts(sessionDir) {
 
 const snapshotFact = snap => (snap?.record?.treeSha256 ? { known: true, treeSha256: snap.record.treeSha256 } : unknown('the world holds no registered tree hash for this snapshot'));
 
+const packagesOf = world => [world?.snapshots?.csharp, world?.snapshots?.node].map(snap => snap?.record?.packages);
+
+/** The package list of both snapshots: known only when both records hold one (a partial list is not the list, and no list is not an empty one). */
+const packagesFact = world => (packagesOf(world).every(Array.isArray) ? { known: true, value: packagesOf(world).flat() } : unknown('the world holds no package list for one or both snapshots (the record has no `packages`)'));
+
 /** The cache snapshots the session ran against: each tree hash and the package list. */
-function cacheFacts(world) {
-  const packages = [world?.snapshots?.csharp, world?.snapshots?.node].flatMap(snap => snap?.record?.packages ?? []);
-  return { csharp: snapshotFact(world?.snapshots?.csharp), node: snapshotFact(world?.snapshots?.node), packages: { known: true, value: packages } };
-}
+const cacheFacts = world => ({ csharp: snapshotFact(world?.snapshots?.csharp), node: snapshotFact(world?.snapshots?.node), packages: packagesFact(world) });
 
 const statementFact = (world, stack) => {
   const statement = world?.filesFor?.(stack)?.['STATEMENT.md'];
   return statement === undefined ? unknown('the workspace has no STATEMENT.md') : { known: true, sha256: sha256(statement.bytes) };
 };
 
-const affinityFact = entry => (entry.run?.mask === undefined ? unknown('the run-map entry holds no mask') : { known: true, mask: entry.run.mask, observed: entry.run.maskObserved ?? null });
+const affinityFact = entry => {
+  if (entry.run?.mask === undefined) return unknown('the run-map entry holds no mask');
+  return entry.run.maskObserved === undefined || entry.run.maskObserved === null ? unknown('the affinity read-back never ran: the entry holds the mask but no observed mask') : { known: true, mask: entry.run.mask, observed: entry.run.maskObserved };
+};
 
 /** The facts of one session. `entry` is its run-map entry (the read-back of the launch's affinity), `world` the loaded world of its task. */
 export function sessionFacts({ sessionDir, entry, world }) {

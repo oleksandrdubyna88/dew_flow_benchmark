@@ -13,7 +13,7 @@ import { scoringBoxFacts } from '../lib/box-facts.mjs';
 import { commitBuild, runShFact } from '../lib/build-commit.mjs';
 import { passBody } from '../lib/pass-child.mjs';
 import { writeAttempt } from '../lib/score-files.mjs';
-import { FACTS_FILE, STORED_FIELDS, storedProblems, writeSessionFacts } from '../lib/stage-facts.mjs';
+import { FACTS_FILE, STORED_FIELDS, sessionFacts, storedProblems, writeSessionFacts } from '../lib/stage-facts.mjs';
 
 const MIB = 1024 * 1024;
 const LIMIT = 512 * MIB;
@@ -91,4 +91,22 @@ test('A_session_stores_the_culture_of_both_boxes_and_the_hash_of_the_run_sh_that
   assert.equal(readJson(path.join(noLocale.dir, FACTS_FILE)).agent.culture.known, false, 'a culture that cannot be taken says why, never a missing key');
   assert.deepEqual(storedProblems(noLocale.dir), [], 'and counts as stored');
   assert.equal(scoringBoxFacts({ stack: 'rust', dirs: DIRS, memoryBytes: LIMIT }).known, false);
+});
+
+test('A_package_list_the_snapshots_never_recorded_and_an_affinity_read_back_that_never_ran_are_unknown_never_empty_or_null', () => {
+  const dir = tmpDir('stage-unknown');
+  const noPackages = { snapshots: { csharp: { record: { treeSha256: 'c'.repeat(64) } }, node: { record: { treeSha256: 'd'.repeat(64) } } } };
+  for (const w of [noPackages, undefined]) {
+    const facts = sessionFacts({ sessionDir: dir, entry, world: w });
+    assert.equal(facts.cache.packages.known, false, 'no package list in the records, or no world: not an empty list');
+    assert.equal(typeof facts.cache.packages.why, 'string');
+  }
+  const withList = sessionFacts({ sessionDir: dir, entry, world });
+  assert.deepEqual(withList.cache.packages, { known: true, value: ['pkg-a@1', 'pkg-b@2'] }, 'the control: a recorded list is known');
+  const emptyList = sessionFacts({ sessionDir: dir, entry, world: { snapshots: { csharp: { record: { packages: [] } }, node: { record: { packages: [] } } } } });
+  assert.deepEqual(emptyList.cache.packages, { known: true, value: [] }, 'a list the records say is empty is known');
+  const notRead = sessionFacts({ sessionDir: dir, entry: { rid: 'abc123', stack: 'node', run: { mask: '0-5' } }, world });
+  assert.equal(notRead.launch.affinity.known, false, 'the mask was set but never read back');
+  assert.match(notRead.launch.affinity.why, /read-back/);
+  assert.deepEqual(sessionFacts({ sessionDir: dir, entry, world }).launch.affinity, { known: true, mask: '0-5', observed: '0-5' }, 'the control: read back');
 });
