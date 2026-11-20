@@ -618,6 +618,13 @@ ended unit still owes before it offers a unit (Opus review, PR 3); `--until roun
 affinity read-back that never ran are stored as unknown (Opus review, PR 3); `stage-run` and `stage-status` print every malformed Stage 1 line and every
 home path as a report line, never a refusal (Opus review, PR 3); a missing pinned price or policy file refuses `stage-init` and `stage-run` with its path
 instead of throwing (Opus review, PR 3).
+(8) *(coai code round 2, PR 3)*: a unit owes its records when ANY of its ended sessions lacks its `stage-facts.json` OR its `record.json` lacks a Stage 1
+field of its `explore` section (`STAGE_PATHS`, found with `records.mjs` `lacksPaths`, the check `missingPaths(record, scored, true)` uses), or a data slot lacks
+its pair record, because the finalizer writes the facts BEFORE the explore section; the finalizer is safe to run twice (the facts file is published once, the
+rest is rebuilt to the same bytes), and `next` finishes the records before it offers a unit; `stage-status` reads the run-map through `stage-step.mjs`
+`mapAsRead`, the function `stage-run` reads it through, so a dated `refuted` line shows the stack as void with its re-run owed and its charge on the `void`
+line; a moved harness refuses a Stage 1 unit (exit 3) without a `harness-moved` ledger event, so every refusal of Stage 1 leaves the run-map and the ledger as
+they were, and the one-task `run` keeps its event; `slicesOf` builds its slices without mutation.
 
 ### (a) the guards before a paid pair — PR 4
 
