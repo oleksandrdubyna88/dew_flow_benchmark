@@ -16,6 +16,7 @@ import { loadExplore } from '../lib/inputs.mjs';
 import { machineFor, pilotQuiet } from '../lib/machine.mjs';
 import { bannerOf } from '../lib/note-tasks.mjs';
 import { loadHeldout } from '../lib/heldout.mjs';
+import { fileProblem } from '../lib/pins.mjs';
 import { loadPrompts } from '../lib/plan.mjs';
 import { referenceFill, rehearse } from '../lib/rehearse.mjs';
 import { runPair } from '../lib/run.mjs';
@@ -23,7 +24,7 @@ import { removeArea } from '../lib/score.mjs';
 import { createSeries, drawMask, ledgerFileOf, loadSeries, runMapFileOf, seriesDirs } from '../lib/series.mjs';
 import { planSeriesDirs } from '../lib/pause.mjs';
 import { resolveTask } from '../lib/tasks.mjs';
-import { rigHome, toyExplore, writeToyHeldout } from './olympiad-fixture.mjs';
+import { linkedParts, rigHome, toyExplore, writeToyHeldout } from './olympiad-fixture.mjs';
 
 const REAL = loadExplore().value;
 /** The home these tests run with: its explore root is its own; the toolchains are linked from the operator's home (see `rigHome`). */
@@ -72,8 +73,11 @@ test('The_rehearsal_runs_a_pair_end_to_end_for_free_for_each_of_tasks_02_03_and_
 });
 
 test('A_rehearsal_whose_explore_pins_another_CLI_version_gets_a_stub_that_reports_that_version_and_its_init_read_back_holds', { timeout: 600_000 }, async t => {
-  const pinned = '2.1.329';
-  assert.notEqual(REAL.cli.version, pinned, 'the pins on main name another version, so a stub fixed at one version cannot pass both');
+  // a version that is neither the live pin nor v1's default stub version, taken from the live pin (the pre-registration moved it from 2.1.310 to 2.1.329, so the version this test pins may not be a literal of either)
+  const [major, minor, patch] = REAL.cli.version.split('.').map(Number);
+  const pinned = `${major}.${minor}.${patch + 1}`;
+  assert.notEqual(REAL.cli.version, pinned, 'the pins name another version, so a stub fixed at one version cannot pass both');
+  assert.notEqual(pinned, '2.1.310', 'and it is not the version v1\'s stub reports by default');
   const toy = await toyOrNull(t, ['02'], undefined, withCliVersion(REAL, pinned));
   if (!toy) return;
   const said = [];
@@ -115,7 +119,7 @@ test('A_stub_pair_past_the_pause_point_runs_only_with_allow_over_and_the_owner_s
   const said = [];
   const quiet = { hostCpus: 0.1, harnessCpus: 0.05, foreignCpus: 0, foreignAgents: [], memAvailablePct: 80, liveSessions: [], spinMs: 20 };
   const machine = machineFor({ thresholds: pilotQuiet().value, calibratedMs: 20, seriesDir: dir, samplerFn: async () => async () => quiet, sleepFn: async () => {}, now: (() => { let n = 0; return () => (n += 7000); })() });
-  const seams = { fill: referenceFill({ world: { filesFor: (await toy.worldFn({ home: realHome, work: tmpDir('o-toy-w2'), task })).value.filesFor }, heldout: loadHeldout(realHome, task).value }), claudeBinary: stubClaude(tmpDir('o-toy-stub')), planOver: { upstream: stub.upstream, tickMs: 500, sampleMs: 500, settleMs: 500, graceMs: 2000 }, preflightHome: fakeHome(), stub: true, machine };
+  const seams = { fill: referenceFill({ world: { filesFor: (await toy.worldFn({ home: realHome, work: tmpDir('o-toy-w2'), task })).value.filesFor }, heldout: loadHeldout(realHome, task).value }), claudeBinary: stubClaude(tmpDir('o-toy-stub'), undefined, { version: toy.explore.cli.version }), planOver: { upstream: stub.upstream, tickMs: 500, sampleMs: 500, settleMs: 500, graceMs: 2000 }, preflightHome: fakeHome(), stub: true, machine };
   const io = (over = {}) => ({ home: realHome, say: l => said.push(l), abort: { reason: null, exit: 130 }, worldFn: toy.worldFn, tokenFn: async () => ({ ok: true, value: 'sk-ant-fake-for-the-test' }), seams, ...over });
   const before = readFileSync(runMapFileOf(dir), 'utf8');
   const stopped = await runPair({ seriesDir: dir, pair: 1, explore: toy.explore, task, io: io() });
@@ -127,4 +131,40 @@ test('A_stub_pair_past_the_pause_point_runs_only_with_allow_over_and_the_owner_s
   const pair = JSON.parse(readFileSync(path.join(dir, 'pairs', 'p1.json'), 'utf8'));
   assert.deepEqual(pair.pauseOverrides.map(o => [o.text, o.needed, o.spentUsd, o.pausePointUsd]), [['the owner, 2026-11-01: go on', true, 58, 60]], 'the owner\'s words are in the pair record');
   assert.equal(existsSync(path.join(dir, 'pairs', 'p1.json')), true);
+});
+
+// ---- the rig home follows the CLI pin of the live explore.json (F3 PR 6 moved it from 2.1.310 to 2.1.329) -------------------------------------------------------------------------------------
+
+const cliAt = (home, explore = REAL) => path.join(home, ...explore.cli.pathParts);
+/** A home holding `bytes` where `explore` pins the CLI copy. */
+function homeWith(bytes, explore = REAL) {
+  const home = tmpDir('o-rig-pinned-home');
+  mkdirSync(path.dirname(cliAt(home, explore)), { recursive: true });
+  writeFileSync(cliAt(home, explore), bytes);
+  return home;
+}
+
+test('The_rig_home_links_the_folder_of_the_pinned_CLI_copy_from_the_explore_json_and_refuses_a_missing_or_other_copy_by_the_pin', () => {
+  const copy = Buffer.from('the pinned CLI bytes');
+  const operator = homeWith(copy);
+  const rig = rigHome(operator);
+  assert.equal(existsSync(cliAt(rig)), true, 'the copy the live pins name is reachable from the rig home');
+  assert.deepEqual(readFileSync(cliAt(rig)), copy, 'and it is the operator\'s own bytes, linked');
+  assert.match(fileProblem('the pinned CLI copy', cliAt(rig), REAL.cli.sha256), /hashes to .*, the pin says/, 'a copy of other bytes is refused by its sha256 (here the bytes are a test\'s)');
+  const bare = rigHome(tmpDir('o-rig-pinned-empty'));
+  assert.equal(existsSync(cliAt(bare)), false, 'a host without the copy gives the rig no copy: nothing is made up');
+  assert.match(fileProblem('the pinned CLI copy', cliAt(bare), REAL.cli.sha256), /the pinned CLI copy .* is missing/, 'and the pin check says it is missing');
+  const moved = { ...REAL, cli: { ...REAL.cli, pathParts: ['rsd', 'elsewhere', 'claude-0.0.1'] } };
+  const movedHome = homeWith(copy, moved);
+  assert.equal(existsSync(cliAt(rigHome(movedHome, moved), moved)), true, 'a pin that moves to another folder moves the link with it');
+  assert.equal(existsSync(cliAt(rigHome(movedHome), REAL)), false, 'and the folder of the old pin is not linked for the new one');
+});
+
+test('The_rig_links_each_folder_once_whatever_the_pin_and_v1_s_folders_stay_linked', () => {
+  const parts = linkedParts(REAL).map(p => p.join('/'));
+  assert.equal(new Set(parts).size, parts.length, 'no folder twice (a second link of one path would throw)');
+  for (const kept of ['.nvm', 'rsd/minigit/toolchains', 'rsd/lang-v2/caches']) assert.ok(parts.includes(kept), kept);
+  assert.ok(parts.includes(REAL.cli.pathParts.slice(0, -1).join('/')), 'the folder of the pinned copy');
+  const old = { cli: { pathParts: ['rsd', 'minigit', 'toolchains', 'claude-2.1.310'] } };
+  assert.equal(linkedParts(old).filter(p => p.join('/') === 'rsd/minigit/toolchains').length, 1, 'the pin that was under v1\'s folder adds nothing');
 });

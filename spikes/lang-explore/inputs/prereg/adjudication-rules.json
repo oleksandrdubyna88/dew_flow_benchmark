@@ -1,0 +1,74 @@
+{
+  "source": "the pre-registration's writer, as data (F3.S1 (b), PR 6); the same rules in words are section 9 of analysis-contract.md, and the rule ids equal the contract's adjudication-rule markers",
+  "conditionFive": "The adjudication's code is written after the data collection ends; its complete rules were registered before the first paid session, and they are the rules of this file.",
+  "masks": {
+    "order": "v1's rules first, in v1's order, then the added rules below, in this order; the tool adds no mask of its own",
+    "note": "The default HTTP error bodies of Fastify ({\"statusCode\":..,\"error\":..,\"message\":..}) and of ASP.NET (ProblemDetails) are not masked, because they are the response the case judged and masking them would hide case content; a judge may therefore infer the stack from such a body, and the report states that as a known limit of the blinding.",
+    "v1": {
+      "file": "spikes/minigit-bench/lib/adjudicate-mask.mjs",
+      "export": "maskRules",
+      "blob": "6551bdf4d8683139d54e7d620394e6bbe0a80d2d",
+      "functions": ["maskText", "maskStderr", "maskExit", "maskCaptured"]
+    },
+    "added": [
+      { "name": "log-shapes", "replacement": "<runtime>", "pattern": "(?:\\{\"level\":\\d+,\"time\":\\d+[^\\n]*\\}|\\b(?:info|warn|fail|crit|dbug|trce): [\\w.<>]+\\[\\d+\\]|Now listening on:[^\\n]*|Application started\\.[^\\n]*|Hosting environment:[^\\n]*|Content root path:[^\\n]*|Server listening at[^\\n]*)", "flags": "g" },
+      { "name": "runtime-messages", "replacement": "<runtime>", "pattern": "(?:Object reference not set to an instance of an object\\.|Index was outside the bounds of the array\\.|Stack overflow\\.|Cannot read propert(?:y|ies) of (?:undefined|null)[^\\n]*|is not a function|Maximum call stack size exceeded|Unexpected token[^\\n]*(?:in JSON|is not valid JSON)[^\\n]*|Unexpected end of JSON input|is an invalid start of a value\\.[^\\n]*|LineNumber: \\d+ \\| BytePositionInLine: \\d+\\.?)", "flags": "g" },
+      { "name": "stack-names", "replacement": "<runtime>", "pattern": "\\b(?:typescript|tsc|tsx|ts-node|fastify|undici|libuv|kestrel|asp\\.?net(?:\\s?core)?|Microsoft(?:\\.\\w+)+|msbuild|roslyn)\\b", "flags": "gi" },
+      { "name": "heap-keys", "replacement": "<runtime>", "pattern": "(?:DOTNET_[A-Za-z_]+(?:=\\S*)?|GCHeapHardLimit|--max-old-space-size(?:=\\d+)?|max_old_space_size)", "flags": "g" },
+      { "name": "abort-shapes", "replacement": "<runtime>", "pattern": "(?:FATAL ERROR:[^\\n]*|JavaScript heap out of memory|Reached heap limit[^\\n]*|Allocation failed[^\\n]*|Out of memory\\.)", "flags": "g" },
+      { "name": "compiler-codes", "replacement": "<runtime>", "pattern": "(?<![A-Za-z])(?:TS\\d{4,5}|CS\\d{4})(?!\\d)", "flags": "g" },
+      { "name": "file-suffixes", "replacement": "<path>", "pattern": "\\b[\\w.-]+\\.(?:cs|csproj|sln|slnx|ts|mts|cts|tsx|js|mjs|cjs|dll|pdb)\\b|\\b(?:package(?:-lock)?|tsconfig|global|nuget|appsettings(?:\\.\\w+)?|[\\w.-]+\\.(?:runtimeconfig|deps))\\.json\\b", "flags": "g" }
+    ]
+  },
+  "folders": {
+    "packets": "<series>/adjudication-packets/ (the only folder the step-1 judge is given)",
+    "verdicts": "<series>/adjudication/",
+    "insideGit": "both are refused inside any git worktree"
+  },
+  "rules": [
+    {
+      "id": "packets-sessions",
+      "text": "The packets come from the data attempt of each cell (one slot's one stack) of the 30 slots. A re-run happens only after a void, so at most one attempt of a cell is data. [data]: that attempt gives the packets. [void, data]: attempt 2 gives them. [void, void]: no packet; the cell has no data attempt. A data attempt that a dated refuted read-back line made void, then its re-run: the re-run when it is data, otherwise no packet. A data attempt whose build failed: no packet (packets-build-failed). A pilot session never gives a packet."
+    },
+    {
+      "id": "packets-cases",
+      "text": "Every visible or held-out case that failed in at least one completed pass gives one packet. An environment attempt of a pass is no pass; a case clean in every completed pass gives none."
+    },
+    {
+      "id": "packets-evidence",
+      "text": "A packet shows its blind id, the case, the sentences of the requirement ids the case cites (from the frozen spec's text), the evidence of the first failing completed pass by its number as the runner recorded it, and the pattern: in how many completed passes of each profile the case failed. It shows nothing of the stack, the arm or the session."
+    },
+    {
+      "id": "packets-build-failed",
+      "text": "A session whose build failed gives no packet. It is counted apart."
+    },
+    {
+      "id": "masks-order",
+      "text": "Every text of a packet is masked by v1's mask rules, held to the blob id in masks.v1.blob, then by the added rules of masks.added, in that order. The tool adds no mask of its own; a v1 file whose blob is not that id is a refusal."
+    },
+    {
+      "id": "memory-cause",
+      "text": "Before the reveal a memory limit packet shows its cause as kernel kill or runtime abort, with the flags abort-below-evidence and child-abort-line (D56); the runtime's own name is shown only after the reveal."
+    },
+    {
+      "id": "step-one",
+      "text": "Step 1: an Opus judge that is given the packets folder and nothing else answers spec-ambiguity or not-ambiguous, with a reason, for every packet. The reveal is refused until every packet has its answer, and the reveal freezes the answers of step 1."
+    },
+    {
+      "id": "step-two",
+      "text": "Step 2, after the reveal: an Opus judge answers product or harness, with a reason, for every packet. An answer is final when it is written: the first answer of a packet stands, and the tool refuses a second answer for the same blind id, so every answer written stays in the record exactly as written. There is no correction path: a correction would need a public line that names a blind id, which the public text never holds (D41)."
+    },
+    {
+      "id": "exclusion",
+      "text": "A case judged spec-ambiguity in any session is dropped from every session of its task, and from no session of another task."
+    },
+    {
+      "id": "revised-verdict",
+      "text": "A session's revised verdict is the verdict rule over its build record and its passes without the dropped cases: verdictOf of spikes/lang-explore/lib/verdict.mjs (F1's ten-pass rule, D71), a file of the Stage 1 harness whose blob the tag freezes through the harness identity. In words: accepted when the build passed, all ten passes completed and every remaining case passed in all ten; rejected when the build failed, or when a completed pass holds a failing remaining case and no completed pass is clean; intermittently incorrect when a completed pass holds a failing remaining case and another completed pass is clean; unscored: environment when no completed pass holds a failing remaining case and some pass has no completed attempt after its three attempts. A pass whose failing cases are all dropped counts as clean in the revised reading. A session whose only failing cases are dropped is accepted in the revised reading. A session whose build failed keeps its primary verdict. If every case of a task's suite were dropped, that task's revised verdict and revised CPC are not defined and are shown as such. The revised reading stands beside the primary one and never replaces it; the primary reading never changes."
+    },
+    {
+      "id": "harness-class",
+      "text": "A case of class harness (step 2) is listed in the private adjudication folder, never removed: it changes neither the revised verdict nor CPC; only the exclusions of step 1 recompute the revised reading. It is an annotation of the revised reading only: it never reclassifies a collected session, never causes a re-run and never moves spend, and it is no void ground (a void ground applies only through the harness's own classification at scoring or a dated refuted read-back line, both before the adjudication). The public report gives counts only: per task and per class, the number of harness cases and how many of them were pivotal (the session's only failing case). The list that ties each harness case to its session and its evidence stays in <series>/adjudication/, never in the report (D41; D49). A corrected score exists only after an instrument fix and a re-score, recorded as a separate dated amendment beside the primary and the revised results."
+    }
+  ]
+}

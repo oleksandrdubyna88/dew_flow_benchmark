@@ -1,0 +1,60 @@
+{
+  "rid": "20261120T161608Z",
+  "cell": "smoke-e8jdyz1s",
+  "startedAt": "2026-11-20T16:16:15.817Z",
+  "exitedAt": "2026-11-20T16:16:28.857Z",
+  "endedAt": "2026-11-20T16:16:31.870Z",
+  "wallMs": 13040,
+  "exit": {
+    "code": 0,
+    "signal": null
+  },
+  "stopped": null,
+  "stoppedAt": null,
+  "outcome": {
+    "ok": true,
+    "label": "ok",
+    "detail": ""
+  },
+  "cliVersion": "2.1.329",
+  "sessionId": "c31ee232-8e4b-4a7a-bdf4-475593db4a5d",
+  "envelopeCostUsd": 0.1107079,
+  "samplers": {
+    "samples": 13,
+    "realInCmdline": 0,
+    "realInEnviron": 0,
+    "dummyInCmdline": 0,
+    "dummyInEnviron": 51,
+    "unreadable": 391
+  },
+  "janitorEnded": 0,
+  "transcripts": 2,
+  "transcriptsProblem": null,
+  "broker": {
+    "spentUsd": 0.1107079,
+    "lowerBound": false,
+    "upstreamRequests": 5,
+    "refused": 0,
+    "refusedByReason": {
+      "cap": 0,
+      "path": 0,
+      "body": 0,
+      "busy": 0
+    },
+    "unpricedModels": [],
+    "overCap": false,
+    "overshootUsd": 0
+  },
+  "unsettledAtClose": {
+    "count": 0,
+    "reservedUsd": 0
+  },
+  "receiver": {
+    "usd": 0.1107079,
+    "requests": 5,
+    "misconfigured": 0,
+    "undecodable": 0
+  },
+  "errors": [],
+  "cleanup": []
+}

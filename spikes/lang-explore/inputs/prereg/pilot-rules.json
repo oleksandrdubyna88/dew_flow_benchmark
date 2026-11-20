@@ -1,0 +1,244 @@
+{
+  "source": "the pre-registration's writer, as data (F3.S1 (b), PR 6); the same rules in words are section 7 and section 8 of analysis-contract.md, and the row ids equal the contract's go-row markers",
+  "frozen": "every v1 helper named here (spikes/minigit-bench/lib/aa-rules.mjs, aa-rules-twins.mjs, aa-check.mjs, aa-facts.mjs, aa-verdicts.mjs, crosscheck.mjs, alias-store.mjs, sandbox.mjs, launch.mjs) and every lang-explore or lang-bench helper named here is a file of the Stage 1 harness, whose identity manifest.json holds as identities.harness; the tag freezes its blob. A fixture or a registry file named here is read at the tag's commit. A record field written as a.b is read through v1's leaf (aa-check.mjs): a captured leaf { known, value } gives its value only when known is true, and anything else is missing",
+  "pilot": {
+    "sessions": "six: the A/A (two identical bare sessions of task 05 on Node, the twins) and two pilot pairs, task 10 (daemon) and task 04 (web), each in both stacks; all void spend, never data (D16). In the run-map (run-map.json sessions) the twins have kind aa and the pair sessions kind pilot",
+    "attempts": "a pilot session that ends as a void is re-run once under the schedule's rule; a row asked of a session reads its last attempt (the run-map entry with the highest attempt, as v1's subjectEntries of aa-facts.mjs takes it); a row whose stopsWhenRefuted is true is asked of every attempt, re-runs included",
+    "words": ["holds", "refuted", "explained", "recorded", "not exercised"],
+    "explained": "explained is one row outcome of its own: a check that would be refuted, turned by a dated line of the registered amendments.md that names it (v1's withExplain, aa-check.mjs). Only G-5, G-6 and a refused host of G-8 may be explained; explained is not refuted",
+    "evidenceRoot": "the session's folder s/<rid>/ of the series, as the frozen harness wrote it; a dated line is read from the registered amendments.md",
+    "sampler": "the phase sampler of lang-explore writes <series>/pairs/p<pair>-cpu.ndjson (spikes/lang-explore/lib/machine.mjs), one line per sample with its time t; a pilot session's pair is PILOT_PAIR (0) of stage-unit.mjs, a data session's pair is its slot. A session's samples are those whose t lies in its window, meta.json startedAt to exitedAt. v1's samplesIn (aa-facts.mjs) reads another name, pairs/p<pair>-<phase>-cpu.ndjson, which a Stage 1 series does not write: the tool reads this file instead and hands the samples to v1's rules",
+    "quietGap": "the quiet gaps of a session are the differences between consecutive t values of its s/<rid>/stream.stamped.ndjson lines, and the gap from meta.json startedAt to the first line; the longest of them is the session's longest quiet gap"
+  },
+  "go": {
+    "rowPasses": "a row passes when its outcome is holds, explained (G-5, G-6, G-8 only) or recorded (G-9 only), or when it is not exercised, its notExercised is not false, and its replacing evidence is named (v1's passes and PASSING of aa-verdicts.mjs, with ALLOWED_NOT_EXERCISED G-4 and G-12)",
+    "definition": "GO when every row passes",
+    "noGo": "NO GO when any row does not pass: any refuted row (explained is not refuted); a by-hand row (G-10, G-13, G-16) without its dated line; a row not exercised whose notExercised is false or whose replacing evidence is not named",
+    "stop": "STOP when G-2, G-8 or G-12 is refuted, or when G-7 is refuted by alias drift; a STOP outranks NO GO",
+    "exit": "0 GO, 2 NO GO or STOP, 4 a refusal of the tool",
+    "line": "the tool prints YYYY-MM-DD | pilot | GO | verdicts:<12 hex of the sha256 of the file it wrote> | <who> and writes no line itself"
+  },
+  "rows": [
+    {
+      "id": "G-1",
+      "askedOf": "all six pilot sessions",
+      "evidence": "s/<rid>/readback.json, field ok; v1's SESSION_ROWS['G-1'] of aa-rules.mjs",
+      "mode": "computed",
+      "threshold": "ok is true: the init read-back matched on every init field",
+      "whenMissing": "no readback.json, or no ok field: not exercised for that session: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-2",
+      "askedOf": "all six pilot sessions, every attempt",
+      "evidence": "s/<rid>/record.json cost.checks t1.status; v1's SESSION_ROWS['G-2'] of aa-rules.mjs",
+      "mode": "computed",
+      "threshold": "t1.status is pass",
+      "whenMissing": "not exercised for that session: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": true
+    },
+    {
+      "id": "G-3",
+      "askedOf": "all six pilot sessions",
+      "evidence": "s/<rid>/record.json cost.checks t2.status; v1's SESSION_ROWS['G-3'] of aa-rules.mjs",
+      "mode": "computed",
+      "threshold": "t2.status is pass (T2 per model and kind)",
+      "whenMissing": "not exercised for that session: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-4",
+      "askedOf": "the two A/A twins",
+      "evidence": "each twin's s/<rid>/record.json cost.checks t3.status and t4.status, and time.children launched. These are computed at collection by spikes/minigit-bench/lib/crosscheck.mjs from the session's own files: O is otel/otel-raw.ndjson (the OpenTelemetry file sink), T is the files under transcripts/; matchTO joins them by the policy's join field (crosscheck-policy.json join = request_id: an O record is matched when a transcript message carries its request id, and an O record no message carries is unmatched); T3 compares T at the CLI's rates with the matched O records' cost (within 2 %), T4 compares T's input and cache tokens per model with the matched O records (within 0.1 %). The smoke fixture: the folder spikes/minigit-bench/test/fixtures/real/claude-<version>-bare-smoke/ at the tag's commit, its meta.json cliVersion, and its row B-T1 recomputed by smokeEvidence (aa-facts.mjs) over loadSmoke and computeSmokeVerdicts. The rule is v1's coverage, t3Rule and g4 of aa-rules-twins.mjs",
+      "mode": "computed",
+      "threshold": "main holds when both twins' t3.status and t4.status are pass; the subagent half holds on the twins when main holds and a twin's time.children launched is above 0. t3Rule: t3 = stop when main holds and the subagent half holds on the twins or the fixture's B-T1 holds with meta.json cliVersion equal to explore.json cli.version; otherwise fallback-t2. The row holds when main holds and the subagent half holds on the twins",
+      "whenMissing": "a twin without t3.status, t4.status or time.children: not exercised: NO GO",
+      "notExercised": "the subagent half only, when main holds and no twin launched a subagent: its replacing evidence is the B-T1 of a fixture whose meta.json cliVersion equals explore.json cli.version, named by its folder. At the tag the only fixture is claude-2.1.310-bare-smoke, which is not the pinned CLI, so with no subagent launched by a twin the row is not exercised without replacing evidence (NO GO) and t3Rule gives fallback-t2. The policy that follows is written by a dated input:crosscheck-policy.json line",
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-5",
+      "askedOf": "all six pilot sessions",
+      "evidence": "s/<rid>/record.json cost.checks t5.status, cost.brokerUsd and cost.cliTotalUsd; v1's SESSION_ROWS['G-5'] of aa-rules.mjs, with withExplain",
+      "mode": "computed",
+      "threshold": "t5.status is pass and |cost.brokerUsd - cost.cliTotalUsd| is at most $0.000001; a refutation a dated G-5 line names is explained",
+      "whenMissing": "not exercised for that session: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-6",
+      "askedOf": "all six pilot sessions",
+      "evidence": "s/<rid>/record.json time.partition (categories, unattributed) and time.wallMs; v1's SESSION_ROWS['G-6'] of aa-rules.mjs, with withExplain",
+      "mode": "computed",
+      "threshold": "the categories sum to time.wallMs within 1 ms, and unattributed plus any positive gap is under 5 % of time.wallMs; a refutation a dated G-6 line names, with its cause and evidence path, is explained",
+      "whenMissing": "not exercised for that session: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-7",
+      "askedOf": "the two A/A twins",
+      "evidence": "the record kinds of each twin, as v1's kindsOf (aa-rules-twins.mjs) derives them from the twin's folder loaded by loadSessionDir (smoke-load.mjs): stream (stream.ndjson has events), envelope (an event of type result), O (otel/otel-raw.ndjson has records), T (transcripts/ has a file), audit (box/out/audit.ndjson has lines), broker (broker.ndjson has lines), egress (record.json egress bytesCaptured is true), cpuSamples (the sampler file has samples in the session's window; see sampler below), spin (record.json run.spin), packages (record.json packages), score (score/score.json exists and every record.json quality entry is known), ledger (the series' ledger.ndjson charges the rid). The aliases used: record.json cost.aliases aliases (alias -> id) and cost.aliases check.verdict. The series' alias baseline: <series>/aliases.json aliases (alias -> id), written by v1's aliasStore (alias-store.mjs) from the series' first session. The rule is v1's g7 and aliasProblems",
+      "mode": "computed",
+      "threshold": "both twins carry every record kind; every alias a twin used is in the baseline and resolves to the baseline's id. Alias drift is a used alias that resolves to another id than the baseline's, or cost.aliases check.verdict stop",
+      "whenMissing": "a twin without cost.aliases, or fewer than two twins: refuted (NO GO), not a stop; an alias used that the baseline does not hold: refuted (NO GO), not a stop",
+      "notExercised": false,
+      "stopsWhenRefuted": "alias drift only: a refutation by alias drift is a STOP; any other refutation is NO GO"
+    },
+    {
+      "id": "G-8",
+      "askedOf": "all six pilot sessions, every attempt",
+      "evidence": "s/<rid>/record.json egress (allowed, refused, tlsRefused, nonConnect), detail (high, canary, tokenHits) and class, and s/<rid>/meta.json samplers (realInCmdline, realInEnviron); the host lists EGRESS_HOSTS.bare and KNOWN_REFUSED of egress-hosts.mjs; v1's SESSION_ROWS['G-8'] of aa-rules.mjs, with withExplain",
+      "mode": "computed",
+      "threshold": "every allowed CONNECT host is in EGRESS_HOSTS.bare; every refused host is in KNOWN_REFUSED or named by a dated G-8 line (then explained); nonConnect is 0; the real token is counted zero times and the class is not stop: security; high, canary and tokenHits are 0",
+      "whenMissing": "no egress in the record: not exercised for that session: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": true
+    },
+    {
+      "id": "G-9",
+      "askedOf": "the two A/A twins",
+      "evidence": "the twins' record.json cost.stopRuleUsd, time.wallMs, time.modelApiMs, time.activeMinusModelApiMs, quality.heldout (percent, defects.count) and the CPU per mask from the sampler file (see sampler below); v1's g9 of aa-rules-twins.mjs",
+      "mode": "recorded",
+      "threshold": "none: the spread is recorded and shown beside every ratio as a reference (n = 1), and never gates",
+      "whenMissing": "recorded as missing; it never gates",
+      "notExercised": "always allowed: the row never gates",
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-10",
+      "askedOf": "one A/A twin and each of the four sessions of the two pilot pairs",
+      "evidence": "one dated line per session in the registered amendments.md: YYYY-MM-DD | G-10 | holds|refuted | <rid> | <evidence path> | <who>; the hand's trees, commands and outputs stay in the series' private folder; v1's lineFor (aa-check.mjs) reads the line",
+      "mode": "by hand",
+      "threshold": "in a clean copy of the session's tree, through the frozen build the scorer uses, the build and the visible samples run by hand give the scorer's counts, and the hand reads the session's deviations; the line says holds",
+      "whenMissing": "NO GO, naming the session without a line; a line that says explained counts as no line",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-11",
+      "askedOf": "all six pilot sessions",
+      "evidence": "s/<rid>/record.json run.quiet (quiet), run.maskObserved and run.spin, and the sampler's samples inside the session's window (see sampler below); the interval is spikes/minigit-bench/inputs/quiet.json intervalMs; v1's SESSION_ROWS['G-11'] of aa-rules.mjs",
+      "mode": "computed",
+      "threshold": "run.quiet quiet is true, run.maskObserved is true, run.spin is there, at least two samples, no gap between samples above the interval plus 1000 ms, and every sample has its spin figure",
+      "whenMissing": "not exercised for that session: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-12",
+      "askedOf": "all six pilot sessions, every attempt",
+      "evidence": "s/<rid>/record.json class, cost.stopRuleUsd (the stop-rule figure) and cost.censoredAtUsd (the settled spend at the stop), and a dated G-12 line; v1's g12 of aa-rules-twins.mjs, with the cap explore.json caps.capUsd ($50)",
+      "mode": "computed",
+      "threshold": "v1's meaning, the cap stops a session that reaches it: an attempt reached the cap when its cost.stopRuleUsd is at least $50 or its class is killed: cap. The row is evaluated on those attempts only; an attempt below the cap gives no evidence for G-12 and is neither a pass nor a refutation. With at least one attempt at the cap, the row holds when every such attempt has class killed: cap and cost.censoredAtUsd at least $50, and is refuted otherwise; a dated G-12 refuted line also refutes it",
+      "whenMissing": "an attempt whose cost.stopRuleUsd or class cannot be read: the tool cannot tell whether that attempt reached the cap, so the row is NO GO, naming the attempt, and no replacing evidence is allowed",
+      "notExercised": "only when every pilot attempt's cost.stopRuleUsd and class are read and none reached $50: a dated G-12 holds line whose evidence names v1's broker proof P-6 and the budget tests green at the series' harness identity (its 12 hex)",
+      "stopsWhenRefuted": true
+    },
+    {
+      "id": "G-13",
+      "askedOf": "all six pilot sessions",
+      "evidence": "one dated line per session in the registered amendments.md: YYYY-MM-DD | G-13 | holds|refuted | <rid> | <evidence path> | <who>; v1's lineFor (aa-check.mjs) reads the line",
+      "mode": "by hand",
+      "threshold": "the session's class read by hand against its stream.ndjson and broker.ndjson is the record's class; the line says holds",
+      "whenMissing": "NO GO, naming the session without a line; a line that says explained counts as no line",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-14",
+      "askedOf": "the free rehearsal series of step T: the Stage 1 series r-<yyyymmdd>-<4 hex> whose explore-series.json has stage 1 and preregTag null, made at the tag's commit",
+      "evidence": "that series' run-map.json sessions: for each entry kind (data), round, task, pair (the slot number), stack, attempt and status; and each such session's s/<rid>/record.json, checked by missingPaths(record, true, true) of spikes/lang-explore/lib/records.mjs (REQUIRED_PATHS, STAGE_PATHS, SCORED_PATHS, and PASSES_PATHS when the record carries explore.verdict), and its run.harnessIdentity",
+      "mode": "computed",
+      "threshold": "for task 10 and for task 04, in round 1, for each of the two stacks, the last attempt of the slot's session has status scored, its record lacks no path of missingPaths(record, true, true), and its run.harnessIdentity equals manifest.json identities.harness. The stub programs' verdict is not read",
+      "whenMissing": "no such series, or a slot of task 10 or 04 without both stacks scored: not exercised: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-16",
+      "askedOf": "one session of each pilot task: task 05 (the TCP driver), task 10 (the daemon checks), task 04 (the HTTP driver); the task of the line's rid (its run-map entry's task) names the driver",
+      "evidence": "three dated lines in the registered amendments.md: YYYY-MM-DD | G-16 | holds|refuted | <rid> | <evidence path> | <who>; what the hand runs is the private aid's (D41)",
+      "mode": "by hand",
+      "threshold": "task 05: the driver's scenario kinds, driven by hand, give the driver's replies; task 10: memory.peak read by hand agrees with the driver's record, SIGTERM by hand ends the process as the driver says, the timer scenarios give the driver's final report; task 04: one scenario of each kind, a concurrency scenario among them, and a captured dynamic value reused as FORMAT.md defines; in each, the culture check passes inside both boxes and the hand reads the session's deviations; the RSS curve clause lapsed with D74; each line says holds",
+      "whenMissing": "NO GO, naming the missing driver",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-17",
+      "askedOf": "no session: the registry and the frozen record, read at the tag's commit",
+      "evidence": "spikes/lang-explore/inputs/memory-limit.json bytes and registration (date, references[] of { task, stack, treeSha256 }); spikes/lang-explore/inputs/packages.json, per task NN: refsTreeSha256 { csharp, node }, memoryBytes, referenceVerdicts { csharp, node }, counts.witnesses, specSha256; the private package record ~/rsd/lang-v2/explore/package-NN/<run>/record.json that the registry row was written from (latestRecord of spikes/lang-explore/lib/package-record.mjs), field items.witnesses { ok, witnesses, caught, notCaught }; spikes/lang-bench/inputs/specs.d/spec-states.json freeze (state) and specs.NN (state, sha256, commitSha, path)",
+      "mode": "computed",
+      "threshold": "(1) the twelve references: memory-limit.json registration has a real date and exactly twelve references, one for each task of FREEZE_TASKS and each stack, each treeSha256 equal to packages.json NN.refsTreeSha256 of its stack; memory-limit.json bytes is 536870912 and every packages.json NN.memoryBytes equals it; every NN.referenceVerdicts of both stacks is accepted. (2) the witnesses: a witness is caught when the package tool's witnessesStep (package-steps.mjs) ran it and the suite failed it; the passing predicate is, for each task, items.witnesses ok is true, items.witnesses caught equals items.witnesses witnesses, that count is above 0 and equals packages.json NN.counts.witnesses, and notCaught is empty. (3) the frozen specs: spec-states.json freeze.state is accepted and freezeProblems (spikes/lang-explore/lib/freeze-consumers.mjs) over the record is empty; every specs.NN.state is frozen; and the freeze's own check gatedProblems (spikes/lang-bench/lib/freeze-pins.mjs) is empty for each task: the spec's bytes at specs.NN.commitSha and path, with its Freeze tag row set to the placeholder, hash to packages.json NN.specSha256 (the gated text)",
+      "whenMissing": "NO GO, naming the file or the field",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-18",
+      "askedOf": "all six pilot sessions",
+      "evidence": "each pilot session's s/<rid>/record.json cost.stopRuleUsd (its settled cost), class, and s/<rid>/stream.stamped.ndjson (its longest quiet gap, as pilot.quietGap defines it); the stall in force: explore.json caps.stallMs, or the stallMs of the one dated caps line",
+      "mode": "computed",
+      "threshold": "the cross-check figure of a kind, twice the larger settled cost (cost.stopRuleUsd) of the two sessions of the pilot pair of that kind (task 10 for the daemons, task 04 for the web tasks), is shown beside the fixed $50 cap and binds nothing; the stall in force is larger than the longest quiet gap of any pilot session; every pilot session whose cost.stopRuleUsd reached $50 has class killed: cap",
+      "whenMissing": "not exercised: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    }
+  ],
+  "readback": {
+    "pairs": "in round 1 and in round 2, the one daemon slot and the one web slot that schedule.json's readback names from the seed; both sessions of each (the last attempt of each stack)",
+    "row": "G-1",
+    "fields": [
+      {
+        "field": "the agent box's argv",
+        "stored": "s/<rid>/argv.json claude (the CLI's argv) and settingsSha256; s/<rid>/harness/settings.json; stage-facts.json agent.argv sha256",
+        "comparedWith": "stage-facts.json agent.argv sha256 equals the sha256 of argv.json; the file at claude[0] hashes to explore.json cli.sha256 (= manifest.json identities.cliSha256) and its path is the home joined with explore.json cli.pathParts; the value after --model equals explore.json cli.model; the value after --max-budget-usd equals explore.json caps.capUsd; the value after --tools equals BARE_TOOLS of spikes/minigit-bench/lib/launch.mjs joined by commas; the effort is not an argv entry: harness/settings.json effortLevel and modelSettings.<cli.model>.effortLevel equal explore.json cli.effort, and the sha256 of harness/settings.json equals argv.json settingsSha256"
+      },
+      {
+        "field": "the agent box's binds",
+        "stored": "stage-facts.json agent.binds value: the { host, box } pairs bindPairsOf (sandbox.mjs) took from argv.json bwrap",
+        "comparedWith": "(a) every pair whose host is outside the session's own folder <series>/s/<rid>/ has host equal to box and is the pinned CLI copy (the home joined with explore.json cli.pathParts) or a pinned toolchain folder (the home joined with spikes/lang-bench/inputs/stacks-lang.json storeRoot and one of its directories values); (b) with each session's own folder <series>/s/<rid> written as one placeholder, the session's pairs equal its pair partner's pairs as a set. Any extra or absent pair is a difference, and a difference in (b) refutes both sessions"
+      },
+      {
+        "field": "the cache snapshots' hashes",
+        "stored": "stage-facts.json cache.csharp treeSha256 and cache.node treeSha256",
+        "comparedWith": "spikes/lang-bench/inputs/cache-snapshots-lang.json csharp.treeSha256 and node.treeSha256, which equal manifest.json identities snapshot.csharp and snapshot.node"
+      },
+      {
+        "field": "the package list",
+        "stored": "stage-facts.json cache.packages value",
+        "comparedWith": "the list csharp.packages followed by node.packages of spikes/lang-bench/inputs/cache-snapshots-lang.json, entry for entry; any extra, absent or different entry is a difference"
+      },
+      {
+        "field": "the agent box's environment keys",
+        "stored": "stage-facts.json agent.envKeys value (argv.json envKeys) and agent.culture (LANG, LC_ALL)",
+        "comparedWith": "as a set, the keys of agentEnv (spikes/minigit-bench/lib/sandbox.mjs, AGENT_ENV_KEYS with LC_ALL and the keys its arguments add) for the session's own plan.json (nodeDir, tsDir, dotnetDir, envExtra, locale); any extra or absent key is a difference; agent.culture LANG and LC_ALL equal explore.json locale"
+      },
+      {
+        "field": "the scoring box's keys, with the two heap keys and their values, of every completed pass",
+        "stored": "s/<rid>/score/passes/pNN-<profile>-aK.json whose kind is completed: box envKeys, box heap, box LANG, box LC_ALL; the retries of a pass that did not complete (kind environment) are not read",
+        "comparedWith": "box envKeys equals allowFor(stack) of spikes/lang-bench/lib/exec-layer/env.mjs as a sorted set (any extra or absent key is a difference); box heap equals heapKeys(stack, memory-limit.json bytes) of the same file (C#: DOTNET_GCHeapHardLimit, Node: NODE_OPTIONS with --max-old-space-size), key for key and value for value; box LANG and LC_ALL equal explore.json locale",
+        "rule": "a difference in any one completed pass makes the field refuted; a session with no completed pass shows the field as 'no completed pass, not compared', which alone is not refuted, and the other fields are still compared"
+      },
+      {
+        "field": "the effective CPU affinity",
+        "stored": "the launch's read-back <series>/readback/p<slot>-<utc>.json masks (mask -> observed); stage-facts.json launch.affinity (mask, observed: the run-map entry's run.mask and run.maskObserved); each completed pass file's observedCpus",
+        "comparedWith": "launch.affinity mask equals the cell's mask for the session's stack in schedule.json masks (round, task); in the launch's read-back the observed value of that mask equals the mask; launch.affinity observed is true; each completed pass's observedCpus equals the CPUs of its profile in schedule.json scoring.profiles (the profile named in the pass file's name: 2cpu is 6-7, 8cpu is 0-7)"
+      },
+      {
+        "field": "the spec blob",
+        "stored": "stage-facts.json workspace.statementSha256 sha256; the frozen spec's sha256 the series' slice of the task holds: <series>/inputs.json tasks.<NN>.taskPins.spec.sha256",
+        "comparedWith": "workspace.statementSha256 equals prompts-lang.json tasks.<NN>.<stack>.statementSha256 (the hash list at W); tasks.<NN>.taskPins.spec.sha256 equals spikes/lang-bench/inputs/specs.d/spec-states.json specs.<NN>.sha256, which equals manifest.json identities spec.<NN>"
+      }
+    ],
+    "difference": "refuted",
+    "missingField": "a refusal of the tool naming the field, never a blank (stage-facts.mjs storedProblems lists what a session's files lack)",
+    "lines": "an Opus judge writes one dated line per session: YYYY-MM-DD | G-1 | holds|refuted | <rid> | <evidence path> | <who>; a refuted line makes the session void: harness, and its one re-run is the schedule's next step and is read back the same way",
+    "gate": "no later slot runs before the lines of a read-back slot are on main and on the series' branch"
+  }
+}

@@ -91,7 +91,7 @@ async function pilotRig(t, { world, calibration }, { machine, worldFn = loadWorl
   const said = [];
   const rig = {
     dir, said, explore: world.explore, quiet: { hostCpus: 0.1, harnessCpus: 0.05, foreignCpus: 0, foreignAgents: [], memAvailablePct: 80, liveSessions: [], spinMs: 20 },
-    seams: { fill: referenceFill({ world, heldout: loadHeldout(realHome, TASK).value }), claudeBinary: stubClaude(stubDir), planOver: { upstream: stub.upstream, tickMs: 500, sampleMs: 500, settleMs: 500, graceMs: 2000 }, preflightHome: fakeHome(), stub: true },
+    seams: { fill: referenceFill({ world, heldout: loadHeldout(realHome, TASK).value }), claudeBinary: stubClaude(stubDir, undefined, { version: world.explore.cli.version }), planOver: { upstream: stub.upstream, tickMs: 500, sampleMs: 500, settleMs: 500, graceMs: 2000 }, preflightHome: fakeHome(), stub: true },
   };
   const machineOf = sample => machineFor({ thresholds: pilotQuiet().value, calibratedMs: 20, seriesDir: dir, samplerFn: async () => async () => sample, sleepFn: async () => {}, now: (() => { let n = 0; return () => (n += 7000); })() });
   rig.machineOf = machineOf;

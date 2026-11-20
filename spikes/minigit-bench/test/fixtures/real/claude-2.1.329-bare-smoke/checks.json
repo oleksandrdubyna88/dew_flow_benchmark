@@ -1,0 +1,28 @@
+{
+  "tokenTxt": {
+    "present": false,
+    "equalsDummy": false
+  },
+  "realTokenScan": {
+    "scanned": 32,
+    "hits": [],
+    "tooLarge": [],
+    "links": [],
+    "insideLinks": [
+      {
+        "link": "/tmp/claude-1000/-home-user-rsd-lang-v2-smoke-20261120T161608Z-box-work/c31ee232-8e4b-4a7a-bdf4-475593db4a5d/tasks/a3a5391f7fc436f4d.output",
+        "target": "/home/user/rsd/lang-v2/smoke/20261120T161608Z/box/config/projects/-home-user-rsd-lang-v2-smoke-20261120T161608Z-box-work/c31ee232-8e4b-4a7a-bdf4-475593db4a5d/subagents/agent-a3a5391f7fc436f4d.jsonl"
+      }
+    ]
+  },
+  "positiveControl": {
+    "samples": 13,
+    "dummyInEnviron": 51
+  },
+  "survivors": 0,
+  "statePhase": "closed",
+  "socketsLeft": 0,
+  "contamination": [],
+  "tokenHits": [],
+  "outcome": "ok"
+}
