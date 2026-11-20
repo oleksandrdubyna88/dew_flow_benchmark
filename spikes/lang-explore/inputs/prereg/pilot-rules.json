@@ -129,9 +129,9 @@
       "askedOf": "all six pilot sessions, every attempt",
       "evidence": "record.json, class, cost.stopRuleUsd and cost.censoredAtUsd, and a dated G-12 line (v1's g12, at the registered cap)",
       "mode": "computed",
-      "threshold": "a session whose stop-rule figure reached the registered cap of $50 is killed: cap at a settled spend of at least $50",
-      "whenMissing": "not exercised when no pilot session reached the cap, with the replacing evidence notExercised names; otherwise NO GO",
-      "notExercised": "when no pilot session reached $50: a dated G-12 holds line whose evidence names v1's broker proof P-6 and the budget tests green at the series' harness identity (its 12 hex)",
+      "threshold": "v1's meaning, the cap stops a session that reaches it: the row is evaluated on the attempts whose stop-rule figure reached the registered cap of $50; an attempt below the cap gives no evidence for G-12 and is neither a pass nor a refutation; with at least one attempt at the cap, the row holds when every such attempt is killed: cap at a settled spend of at least $50, and is refuted otherwise; a dated G-12 refuted line also refutes it",
+      "whenMissing": "an attempt at the cap whose class, stop-rule figure or settled spend cannot be read: NO GO, naming it; no attempt at the cap: not exercised, as notExercised says",
+      "notExercised": "only when no pilot attempt reached $50: a dated G-12 holds line whose evidence names v1's broker proof P-6 and the budget tests green at the series' harness identity (its 12 hex)",
       "stopsWhenRefuted": true
     },
     {
@@ -194,7 +194,7 @@
       { "field": "the cache snapshots' hashes", "stored": "stage-facts.json cache.csharp and cache.node", "comparedWith": "manifest snapshot.csharp and snapshot.node" },
       { "field": "the package list", "stored": "stage-facts.json cache.packages", "comparedWith": "the registered snapshot records, spikes/lang-bench/inputs/cache-snapshots-lang.json" },
       { "field": "the agent box's environment keys", "stored": "stage-facts.json agent.envKeys and agent.culture", "comparedWith": "the registered locale, base environment and allow-list (manifest locale); LANG and LC_ALL equal to explore.json's locale" },
-      { "field": "the scoring box's keys of a completed pass, with the two heap keys and their values", "stored": "score/passes/* (the box facts of each completed pass)", "comparedWith": "the memory policy (manifest memoryPolicy) and the heap values it derives from the one memory value (manifest memoryValue)" },
+      { "field": "the scoring box's keys, with the two heap keys and their values, of every completed pass", "stored": "score/passes/* (the box facts of each completed pass; the retries of a pass that did not complete are not read)", "comparedWith": "the memory policy (manifest memoryPolicy) and the heap values it derives from the one memory value (manifest memoryValue)", "rule": "a difference in any one completed pass makes the field refuted; a session with no completed pass shows the field as 'no completed pass, not compared', which alone is not refuted, and the other fields are still compared" },
       { "field": "the effective CPU affinity", "stored": "stage-facts.json launch.affinity (the mask and the mask observed in flight) and each pass's affinity read-back in score/passes/*", "comparedWith": "the cell's mask in schedule.json for the launch and in flight; the pass's profile CPUs in schedule.json for each pass" },
       { "field": "the spec blob", "stored": "stage-facts.json workspace.statementSha256, and the frozen spec's sha256 the session was cut from", "comparedWith": "the statement's sha256 in prompts-lang.json (the hash list at W), and manifest spec.<NN>" }
     ],

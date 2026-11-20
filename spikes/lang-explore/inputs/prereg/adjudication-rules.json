@@ -25,7 +25,7 @@
   "rules": [
     {
       "id": "packets-sessions",
-      "text": "The packets come from the last data attempt of each cell of the 30 slots. A pilot session never gives a packet."
+      "text": "The packets come from the data attempt of each cell (one slot's one stack) of the 30 slots. A re-run happens only after a void, so at most one attempt of a cell is data. [data]: that attempt gives the packets. [void, data]: attempt 2 gives them. [void, void]: no packet; the cell has no data attempt. A data attempt that a dated refuted read-back line made void, then its re-run: the re-run when it is data, otherwise no packet. A data attempt whose build failed: no packet (packets-build-failed). A pilot session never gives a packet."
     },
     {
       "id": "packets-cases",
@@ -61,11 +61,11 @@
     },
     {
       "id": "revised-verdict",
-      "text": "A session's revised verdict is the verdict rule (verdictOf) over its passes without the dropped cases. A session whose build failed keeps its primary verdict. The revised reading stands beside the primary one and never replaces it."
+      "text": "A session's revised verdict is the verdict rule (verdictOf) over its passes without the dropped cases. A pass whose failing cases are all dropped counts as clean in the revised reading. A session whose only failing cases are dropped is accepted in the revised reading. A session whose build failed keeps its primary verdict. If every case of a task's suite were dropped, that task's revised verdict and revised CPC are not defined and are shown as such. The revised reading stands beside the primary one and never replaces it; the primary reading never changes."
     },
     {
       "id": "harness-class",
-      "text": "A case of class harness (step 2) is listed, never removed: it changes neither the revised verdict nor CPC; only the exclusions of step 1 recompute the revised reading. The report lists each such case with its session and its evidence and says whether it was pivotal (the session's only failing case) or not. A corrected score exists only after an instrument fix and a re-score, recorded as a separate dated amendment beside the primary and the revised results."
+      "text": "A case of class harness (step 2) is listed in the private adjudication folder, never removed: it changes neither the revised verdict nor CPC; only the exclusions of step 1 recompute the revised reading. It is an annotation of the revised reading only: it never reclassifies a collected session, never causes a re-run and never moves spend, and it is no void ground (a void ground applies only through the harness's own classification at scoring or a dated refuted read-back line, both before the adjudication). The public report gives counts only: per task and per class, the number of harness cases and how many of them were pivotal (the session's only failing case). The list that ties each harness case to its session and its evidence stays in <series>/adjudication/, never in the report (D41; D49). A corrected score exists only after an instrument fix and a re-score, recorded as a separate dated amendment beside the primary and the revised results."
     }
   ]
 }

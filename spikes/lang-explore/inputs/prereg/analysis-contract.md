@@ -144,6 +144,23 @@ say the same, and the rule files hold exactly the GO rows and the adjudication r
 
 - **The measures** are CPC, `CPC_all`, the success rate (accepted over data attempts), tokens, wall, `model_api` and
   `active − model_api`. Every figure below is given for **every measure**, not for CPC alone.
+- **Each measure's per-task value for one stack, and which attempts enter it.** The parent asks for the C# over TypeScript
+  ratio "of CPC and of every secondary measure where defined" (§9) and does not say more; the rest is this contract's:
+  - CPC: section 1, over the data attempts.
+  - `CPC_all`: the cost of every data attempt and every void attempt of (t, s) over the number of accepted data attempts.
+    It is undefined in the same five cases as CPC, read over the accepted data attempts.
+  - The success rate: the accepted data attempts over the data attempts. A rate of 0 is a known value.
+  - Tokens, wall, `model_api` and `active − model_api`: the **median** of the measure over the stack's **data attempts**
+    of the task. Tokens are taken **per model and kind** (input, output, cache read and cache write, each per model, as the
+    record holds them), and each of these is a measure of its own under every rule of this section; no sum over models
+    or kinds is a measure. Wall is the record's registered wall; `model_api` and `active − model_api` are the record's
+    time partition.
+  - A void attempt enters only `CPC_all`. A pilot session enters no measure.
+- **Missing, zero and undefined.** An attempt whose value of a measure is not known (`{ known: false }`) is **left out of
+  that measure** and counted: a "missing" count is printed beside the value, and an unknown is never read as a zero. The
+  C# over TypeScript ratio of a measure is **undefined** when either stack has no data attempt with a known value of it,
+  or when the TypeScript value is 0; for CPC and `CPC_all`, the cases of section 1 hold. An undefined ratio stands in the
+  line of undefined outcomes, as for CPC, and is never a bound.
 - **Over the six tasks:** the median of the per-task C# over TypeScript ratios over the defined ones, the geometric mean of
   the same ratios, and the count of tasks where C# is higher. Each states its denominator in the form "median over k of 6
   tasks; m undefined", and the line of undefined outcomes stands beside it.
@@ -161,7 +178,10 @@ say the same, and the rule files hold exactly the GO rows and the adjudication r
 - `unscored: environment` is a **void**. Its cost is on the void line, in neither part of the primary CPC, and it is re-run
   once.
 - A killed or a crashed session is a data attempt. Where the cap ended it, its cost is censored at the cap (`≥`).
-- **The void grounds** are v1's void classes of the quoted outcome classes and `unscored: environment`.
+- **The void grounds** are v1's void classes of the quoted outcome classes and `unscored: environment`. A void ground
+  applies **only through the harness's own classification at scoring, or through a dated `refuted` read-back line**
+  (section 8), both before the adjudication. A step-2 `harness` class of the blind adjudication (section 9) is **no void
+  ground**: it never reclassifies a collected session, never causes a re-run and never moves spend.
 - **The re-run rule:** a void session is re-run **once**, **alone**, **before the next slot** runs. A second void of the same
   cell ends that cell as `missing`.
 - **The stop grounds** are v1's `stop:` classes, a breach of the cost check T1 under its policy, a second contaminated void
@@ -262,10 +282,14 @@ the row says otherwise.
   interval, and the mask was observed.
 
 <!-- go-row: G-12 -->
-- **G-12, the cap** (all six, every attempt; computed). A session whose stop-rule figure reached the registered cap of
-  **$50** is `killed: cap` at a settled spend of at least $50. When no pilot session reached it, the row is `not exercised`,
-  and its replacing evidence is a dated G-12 `holds` line whose evidence names v1's broker proof P-6 and the budget tests
-  green at the series' harness identity (its 12 hex). Refuted: STOP.
+- **G-12, the cap** (all six, every attempt; computed). v1's meaning: the cap stops a session that reaches it. An attempt
+  whose stop-rule figure reached the registered cap of **$50** must be `killed: cap` at a settled spend of at least $50.
+  **The row is evaluated on the attempts that reached the cap.** An attempt below the cap gives no evidence for G-12: it
+  is neither a pass nor a refutation. With at least one attempt at the cap, the row holds when every such attempt is
+  `killed: cap` at a settled spend of at least $50, and is refuted otherwise; a dated G-12 `refuted` line also refutes
+  it. **Only when no pilot attempt reached the cap** is the row `not exercised`, and its replacing evidence is a dated
+  G-12 `holds` line whose evidence names v1's broker proof P-6 and the budget tests green at the series' harness identity
+  (its 12 hex). Refuted: STOP.
 
 <!-- go-row: G-13 -->
 - **G-13, each class by hand** (all six; by hand). Each session's class is read against its stream and the broker's log.
@@ -310,8 +334,11 @@ the row says otherwise.
   - the package list: the registered snapshot records (`spikes/lang-bench/inputs/cache-snapshots-lang.json`);
   - the agent box's environment keys: the registered locale, base environment and allow-list (`locale`), with `LANG` and
     `LC_ALL` equal to `explore.json`'s locale;
-  - the scoring box's keys of a completed pass, with the two heap keys and their values: the memory policy
-    (`memoryPolicy`) and the value it derives from the one memory value (`memoryValue`);
+  - the scoring box's keys, with the two heap keys and their values, of **every completed pass**: the memory policy
+    (`memoryPolicy`) and the value it derives from the one memory value (`memoryValue`). A difference in any one
+    completed pass makes the field `refuted`. The retries of a pass that did not complete are not read. A session with no
+    completed pass shows this field as "no completed pass, not compared"; that alone is **not** `refuted`, and the other
+    fields are still compared;
   - the effective CPU affinity: the launch's read-back and the mask observed in flight against the cell's mask in
     `schedule.json`; each pass's read-back against its profile's CPUs;
   - the spec blob: the workspace's `STATEMENT.md` against its hash in `prompts-lang.json` (the hash list at W), and the
@@ -327,8 +354,16 @@ the row says otherwise.
 rules were registered before the first paid session, and they are the rules below.**
 
 <!-- adjudication-rule: packets-sessions -->
-- **The sessions.** The packets come from the last data attempt of each cell of the 30 slots. A pilot session never gives a
-  packet.
+- **The sessions.** The packets come from the data attempt of each cell (one slot's one stack) of the 30 slots. A re-run
+  happens only after a void, so at most one attempt of a cell is data. Every sequence of a cell's attempts:
+  - [data]: that attempt gives the packets;
+  - [void, data]: attempt 2 gives them;
+  - [void, void]: no packet; the cell has no data attempt;
+  - a data attempt that a dated `refuted` read-back line made void, then its re-run: the re-run when it is data, otherwise
+    no packet;
+  - a data attempt whose build failed: no packet (below).
+
+  A pilot session never gives a packet.
 
 <!-- adjudication-rule: packets-cases -->
 - **The cases.** Every visible or held-out case that failed in at least one **completed** pass gives one packet. An
@@ -364,15 +399,24 @@ rules were registered before the first paid session, and they are the rules belo
   session of another task.
 
 <!-- adjudication-rule: revised-verdict -->
-- **The revised verdict.** A session's revised verdict is the verdict rule over its passes without the dropped cases. A
-  session whose build failed keeps its primary verdict. The revised reading stands beside the primary one and never
-  replaces it.
+- **The revised verdict.** A session's revised verdict is the verdict rule over its passes without the dropped cases:
+  - a pass whose failing cases are all dropped counts as **clean** in the revised reading;
+  - a session whose only failing cases are dropped is **accepted** in the revised reading;
+  - a session whose build failed keeps its primary verdict;
+  - if every case of a task's suite were dropped, that task's revised verdict and revised CPC are **"not defined"** and are
+    shown as such.
+
+  The revised reading stands beside the primary one and never replaces it. **The primary reading never changes.**
 
 <!-- adjudication-rule: harness-class -->
-- **A `harness` class** (step 2) is **listed, never removed**: it changes neither the revised verdict nor CPC; only the
-  exclusions of step 1 recompute the revised reading. The report lists each such case with its session and its evidence
-  and says whether it was pivotal (the session's only failing case) or not. A corrected score exists only after an
-  instrument fix and a re-score, recorded as a separate dated amendment beside the primary and the revised results.
+- **A `harness` class** (step 2) is **listed, never removed** (listed in the private adjudication folder, below): it changes neither the revised verdict nor CPC; only the
+  exclusions of step 1 recompute the revised reading. It is an annotation of the revised reading only: it **never
+  reclassifies a collected session, never causes a re-run and never moves spend**, and it is no void ground (section 3).
+  **The public report gives counts only**: per task and per class, the number of `harness` cases and how many of them
+  were pivotal (the session's only failing case). The list that ties each `harness` case to its session and its evidence
+  stays in the private adjudication folder (`<series>/adjudication/`), never in the report (D41; D49: counts and rates
+  only, no per-case adjudication narrative). A corrected score exists only after an instrument fix and a re-score,
+  recorded as a separate dated amendment beside the primary and the revised results.
 
 ### 10. The disk, the memory causes, deviations and flagged pairs
 
