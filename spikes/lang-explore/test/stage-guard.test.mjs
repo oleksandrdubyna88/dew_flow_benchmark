@@ -46,11 +46,11 @@ test('The_guard_refuses_a_series_while_the_frozen_record_lacks_a_field_and_names
 test('A_missing_hash_list_is_named_as_one_problem_among_the_others_and_the_guard_does_not_throw', async t => {
   const w = await world(t);
   rmSync(path.join(w.repo, 'spikes/lang-bench/inputs/hashes-lang.txt'));
-  mutate(w.repo, 'memoryLimit', json => { delete json.bytes; });
+  mutate(w.repo, 'specStates', json => { delete json.freeze.formatSha256; });
   const refused = await stageGuard(w.args);
   assert.equal(refused.ok, false, 'the guard refuses with its problems and does not reject');
   assert.ok(refused.problems.some(p => /hashes-lang\.txt/.test(p) && /cannot be read/.test(p)), `the missing list is named: ${refused.problems.join(' | ')}`);
-  assert.ok(refused.problems.some(p => /memoryLimit/.test(p)), `and the other problems are still there: ${refused.problems.join(' | ')}`);
+  assert.ok(refused.problems.some(p => /specStates: freeze\.formatSha256 is absent/.test(p)), `and the other problems are still there: ${refused.problems.join(' | ')}`);
 });
 
 test('The_guard_refuses_while_the_memory_value_is_not_registered', async t => {
