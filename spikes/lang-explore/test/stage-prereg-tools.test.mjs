@@ -113,22 +113,23 @@ test('The_seed_is_committed_last_after_every_registered_file_and_the_reveal_refu
 });
 test('A_seed_commit_that_was_stopped_between_its_two_writes_is_named_by_the_verb_and_a_second_reveal_says_already_revealed', () => {
   const f = treeFixture();
-  const lines = [];
-  const io = { home: f.home, repo: f.root, say: l => lines.push(l) };
-  assert.equal(cmdSeedCommit({}, io), 0, lines.join('|'));
+  // Each call says into its own list, so no list is emptied and reused.
+  const said = verb => { const out = []; return { exit: verb({}, { home: f.home, repo: f.root, say: l => out.push(l) }), out }; };
+  const first = said(cmdSeedCommit);
+  assert.equal(first.exit, 0, first.out.join('|'));
   const seed = readFileSync(stageSeedFile(f.home), 'utf8');
   rmSync(hashFile(f.root)); // the state of a kill between the two writes
-  lines.length = 0;
-  assert.equal(cmdSeedCommit({}, io), 4);
-  assert.match(lines[0], /that seed was never committed and is not reused; the private seed file at .*stage1\.seed can be removed by the operator, then run seed-commit again/);
+  const retry = said(cmdSeedCommit);
+  assert.equal(retry.exit, 4);
+  assert.match(retry.out[0], /that seed was never committed and is not reused; the private seed file at .*stage1\.seed can be removed by the operator, then run seed-commit again/);
   assert.equal(readFileSync(stageSeedFile(f.home), 'utf8'), seed, 'the real home\'s seed file is kept');
-  assert.equal(cmdSeedReveal({}, io), 4, 'and a seed that was never committed is not revealed');
+  assert.equal(said(cmdSeedReveal).exit, 4, 'and a seed that was never committed is not revealed');
   rmSync(stageSeedFile(f.home));
-  assert.equal(cmdSeedCommit({}, io), 0, 'the operator removed the file: the retry commits a new seed');
-  assert.equal(cmdSeedReveal({}, io), 0);
-  lines.length = 0;
-  assert.equal(cmdSeedReveal({}, io), 4);
-  assert.match(lines[0], /^already revealed: .*seed\.txt holds the committed seed; nothing was written$/);
+  assert.equal(said(cmdSeedCommit).exit, 0, 'the operator removed the file: the retry commits a new seed');
+  assert.equal(said(cmdSeedReveal).exit, 0);
+  const again = said(cmdSeedReveal);
+  assert.equal(again.exit, 4);
+  assert.match(again.out[0], /^already revealed: .*seed\.txt holds the committed seed; nothing was written$/);
 });
 
 const git_rm = file => rmSync(file);
