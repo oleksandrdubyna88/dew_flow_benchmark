@@ -2,9 +2,9 @@
   "decidedOn": "2026-10-31",
   "reason": "The pins of the exploratory pilot (todo/PLAN_lang_explore_task1.md, D-X2 to D-X8, section 10 step 1). Exploratory, not evidence: nothing here is a pre-registration. A later amendment moves a pin in one dated line before pair 1, never between pairs. Paths are parts under the operator's home.",
   "cli": {
-    "version": "2.1.310",
-    "pathParts": ["rsd", "minigit", "toolchains", "claude-2.1.310"],
-    "sha256": "b73676430af12f97316a798b8371f81d640f90a58bdcb8f3ce56a835bb47df56",
+    "version": "2.1.329",
+    "pathParts": ["rsd", "lang-v2", "toolchains", "claude-2.1.329"],
+    "sha256": "30e2724e2aecb1bf5dc9f3130901afb71c5fa229051c190a6d7ad9aff6378d6d",
     "model": "opus",
     "effort": "high"
   },
