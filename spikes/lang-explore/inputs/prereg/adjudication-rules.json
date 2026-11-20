@@ -10,11 +10,13 @@
       "functions": ["maskText", "maskStderr", "maskExit", "maskCaptured"]
     },
     "added": [
+      { "name": "log-shapes", "replacement": "<runtime>", "pattern": "(?:\\{\"level\":\\d+,\"time\":\\d+[^\\n]*\\}|\\b(?:info|warn|fail|crit|dbug|trce): [\\w.<>]+\\[\\d+\\]|Now listening on:[^\\n]*|Application started\\.[^\\n]*|Hosting environment:[^\\n]*|Content root path:[^\\n]*|Server listening at[^\\n]*)", "flags": "g" },
+      { "name": "runtime-messages", "replacement": "<runtime>", "pattern": "(?:Object reference not set to an instance of an object\\.|Index was outside the bounds of the array\\.|Stack overflow\\.|Cannot read propert(?:y|ies) of (?:undefined|null)[^\\n]*|is not a function|Maximum call stack size exceeded|Unexpected token[^\\n]*(?:in JSON|is not valid JSON)[^\\n]*|Unexpected end of JSON input|is an invalid start of a value\\.[^\\n]*|LineNumber: \\d+ \\| BytePositionInLine: \\d+\\.?)", "flags": "g" },
       { "name": "stack-names", "replacement": "<runtime>", "pattern": "\\b(?:typescript|tsc|tsx|ts-node|fastify|undici|libuv|kestrel|asp\\.?net(?:\\s?core)?|Microsoft(?:\\.\\w+)+|msbuild|roslyn)\\b", "flags": "gi" },
       { "name": "heap-keys", "replacement": "<runtime>", "pattern": "(?:DOTNET_[A-Za-z_]+(?:=\\S*)?|GCHeapHardLimit|--max-old-space-size(?:=\\d+)?|max_old_space_size)", "flags": "g" },
       { "name": "abort-shapes", "replacement": "<runtime>", "pattern": "(?:FATAL ERROR:[^\\n]*|JavaScript heap out of memory|Reached heap limit[^\\n]*|Allocation failed[^\\n]*|Out of memory\\.)", "flags": "g" },
-      { "name": "compiler-codes", "replacement": "<runtime>", "pattern": "\\b(?:TS|CS)\\d{4}\\b", "flags": "g" },
-      { "name": "file-suffixes", "replacement": "<path>", "pattern": "\\b[\\w.-]+\\.(?:cs|csproj|sln|slnx|ts|mts|cts|tsx|js|mjs|cjs|json|dll|pdb)\\b", "flags": "g" }
+      { "name": "compiler-codes", "replacement": "<runtime>", "pattern": "(?<![A-Za-z])(?:TS\\d{4,5}|CS\\d{4})(?!\\d)", "flags": "g" },
+      { "name": "file-suffixes", "replacement": "<path>", "pattern": "\\b[\\w.-]+\\.(?:cs|csproj|sln|slnx|ts|mts|cts|tsx|js|mjs|cjs|dll|pdb)\\b|\\b(?:package(?:-lock)?|tsconfig|global|nuget|appsettings(?:\\.\\w+)?|[\\w.-]+\\.(?:runtimeconfig|deps))\\.json\\b", "flags": "g" }
     ]
   },
   "folders": {
@@ -53,7 +55,7 @@
     },
     {
       "id": "step-two",
-      "text": "Step 2, after the reveal: an Opus judge answers product or harness, with a reason, for every packet."
+      "text": "Step 2, after the reveal: an Opus judge answers product or harness, with a reason, for every packet. An answer is final when it is written: the first answer of a packet stands, and the tool refuses a second answer for the same blind id, so every answer written stays in the record exactly as written. There is no correction path: a correction would need a public line that names a blind id, which the public text never holds (D41)."
     },
     {
       "id": "exclusion",
@@ -61,7 +63,7 @@
     },
     {
       "id": "revised-verdict",
-      "text": "A session's revised verdict is the verdict rule (verdictOf) over its passes without the dropped cases. A pass whose failing cases are all dropped counts as clean in the revised reading. A session whose only failing cases are dropped is accepted in the revised reading. A session whose build failed keeps its primary verdict. If every case of a task's suite were dropped, that task's revised verdict and revised CPC are not defined and are shown as such. The revised reading stands beside the primary one and never replaces it; the primary reading never changes."
+      "text": "A session's revised verdict is the verdict rule over its build record and its passes without the dropped cases: verdictOf of spikes/lang-explore/lib/verdict.mjs (F1's ten-pass rule, D71), a file of the Stage 1 harness whose blob the tag freezes through the harness identity. In words: accepted when the build passed, all ten passes completed and every remaining case passed in all ten; rejected when the build failed, or when a completed pass holds a failing remaining case and no completed pass is clean; intermittently incorrect when a completed pass holds a failing remaining case and another completed pass is clean; unscored: environment when no completed pass holds a failing remaining case and some pass has no completed attempt after its three attempts. A pass whose failing cases are all dropped counts as clean in the revised reading. A session whose only failing cases are dropped is accepted in the revised reading. A session whose build failed keeps its primary verdict. If every case of a task's suite were dropped, that task's revised verdict and revised CPC are not defined and are shown as such. The revised reading stands beside the primary one and never replaces it; the primary reading never changes."
     },
     {
       "id": "harness-class",

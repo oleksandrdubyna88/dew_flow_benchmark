@@ -226,16 +226,26 @@ pairs**, task 10 (daemon) and task 04 (web), each in both stacks. All six are vo
 session that ends as a void is re-run once under the schedule's rule. A row asked of a session reads that session's last
 attempt. The rows marked as a stop (G-2, G-8, G-12) are asked of every attempt, re-runs included.
 
-**The row words** are v1's: `holds`, `refuted`, `explained`, `recorded`, `not exercised`.
+**The row words** are v1's: `holds`, `refuted`, `explained`, `recorded`, `not exercised`. **`explained`** is one outcome of
+its own: a check that would be refuted, turned by a dated line that names it (v1's `withExplain`). Only G-5, G-6 and a
+refused host of G-8 may be `explained`, and `explained` is not `refuted`.
 
-**GO** means: every row holds, except that G-5, G-6 and a refused host of G-8 may be `explained` by a dated line, G-9 is
-recorded and never gates, and the two rows below that name it may be `not exercised` with their replacing evidence. A
-by-hand row (G-10, G-13, G-16) without its dated line is NO GO. Any `refuted` row is NO GO. **A STOP** is G-2, G-8 or
-G-12 refuted, or alias drift (G-7). The tool prints the GO line for the team lead to write and writes no line itself.
+**A row passes** when its outcome is `holds`, `explained` (G-5, G-6, G-8 only) or `recorded` (G-9 only), or when it is
+`not exercised`, the row below allows that, and its replacing evidence is named (v1's `passes` of
+`spikes/minigit-bench/lib/aa-verdicts.mjs`). **GO** means every row passes. **NO GO** means a row does not pass: any
+`refuted` row, a by-hand row (G-10, G-13, G-16) without its dated line, or a row `not exercised` without allowed and
+named replacing evidence. **A STOP** is G-2, G-8 or G-12 refuted, or G-7 refuted by alias drift; it outranks NO GO. The
+tool prints the GO line for the team lead to write and writes no line itself.
 
-Where a row reads a stored file, it reads what the frozen harness wrote in the session's folder (`s/<rid>/`). Missing
-evidence never passes: a computed row whose evidence is missing is not exercised for that session, which is NO GO unless
-the row says otherwise.
+Where a row reads a stored file, it reads what the frozen harness wrote in the session's folder (`s/<rid>/`), and
+`pilot-rules.json` names each file, field and v1 helper of the row exactly. Every helper it names is a file of the Stage 1
+harness, so the tag freezes its blob through the manifest's `harness` identity; a fixture or a registry file is read at the
+tag's commit. Missing evidence never passes: a computed row whose evidence is missing is not exercised for that session,
+which is NO GO unless the row says otherwise. Two definitions the rows share: **the sampler's samples** of a session are
+the lines of `<series>/pairs/p<pair>-cpu.ndjson` (lang-explore's sampler; a pilot session's pair is 0) whose time falls
+in the session's window (`meta.json` `startedAt` to `exitedAt`) — v1's own fact loader reads another file name, which a
+Stage 1 series does not write; **a session's longest quiet gap** is the largest difference between consecutive time
+stamps `t` of its `stream.stamped.ndjson`, the gap from `startedAt` to the first line included.
 
 <!-- go-row: G-1 -->
 - **G-1, the read-back** (all six; computed). The session's `readback.json` says `ok` on every init field. Missing: NO GO.
@@ -247,11 +257,17 @@ the row says otherwise.
 - **G-3, the cost check T2 per model and kind** (all six; computed). The record's T2 status passes.
 
 <!-- go-row: G-4 -->
-- **G-4, the cost checks T3 and T4 over matched sources** (the two twins; computed). Every main-role record is matched by a
-  transcript message and none is unmatched; every subagent-role record is matched. The T3 rule is v1's: main coverage on
-  the twins and subagent coverage on the twins, or in a committed smoke fixture of the **pinned CLI version**, gives
-  `t3: stop`; otherwise `fallback-t2`. The subagent half may be `not exercised` only with that fixture's B-T1 as its
-  replacing evidence. The policy that follows is written by a dated `input:crosscheck-policy.json` line.
+- **G-4, the cost checks T3 and T4 over matched sources** (the two twins; computed). The record's T3 and T4 statuses, which
+  v1's `crosscheck.mjs` computes at collection from the session's OpenTelemetry sink (`otel/otel-raw.ndjson`) and its
+  transcripts (`transcripts/`): an O record is matched when a transcript message carries its request id (the policy's
+  `join`), T3 compares T at the CLI's rates with the matched O cost within 2 %, T4 compares the tokens within 0.1 %. The
+  rule is v1's `coverage`, `t3Rule` and `g4`: main coverage holds when both twins pass T3 and T4; the subagent half holds
+  on the twins when a twin also launched a subagent (`time.children`). `t3: stop` needs main coverage and the subagent half
+  on the twins or in a committed smoke fixture whose `meta.json` `cliVersion` is the **pinned CLI version**; otherwise
+  `fallback-t2`. The subagent half may be `not exercised` only with that fixture's B-T1 as its replacing evidence. At the
+  tag no fixture of the pinned version exists, so if no twin launches a subagent the row is not exercised without
+  replacing evidence (NO GO) and the T3 rule gives `fallback-t2`. The policy that follows is written by a dated
+  `input:crosscheck-policy.json` line.
 
 <!-- go-row: G-5 -->
 - **G-5, the cost check T5** (all six; computed). T5 passes, and the broker's total equals the envelope's within
@@ -262,9 +278,13 @@ the row says otherwise.
   `unattributed` is under 5 % of the wall. May be `explained` by a dated line that names the cause and its evidence.
 
 <!-- go-row: G-7 -->
-- **G-7, the record kinds and the aliases** (the two twins; computed). Both twins carry the same set of record kinds, and
-  every alias either twin used resolves to the id of the series' alias baseline (D12). Alias drift is a STOP; any other
-  refutation is NO GO.
+- **G-7, the record kinds and the aliases** (the two twins; computed). Both twins carry every record kind of v1's `kindsOf`
+  (stream, envelope, OpenTelemetry sink, transcripts, audit log, broker log, egress with bytes, sampler samples, spin,
+  packages, a score with every step known, a ledger charge), each derived from the file `pilot-rules.json` names. The
+  aliases a twin used are its record's `cost.aliases`; the series' alias baseline is `<series>/aliases.json`, written by
+  v1's `aliasStore` from the series' first session. Every alias used must be in the baseline and resolve to its id.
+  **Alias drift** is a used alias that resolves to another id than the baseline's (or an alias check that says stop): a
+  STOP. Any other refutation (a missing kind, a missing alias record, an alias the baseline lacks) is NO GO.
 
 <!-- go-row: G-8 -->
 - **G-8, isolation** (all six, every attempt; computed). The allowed CONNECTs are within the bare host list, the refused
@@ -282,18 +302,21 @@ the row says otherwise.
   the scorer's counts, and the hand also reads the session's `deviations`. One dated line per session. Missing: NO GO.
 
 <!-- go-row: G-11 -->
-- **G-11, the contention control** (all six; computed). The quiet check passed, the sampler and the spin probe wrote every
-  interval, and the mask was observed.
+- **G-11, the contention control** (all six; computed). The quiet check passed, the mask was observed, the spin record is
+  there, and the sampler's samples (defined above) are at least two, never further apart than the interval of
+  `spikes/minigit-bench/inputs/quiet.json` plus one second, each with its spin figure.
 
 <!-- go-row: G-12 -->
 - **G-12, the cap** (all six, every attempt; computed). v1's meaning: the cap stops a session that reaches it. An attempt
-  whose stop-rule figure reached the registered cap of **$50** must be `killed: cap` at a settled spend of at least $50.
-  **The row is evaluated on the attempts that reached the cap.** An attempt below the cap gives no evidence for G-12: it
-  is neither a pass nor a refutation. With at least one attempt at the cap, the row holds when every such attempt is
-  `killed: cap` at a settled spend of at least $50, and is refuted otherwise; a dated G-12 `refuted` line also refutes
-  it. **Only when no pilot attempt reached the cap** is the row `not exercised`, and its replacing evidence is a dated
-  G-12 `holds` line whose evidence names v1's broker proof P-6 and the budget tests green at the series' harness identity
-  (its 12 hex). Refuted: STOP.
+  reached the cap when its stop-rule figure (`cost.stopRuleUsd`) is at least the registered **$50** or its class is
+  `killed: cap`. **The row is evaluated on the attempts that reached the cap.** An attempt below the cap gives no evidence
+  for G-12: it is neither a pass nor a refutation. With at least one attempt at the cap, the row holds when every such
+  attempt is `killed: cap` at a settled spend (`cost.censoredAtUsd`) of at least $50, and is refuted otherwise; a dated
+  G-12 `refuted` line also refutes it. **An attempt whose stop-rule figure or class cannot be read** leaves the tool
+  unable to tell whether the cap was reached: the row is NO GO, naming the attempt, and no replacing evidence is allowed.
+  **Only when every attempt's figure and class were read and none reached the cap** is the row `not exercised`, and its
+  replacing evidence is a dated G-12 `holds` line whose evidence names v1's broker proof P-6 and the budget tests green at
+  the series' harness identity (its 12 hex). Refuted: STOP.
 
 <!-- go-row: G-13 -->
 - **G-13, each class by hand** (all six; by hand). Each session's class is read against its stream and the broker's log.
@@ -301,8 +324,10 @@ the row says otherwise.
 
 <!-- go-row: G-14 -->
 - **G-14, the free rehearsal** (the free rehearsal series of step T; computed). It is read as the free rehearsal of one
-  daemon and one web task passing in both stacks on the series' own harness: in the stub round of step T, the slots of
-  task 10 and of task 04 each ran both stacks, and each session's records are complete and scored. Missing: NO GO.
+  daemon and one web task passing in both stacks on the series' own harness. In the rehearsal series of step T (an `r-`
+  series of stage 1 with no tag), for task 10 and for task 04 in round 1, each stack's last attempt has the run-map status
+  `scored`, its `record.json` lacks no path of `missingPaths(record, true, true)` (`spikes/lang-explore/lib/records.mjs`),
+  and its `run.harnessIdentity` is the manifest's `harness`. The stub programs' verdict is not read. Missing: NO GO.
 
 <!-- go-row: G-16 -->
 - **G-16, the drivers by hand** (one session of each pilot task; by hand). Three dated lines, one per driver, each on a
@@ -315,38 +340,62 @@ the row says otherwise.
   is named: NO GO.
 
 <!-- go-row: G-17 -->
-- **G-17, the registry and the frozen record** (no session; computed). The twelve references are registered at the one
-  memory value, 536,870,912 bytes (`memory-limit.json`, `packages.json`); every witness of every package is caught; the
-  frozen specs equal the gated ones but for the freeze row (the freeze's own check, read from the record).
+- **G-17, the registry and the frozen record** (no session; computed; read at the tag's commit). Three checks, each passing
+  as follows. **(1) The twelve references:** `memory-limit.json` `registration` has a real date and exactly twelve
+  references, one per task and stack, each `treeSha256` equal to `packages.json` `refsTreeSha256` of its task and stack;
+  `memory-limit.json` `bytes` is 536,870,912 and every `packages.json` `memoryBytes` equals it; every `referenceVerdicts`
+  is `accepted`. **(2) The witnesses:** a witness is caught when the package tool ran it and the suite failed it; for each
+  task, the private package record the registry row was written from (`package-NN/<run>/record.json`) has
+  `items.witnesses.ok` true, `caught` equal to `witnesses` and above zero, `witnesses` equal to `packages.json`
+  `counts.witnesses`, and `notCaught` empty. **(3) The frozen specs:** `spec-states.json` `freeze.state` is `accepted`
+  and `freezeProblems` over the record is empty; every `specs.NN.state` is `frozen`; and the freeze's own check
+  `gatedProblems` (`spikes/lang-bench/lib/freeze-pins.mjs`) is empty for every task: the spec's bytes at its frozen commit,
+  with the Freeze tag row set to the placeholder, hash to `packages.json` `specSha256`.
 
 <!-- go-row: G-18 -->
 - **G-18, the cross-check, the stall and the cap** (all six; computed). The cross-check figure of a kind is **twice the
   larger settled cost of the pilot pair of that kind** (task 10 for the daemons, task 04 for the web tasks). It is shown
-  beside the fixed $50 cap and **binds nothing**. The stall in force (the registered one, or the one dated `caps` line's)
-  is larger than the longest quiet gap of any pilot session, read from the stamped streams. Every pilot session that
-  reached $50 is `killed: cap`.
+  beside the fixed $50 cap and **binds nothing**; a settled cost is the record's `cost.stopRuleUsd`. The stall in force
+  (the registered one, or the one dated `caps` line's) is larger than the longest quiet gap (defined above) of any pilot
+  session. Every pilot session that reached $50 is `killed: cap`.
 
 ### 8. The read-back of rounds 1 and 2
 
 - **Which pairs:** in round 1 and in round 2, one slot of a daemon task and one of a web task, named from the seed by the
   schedule before any result exists (`schedule.json`, `readback`). Both sessions of each such slot are read back.
-- **The fields, and what each is compared with:**
-  - the agent box's argv: the pinned CLI copy (the manifest's `cliSha256`), the cap (`caps`), the model and the effort of
-    `explore.json`'s `cli` entry, and v1's bare tool list;
-  - the binds of the agent box: the pinned toolchains (`toolchains`) and the session's own stack's snapshot;
-  - the cache snapshots' hashes: the manifest's `snapshot.csharp` and `snapshot.node`;
-  - the package list: the registered snapshot records (`spikes/lang-bench/inputs/cache-snapshots-lang.json`);
-  - the agent box's environment keys: the registered locale, base environment and allow-list (`locale`), with `LANG` and
-    `LC_ALL` equal to `explore.json`'s locale;
-  - the scoring box's keys, with the two heap keys and their values, of **every completed pass**: the memory policy
-    (`memoryPolicy`) and the value it derives from the one memory value (`memoryValue`). A difference in any one
-    completed pass makes the field `refuted`. The retries of a pass that did not complete are not read. A session with no
-    completed pass shows this field as "no completed pass, not compared"; that alone is **not** `refuted`, and the other
-    fields are still compared;
-  - the effective CPU affinity: the launch's read-back and the mask observed in flight against the cell's mask in
-    `schedule.json`; each pass's read-back against its profile's CPUs;
-  - the spec blob: the workspace's `STATEMENT.md` against its hash in `prompts-lang.json` (the hash list at W), and the
-    frozen spec's sha256 against the manifest's `spec.<NN>`.
+- **The fields, the stored value and the registered value it is compared with** (`pilot-rules.json` `readback` names the
+  same files and fields; any extra, absent or different entry is a difference):
+  - **the agent box's argv** (`argv.json` `claude`, with `stage-facts.json` `agent.argv` holding its sha256): the file at
+    the first argv entry hashes to `explore.json` `cli.sha256` (the manifest's `cliSha256`) and its path is the home
+    joined with `cli.pathParts`; the value after `--model` is `cli.model`; the value after `--max-budget-usd` is
+    `caps.capUsd`; the value after `--tools` is v1's `BARE_TOOLS` joined by commas. The effort is no argv entry: the
+    session's `harness/settings.json` `effortLevel` and `modelSettings.<model>.effortLevel` are `cli.effort`, and that
+    file's sha256 is `argv.json` `settingsSha256`;
+  - **the binds** (`stage-facts.json` `agent.binds`, the `{ host, box }` pairs of the bwrap argv): every pair outside the
+    session's own folder `<series>/s/<rid>/` binds a folder to itself and is the pinned CLI copy or a pinned toolchain
+    folder (`spikes/lang-bench/inputs/stacks-lang.json` `storeRoot` and `directories`); and, with each session's own
+    folder written as one placeholder, the two sessions of the pair have the same set of pairs. A difference in that
+    second check refutes both sessions;
+  - **the cache snapshots' hashes** (`stage-facts.json` `cache.csharp` and `cache.node` `treeSha256`): the `treeSha256` of
+    `spikes/lang-bench/inputs/cache-snapshots-lang.json`, equal to the manifest's `snapshot.csharp` and `snapshot.node`;
+  - **the package list** (`stage-facts.json` `cache.packages`): the C# then the Node `packages` of that registry, entry for
+    entry;
+  - **the agent box's environment keys** (`stage-facts.json` `agent.envKeys` and `agent.culture`): as a set, the keys of
+    v1's `agentEnv` (`spikes/minigit-bench/lib/sandbox.mjs`) for the session's own `plan.json`; `LANG` and `LC_ALL` are
+    `explore.json` `locale`;
+  - **the scoring box's keys, with the two heap keys and their values, of every completed pass** (each
+    `score/passes/pNN-<profile>-aK.json` of kind `completed`, field `box`): the keys are `allowFor(stack)` and the heap keys
+    and values are `heapKeys(stack, memory-limit.json bytes)` (both of `spikes/lang-bench/lib/exec-layer/env.mjs`); `LANG`
+    and `LC_ALL` are `explore.json` `locale`. A difference in any one completed pass makes the field `refuted`. The
+    retries of a pass that did not complete are not read. A session with no completed pass shows this field as "no
+    completed pass, not compared"; that alone is **not** `refuted`, and the other fields are still compared;
+  - **the effective CPU affinity**: `stage-facts.json` `launch.affinity` `mask` is the cell's mask for the stack in
+    `schedule.json` `masks`, and `observed` (the mask observed in flight) is true; the launch's read-back file
+    `<series>/readback/p<slot>-<utc>.json` shows that mask observed as itself; each completed pass's `observedCpus` is
+    its profile's CPUs in `schedule.json` `scoring.profiles`;
+  - **the spec blob**: `stage-facts.json` `workspace.statementSha256` is the statement's hash in `prompts-lang.json` (the
+    hash list at W); the frozen spec's sha256 the session's task slice holds (`<series>/inputs.json`
+    `tasks.<NN>.taskPins.spec.sha256`) is `spec-states.json` `specs.<NN>.sha256`, the manifest's `spec.<NN>`.
 - **A difference is `refuted`.** A field that is not stored is a refusal of the tool, never a blank.
 - An Opus judge writes one dated `G-1` line per session (`holds` or `refuted`). A `refuted` line makes the session
   `void: harness`; its one re-run is the schedule's next step and is read back the same way.
@@ -383,8 +432,10 @@ rules were registered before the first paid session, and they are the rules belo
 
 <!-- adjudication-rule: masks-order -->
 - **The masks**, in this order: v1's mask rules (`spikes/minigit-bench/lib/adjudicate-mask.mjs`, held to the blob id that
-  `adjudication-rules.json` names), then the added rules that file lists (the two runtimes' and frameworks' names, their
-  error and abort shapes, file suffixes, compiler error codes and the heap keys). The tool adds no mask of its own.
+  `adjudication-rules.json` names), then the added rules that file lists, in its order: the two frameworks' log shapes,
+  the runtimes' own error messages, the runtimes' and frameworks' names, the heap keys, the abort shapes, the compiler
+  error codes (TypeScript's of four and five digits, C#'s of four, anywhere in the text) and the file suffixes and stack
+  file names. The tool adds no mask of its own.
 
 <!-- adjudication-rule: memory-cause -->
 - **A memory cause.** Before the reveal a `memory limit` packet shows its cause as `kernel kill` or `runtime abort`, with the
@@ -396,14 +447,23 @@ rules were registered before the first paid session, and they are the rules belo
   answers of step 1.
 
 <!-- adjudication-rule: step-two -->
-- **Step 2**, after the reveal. An Opus judge answers `product` or `harness`, with a reason, for every packet.
+- **Step 2**, after the reveal. An Opus judge answers `product` or `harness`, with a reason, for every packet. An answer
+  is final when it is written: the first answer of a packet stands, and the tool refuses a second answer for the same
+  blind id, so every answer written stays in the record as written. There is no correction path, because a correction
+  would need a public line that names a blind id, and the public text holds none (D41).
 
 <!-- adjudication-rule: exclusion -->
 - **The exclusion.** A case judged `spec-ambiguity` in any session is dropped from every session of its task, and from no
   session of another task.
 
 <!-- adjudication-rule: revised-verdict -->
-- **The revised verdict.** A session's revised verdict is the verdict rule over its passes without the dropped cases:
+- **The revised verdict.** A session's revised verdict is the verdict rule over its build record and its passes without
+  the dropped cases. The rule is `verdictOf` of `spikes/lang-explore/lib/verdict.mjs` (F1's ten-pass rule, D71), a file of
+  the Stage 1 harness, frozen by the tag through the harness identity. In words: **accepted** when the build passed, all
+  ten passes completed and every remaining case passed in all ten; **rejected** when the build failed, or when a
+  completed pass holds a failing remaining case and no completed pass is clean; **intermittently incorrect** when a
+  completed pass holds a failing remaining case and another completed pass is clean; **unscored: environment** when no
+  completed pass holds a failing remaining case and some pass has no completed attempt after its three attempts. So:
   - a pass whose failing cases are all dropped counts as **clean** in the revised reading;
   - a session whose only failing cases are dropped is **accepted** in the revised reading;
   - a session whose build failed keeps its primary verdict;
