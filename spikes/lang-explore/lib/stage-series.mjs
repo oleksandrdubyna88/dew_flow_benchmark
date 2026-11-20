@@ -1,5 +1,5 @@
 // The Stage 1 series (F3.S1 (a), PR 3): ONE directory `x-<yyyymmdd>-<4 hex>` holds the A/A, the pilot and the 30 slots, so there is one ledger, one run-map and one alias baseline (D47). It is made through `createSeries`'s own steps,
-// widened by its `stage` argument. `explore-series.json` holds `{ seriesId, createdAt, stage: 1, arm: 'bare', tasks, rounds, preregTag, preregCommit, seedSha256, pilot }`; `inputs.json` the series-wide parts once and, under
+// widened by its `stage` argument. `explore-series.json` holds `{ seriesId, createdAt, stage: 1, arm: 'bare', tasks, rounds, preregTag, preregCommit, seedSha256, pilot, branch }` (`branch`: the local branch a paid series was made on, which is the one `stage-sync` moves; a rehearsal records none); `inputs.json` the series-wide parts once and, under
 // `tasks.<NN>`, each task's slice (`stage-inputs.mjs`). Pure but for the directory it makes.
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { STAGE_ROUNDS } from './stage-schedule.mjs';
@@ -17,9 +17,9 @@ export const ARM = 'bare';
  * per-task slices (`{ '04': {...}, ... }`, one for each task of the freeze).
  */
 export function stageParts({ pre, wide, slices }) {
-  const { preregTag, preregCommit, seedSha256, pilot, rehearsalSeed } = pre;
+  const { preregTag, preregCommit, seedSha256, pilot, rehearsalSeed, branch } = pre;
   return {
-    state: { stage: STAGE, arm: ARM, tasks: [...FREEZE_TASKS], rounds: STAGE_ROUNDS, preregTag, preregCommit, seedSha256, pilot, ...(rehearsalSeed === undefined ? {} : { rehearsalSeed }) },
+    state: { stage: STAGE, arm: ARM, tasks: [...FREEZE_TASKS], rounds: STAGE_ROUNDS, preregTag, preregCommit, seedSha256, pilot, ...(rehearsalSeed === undefined ? {} : { rehearsalSeed }), ...(branch === undefined ? {} : { branch }) },
     inputs: { stage: STAGE, arm: ARM, ...wide, tasks: slices },
     map: { stage: STAGE, preregTag, preregCommit, seedSha256 },
   };

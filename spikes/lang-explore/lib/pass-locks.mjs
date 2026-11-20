@@ -38,6 +38,17 @@ export function seriesLockProblem({ seriesDir, pid = process.pid, startTime = pr
   return held.pid === pid && held.startTime === startTime ? null : `${file} is ${holder(held)}, not by this process (pid ${pid}): scoring runs only under the series lock this process holds`;
 }
 
+/**
+ * Who holds `<series>/series.lock` right now, READ and never taken: a sentence naming the holder, or null when there is no lock or its owner is gone (a stale lock stops nothing). An unreadable lock counts as held: it may be a runner in the middle
+ * of writing it. `isAlive` is the seam of a test.
+ */
+export function seriesLockHolder({ seriesDir, isAlive = ownerAlive }) {
+  const held = stampOf(path.join(seriesDir, LOCK_FILE));
+  if (held === null) return null;
+  if (held === 'unreadable') return 'an unreadable series.lock (a runner may be writing it)';
+  return isAlive(held.pid, held.startTime) ? holder(held) : null;
+}
+
 /** Does this process hold `<series>/series.lock`? */
 export const lockHeldByMe = a => seriesLockProblem(a) === null;
 

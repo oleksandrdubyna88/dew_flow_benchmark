@@ -246,7 +246,7 @@ test('The_live_identities_are_read_from_the_places_that_own_them_and_one_that_ca
   const looser = await read({});
   assert.equal(looser.policy.value, now.policy.value);
   put(path.join(repo, prereg, 'crosscheck-policy.json'), { t1: 'stop', t2: 'otel-incomplete', t3: 'investigate', t5: 'stop' });
-  assert.equal((await read({})).policy.value, now.policy.value, 'the policy\'s free fields (t3, t5) are no part of its identity');
+  assert.equal((await read({})).policy.value, now.policy.value, 'the policy\'s four free fields (t3, t5, decidedOn, reason) are no part of its identity');
   put(path.join(repo, prereg, 'crosscheck-policy.json'), { t1: 'investigate', t2: 'otel-incomplete', t3: 'stop', t5: 'investigate' });
   assert.notEqual((await read({})).policy.value, now.policy.value, 'any other field is');
   put(path.join(repo, prereg, 'prices-2026-11-20.json'), 'more');

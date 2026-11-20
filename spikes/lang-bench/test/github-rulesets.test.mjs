@@ -7,7 +7,7 @@ import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { RULESETS, TASK_REPO } from '../lib/github-lang.mjs';
+import { BENCH_OWNER_GO, BENCH_REPO, BENCH_RULESETS, RULESETS, TASK_REPO } from '../lib/github-lang.mjs';
 import { DEFAULT_PACKAGES_FILE, main } from '../github-rulesets.mjs';
 import { ALL_CALLS, asGitHub, brokenRunner, fakeGitHub } from './support/github-fixtures.mjs';
 import { ownedFolder, writeTree } from './toolchain-fixtures.mjs';
@@ -416,4 +416,68 @@ test('No_command_test_reaches_the_network', () => {
   assert.ok(ALL_CALLS.length > 20, `${ALL_CALLS.length} recorded calls`);
   assert.deepEqual([...new Set(ALL_CALLS.map(call => call.exe))], ['gh']);
   assert.ok(ALL_CALLS.filter(call => call.method !== 'GET').every(call => call.method === 'POST'), 'the only write any test made was a POST to a fake');
+});
+
+// ---- --bench: the bench repository's pre-registration tag rulesets (F3.S1 (b), PR 5; the owner's go of 2026-11-19). Never a real call: every case runs over the fake. -----------------------------
+
+const benchPresent = () => BENCH_RULESETS.map((ruleset, index) => asGitHub(ruleset, 200 + index));
+const everyCallIs = (github, repo) => github.calls.length > 0 && github.calls.every(call => call.args.some(arg => arg.startsWith(`repos/${repo}/rulesets`)));
+
+test('A_bench_check_of_equal_rulesets_is_exit_0_reads_the_bench_repository_only_and_reports_no_merge_settings', async () => {
+  const got = await runMain(['--bench', '--check'], fakeGitHub({ rulesets: benchPresent() }));
+  assert.equal(got.exit, 0, got.out.join('|'));
+  for (const ruleset of BENCH_RULESETS) assert.ok(got.out.includes(`${ruleset.name}: equal`), got.out.join('|'));
+  assert.ok(got.out.some(line => line.startsWith('ids: prereg-tags=200 prereg-tags-create=201')), got.out.join('|'));
+  assert.ok(everyCallIs(got.github, BENCH_REPO), 'every call names the bench repository\'s rulesets, and none reads the repository\'s merge settings');
+  assert.ok(!got.out.some(line => line.includes('merge settings')), 'the merge settings are the task repository\'s');
+  assert.deepEqual(got.github.writes(), []);
+  assert.deepEqual(got.progress.map(p => p.line), ['reading the bench repository\'s rulesets…']);
+});
+
+test('A_bench_check_with_an_absent_or_different_ruleset_is_exit_1_and_changes_nothing', async () => {
+  const absent = await runMain(['--bench'], fakeGitHub({ rulesets: benchPresent().slice(0, 1) }));
+  assert.equal(absent.exit, 1);
+  assert.ok(absent.out.includes('prereg-tags-create: absent'), absent.out.join('|'));
+  const different = await runMain(['--bench', '--check'], fakeGitHub({ rulesets: benchPresent().map((r, i) => (i === 0 ? { ...r, rules: r.rules.slice(0, 1) } : r)) }));
+  assert.equal(different.exit, 1);
+  assert.ok(different.out.includes('  - missing rule: deletion'), different.out.join('|'));
+  assert.deepEqual([...absent.github.writes(), ...different.github.writes()], []);
+});
+
+test('A_bench_apply_needs_the_owners_go_date_and_makes_no_call_without_it', async () => {
+  for (const argv of [['--bench', '--apply'], ['--bench', '--apply', '--owner-go'], ['--bench', '--check', '--owner-go', BENCH_OWNER_GO], ['--owner-go', BENCH_OWNER_GO], ['--bench', '--apply', '--owner-go', BENCH_OWNER_GO, '--dry-run-record', 'x'], ['--apply', '--owner-go', BENCH_OWNER_GO]]) {
+    const github = fakeGitHub();
+    const got = await runMain(argv, github);
+    assert.equal(got.exit, 2, argv.join(' '));
+    assert.deepEqual(github.calls, [], argv.join(' '));
+    assert.ok(got.err.join('\n').includes('usage'), argv.join(' '));
+  }
+  const wrong = fakeGitHub();
+  const refused = await runMain(['--bench', '--apply', '--owner-go', '2026-11-18'], wrong);
+  assert.equal(refused.exit, 1, 'another date is a refusal');
+  assert.match(refused.err.join('|'), /owner's go of 2026-11-19; nothing was read or written/);
+  assert.deepEqual(wrong.calls, []);
+  assert.deepEqual(refused.progress, [], 'a refused apply says nothing of reading');
+});
+
+test('A_bench_apply_under_the_go_creates_the_two_rulesets_and_reads_them_back_equal_with_their_ids', async () => {
+  const github = fakeGitHub();
+  const got = await runMain(['--bench', '--apply', '--owner-go', BENCH_OWNER_GO], github);
+  assert.equal(got.exit, 0, got.err.join('|'));
+  assert.ok(got.out.includes('created prereg-tags') && got.out.includes('created prereg-tags-create'), got.out.join('|'));
+  assert.ok(got.out.includes('read back after the writes: equal'));
+  assert.ok(got.out.some(line => line.startsWith('ids: prereg-tags=1000 prereg-tags-create=1001')), 'the ids step T records are printed');
+  assert.ok(everyCallIs(github, BENCH_REPO));
+  assert.deepEqual(github.writes().map(call => call.method), ['POST', 'POST']);
+  const again = await runMain(['--bench', '--apply', '--owner-go', BENCH_OWNER_GO], fakeGitHub({ rulesets: github.state.rulesets }));
+  assert.equal(again.exit, 0);
+  assert.deepEqual(again.github.writes(), []);
+  assert.ok(again.out.includes('read back: equal'));
+});
+
+test('The_usage_text_names_the_bench_flags_and_the_task_repository_stays_the_default', async () => {
+  const text = (await runMain(['--bogus'], fakeGitHub())).err.join('\n');
+  for (const word of ['--bench', '--owner-go <date>', BENCH_REPO]) assert.ok(text.includes(word), `${word} in: ${text}`);
+  const plain = await runMain([], fakeGitHub({ rulesets: present() }));
+  assert.ok(everyCallIs(plain.github, TASK_REPO) || plain.github.calls.every(call => call.args.some(arg => arg.startsWith(`repos/${TASK_REPO}`))), 'no flag: the task repository, as before');
 });

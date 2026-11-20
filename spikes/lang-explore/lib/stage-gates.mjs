@@ -1,6 +1,7 @@
 // What `stage-run` reads before it chooses a unit (F3.S1 (a), PR 3): the registered amendments (the dated lines of `stage-amendments.mjs`), the revealed seed and the guard. A rehearsal series is free and has its own seed in its state; a paid series needs a
 // dated `pilot | GO` line for its data slots, the revealed seed (`inputs/prereg/seed.txt`, which must hash to the series' `seedSha256`) and the owner's go line for what it launches. The guard of a paid launch is PR 4's `stageGuard` (the frozen record, the task
-// repository at it, every identity against the manifest) and, through `deps.preregGuard`, PR 5's: with none handed in, a paid launch is refused, so a Stage 1 series never runs with a guard that always passes. A rehearsal's guard passes by itself.
+// repository at it, every identity against the manifest) with PR 5's in its `deps` (`stage-prereg-guard.mjs`: the tag, the registered blobs, the clean tree, the harness identity, the seed for a data slot, the harness reader and the dated lines
+// that accept a harness). Before PR 6 there is no manifest and no tag, so a paid series is refused with PR 5's own named problems. A rehearsal's guard passes by itself.
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -9,6 +10,7 @@ import { INPUTS, REPO } from './paths.mjs';
 import { STAGE_AMENDMENTS_FILE, ownerGoLine, parseStageAmendments, pilotGoProblem, readStageAmendments, readbackLinesOf, reportLinesOf } from './stage-amendments.mjs';
 import { STACK_ORDER, isRehearsal, seriesInputs } from './series.mjs';
 import { stageGuard } from './stage-guard.mjs';
+import { preregDeps } from './stage-prereg-guard.mjs';
 import { READBACK_ROW, slotsOf } from './stage-schedule.mjs';
 
 /** The revealed seed: `seed.txt` of the registered `prereg` folder, written by `seed-reveal` (PR 5) after the pilot. */
@@ -20,11 +22,20 @@ const seam = (io, name, fallback) => io.stage?.[name] ?? fallback;
 /** The task repository the series was made over (`stage-init` recorded its checkout in `inputs.json`), or `undefined` when the inputs do not say (the guard then asks for `LANG_V2_TASK_REPO`). */
 const recordedTaskRepo = dir => { const inputs = seriesInputs(dir); return inputs.ok ? inputs.value.taskRepo?.root : undefined; };
 
+/** The registered amendments' text for the guard, or '' when they cannot be read (`readGates` refuses an unreadable file before a guard is asked). */
+const textForGuard = io => { const read = amendmentsText(io); return read.ok ? read.value : ''; };
+
 /**
- * The guard of a paid launch (`stageGuard`, PR 4) over this checkout and the series' own task repository: `({ paid, requireSeed }) -> ok(null) | fail(reason, { problems })`. `io.stage.guardArgs` replaces `repo`, `taskRepo` and `deps` (the seams of
- * the tests and of PR 5: `preregGuard`, `readers.harness`, `harnessAccepted`, `manifest`, `live`, `pinnedTaskSha`, `env`).
+ * The arguments of `stageGuard` for a paid launch of `series`: this checkout, the series' task repository and PR 5's `deps` (`preregGuard`, the `harness` reader, `harnessAccepted`, `preregDeps`). `io.stage.guardArgs` replaces `repo` and
+ * `taskRepo` and each of the `deps` by name (the seams of the tests: `preregGuard`, `readers`, `harnessAccepted`, `manifest`, `live`, `pinnedTaskSha`, `env`; a `deps` key set to `undefined` removes the default).
  */
-export const stageGuardOf = ({ series, io }) => ({ paid, requireSeed }) => stageGuard({ repo: REPO, series: series.dir, taskRepo: recordedTaskRepo(series.dir), deps: {}, ...io.stage?.guardArgs, paid, requireSeed });
+function guardArgsOf({ series, io }) {
+  const { deps = {}, ...over } = io.stage?.guardArgs ?? {};
+  return { repo: REPO, taskRepo: recordedTaskRepo(series.dir), ...over, deps: { ...preregDeps({ series, text: textForGuard(io) }), ...deps } };
+}
+
+/** The guard of a paid launch: `stageGuard` (PR 4) over this checkout and the series' own task repository, with PR 5's guard in its `deps`: `({ paid, requireSeed }) -> ok(null) | fail(reason, { problems })`. */
+export const stageGuardOf = ({ series, io }) => ({ paid, requireSeed }) => stageGuard({ ...guardArgsOf({ series, io }), series: series.dir, paid, requireSeed });
 
 /** The guard of a series: a rehearsal's (free) passes; a paid series' is the one handed in (`io.stage.guardFn`), else PR 4's `stageGuard`. */
 export const guardOf = ({ series, io }) => (isRehearsal(series.dir) ? async () => ok(null) : seam(io, 'guardFn', stageGuardOf({ series, io })));

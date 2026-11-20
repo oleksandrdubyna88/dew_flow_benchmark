@@ -70,11 +70,22 @@ const plannedEntry = ({ unit, entry, rand }) => ({
 
 const collisionSentence = (entry, reason) => `${reason}: the rid ${entry.rid} is already in the run-map, so nothing was planned${entry.kind === DATA_KIND ? ' (a data rid comes from the seed and cannot be drawn again: the schedule names it for this slot, so a session of this series already holds it)' : ' (a pilot rid is drawn at random; run the command again to draw another)'}`;
 
+const isFirstDataPlan = ({ before, after, unit }) => unit.kind === DATA_KIND && !hasDataPlanned(before) && hasDataPlanned(after);
+const hasDataPlanned = map => Object.values(map.sessions ?? {}).some(s => s.kind === DATA_KIND);
+
+/**
+ * The run-map of a plan with the harness identity the guard accepted recorded in it (`harnessAtFirstData`, 12 hex) and the 12 hex of each instrument input (`inputsAtFirstData`), when this plan is the one that first plans a data session of the series: the acceptance of a dated line is then frozen with the
+ * plan, written by the same `commitPlan` write, so a later launch accepts exactly that identity (or the manifest's) and nothing a later line names. Any other plan, and a plan with no identity (a rehearsal, a guard that gave none), leaves the map as it is.
+ */
+function withHarnessAtFirstData({ before, after, unit, harnessNow, inputsNow }) {
+  return typeof harnessNow === 'string' && isFirstDataPlan({ before, after, unit }) ? Object.freeze({ ...after, harnessAtFirstData: harnessNow.slice(0, 12), inputsAtFirstData: inputsNow }) : after;
+}
+
 /**
  * The unit's plan: the run-map with every `plan` step of its todo planned (data sessions under the schedule's rids, pilot and A/A sessions under a drawn `pilotRid`), and what was planned or resumed, in the shape `commitPlan` and `settleOpen`
  * of `run.mjs` take. A rid that is already in the run-map fails closed (`planSession`): nothing is planned twice. -> `ok({ map, planned, resumed? })` | `fail`.
  */
-export function planUnit({ map, unit, rand = () => randomBytes(4).toString('hex') }) {
+export function planUnit({ map, unit, harnessNow = null, inputsNow = {}, rand = () => randomBytes(4).toString('hex') }) {
   let current = map;
   const planned = [];
   for (const entry of unit.todo.filter(e => e.step === 'plan')) {
@@ -85,7 +96,7 @@ export function planUnit({ map, unit, rand = () => randomBytes(4).toString('hex'
     planned.push(made);
   }
   const resumed = unit.todo.filter(e => e.step !== 'plan').map(e => e.rid);
-  return ok({ map: current, planned, ...(resumed.length > 0 ? { resumed } : {}) });
+  return ok({ map: withHarnessAtFirstData({ before: map, after: current, unit, harnessNow, inputsNow }), planned, ...(resumed.length > 0 ? { resumed } : {}) });
 }
 
 const refOf = s => ({ stack: s.stack, phase: s.phase, attempt: s.attempt, rid: s.rid });

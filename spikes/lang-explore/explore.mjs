@@ -6,7 +6,7 @@
 //   node spikes/lang-explore/explore.mjs calibrate --task NN           FREE: the oracle (brute.py, handcheck.md), both references through the judge at the 30 s ceiling, the limits (TL, ML), every mutant against its predicted cases
 //   node spikes/lang-explore/explore.mjs rehearse --task NN            FREE: one pair end to end with v1's stub CLI and stub upstream, a fake token; exit 0 when every criterion holds
 //   node spikes/lang-explore/explore.mjs init --task NN                creates a series of the task (the mask draw is made and recorded)
-//   node spikes/lang-explore/explore.mjs stage-init [--rehearsal] [--task-repo <checkout>]   FREE: the ONE series of Stage 1 (F3.S1): the A/A, the pilot and the 30 slots of the six tasks; a paid series needs the pre-registration's guard (PR 5), a rehearsal series (`r-`) needs none
+//   node spikes/lang-explore/explore.mjs stage-init [--rehearsal] [--task-repo <checkout>] [--prereg-tag <name>]   FREE: the ONE series of Stage 1 (F3.S1): the A/A, the pilot and the 30 slots of the six tasks; a paid series needs the pre-registration's guard (PR 5), a rehearsal series (`r-`) needs none
 //   node spikes/lang-explore/explore.mjs stage-run --series <dir> --what aa|pilot:<NN>|next [--until round] [--dry-run] [--accept-noisy <why>]   SPENDS MONEY (a rehearsal series: stub CLI, $0): ONE unit chosen by the schedule; no flag names another data pair; needs the owner's go line for its scope
 //   node spikes/lang-explore/explore.mjs stage-status --series <dir>   FREE: the rounds, the slots, the pilot and the spend on five lines (pilot, A/A, data, void, re-run)
 //   node spikes/lang-explore/explore.mjs stage-archive --series <dir> --to <backup dir>   FREE: copy the whole series to the private backup, verify the copy file by file against the sha256 list, record it in archive.json; deletes nothing
@@ -31,6 +31,9 @@
 //   node spikes/lang-explore/explore.mjs workspaces --tag <ref> --task-repo <task repository> --out <dir>   FREE: the twelve freeze workspaces (tasks 04 05 06 07 08 10, both stacks), exactly what a session is given, the spec and FORMAT read at <ref>, into <dir>/csharp/<NN-slug>/ and <dir>/node/<NN-slug>/ (F2.S2 (d)); <dir> is refused inside any git worktree
 //   node spikes/lang-explore/explore.mjs workspaces-copy --from <dir> --into <worktree of the task repository>   FREE: the separate, reviewed copy of those folders into a clean worktree at the commit they were made from; resumable (an equal folder is skipped, a different one refused)
 //   node spikes/lang-explore/explore.mjs workspaces --check --root <checkout>   FREE and read only: the twelve built again from the checkout's HEAD and compared with the committed folders; the last line of a pass is `workspaces-check ok commit <HEAD> tasks … stacks …`, exit 1 on a finding
+//   node spikes/lang-explore/explore.mjs seed-commit                  FREE: the Stage 1 seed (`lv2-` and 16 hex) drawn so that the schedule accepts it, written to ~/rsd/lang-v2/seeds/stage1.seed (mode 600, outside git) and its sha256 to inputs/prereg/seed.sha256; the last step before the tag
+//   node spikes/lang-explore/explore.mjs seed-reveal                  FREE: inputs/prereg/seed.txt, after the A/A; the seed must hash to the committed value
+//   node spikes/lang-explore/explore.mjs stage-sync [--series <dir>] [--accept-harness <12 hex>]   FREE: on the series' own branch, holds the series lock of every Stage 1 series while it fetches origin, takes the registered files that may change (amendments, seed.txt, the policy, the two caps of explore.json, quiet.json, package-flags.json) from origin/main and commits them; never pushes. With `--accept-harness <12 hex>` it takes the harness folders (and the shared rules' commit) of the commit that the dated `instrument | harness:<12 hex> | commit:<40 hex> ...` line of origin/main names, which must be reachable from origin/main, checks that their identity is the 12 hex, and is refused once a data session has left `planned`; a bare flag is refused naming the value it needs
 //
 // Exit codes: 0 done | 1 a finding of `workspaces --check` | 2 a stop | 3 a resumable halt (the machine not quiet, the preflight) | 4 usage, configuration or a refusal | 5 failed | 130 / 143 cancelled by SIGINT / SIGTERM.
 // `run` and `rehearse` re-execute themselves under `taskset -c 6,7` (an env marker stops a loop), so the broker, the receiver, the proxy and the sampler sit on the harness core, as v1's runner does.
@@ -43,6 +46,7 @@ import { calibrateCommand } from './lib/calibrate.mjs';
 import { cmdHeldoutCheck, cmdHeldoutClose, cmdHeldoutOpen } from './lib/heldout-commands.mjs';
 import { EXIT, cmdInit, cmdLeakcheck, cmdNote, cmdPrune, cmdQuiet, cmdReadback, cmdRehearse, cmdRepartition, cmdReplay, cmdRescore, cmdRun, cmdStatus } from './lib/commands.mjs';
 import { cmdPackage, cmdRegisterMemory } from './lib/package-command.mjs';
+import { cmdSeedCommit, cmdSeedReveal, cmdStageSync } from './lib/stage-prereg-commands.mjs';
 import { cmdStageArchive, cmdStageFree, cmdStageInit, cmdStageRestore, cmdStageRun, cmdStageStatus } from './lib/stage-commands.mjs';
 import { prepare } from './lib/prepare.mjs';
 import { cmdWorkspaces, cmdWorkspacesCopy } from './lib/workspaces-command.mjs';
@@ -50,7 +54,13 @@ import { taskFromValues } from './lib/tasks.mjs';
 import { isQuick } from './lib/quick.mjs';
 import { loadWorld } from './lib/world.mjs';
 
-const OPTIONS = { task: { type: 'string' }, 'allow-over': { type: 'string' }, pair: { type: 'string' }, series: { type: 'string' }, rerun: { type: 'string' }, 'accept-noisy': { type: 'string' }, out: { type: 'string' }, range: { type: 'string' }, 'task-repo': { type: 'string' }, 'task-base': { type: 'string' }, 'candidate-repo': { type: 'string' }, candidate: { type: 'string' }, force: { type: 'boolean' }, rid: { type: 'string' }, wait: { type: 'string' }, case: { type: 'string' }, times: { type: 'string' }, tasks: { type: 'string' }, 'key-file': { type: 'string' }, 'key-backup': { type: 'string' }, 'share-mount': { type: 'string' }, only: { type: 'string' }, register: { type: 'boolean' }, seal: { type: 'boolean' }, tag: { type: 'string' }, from: { type: 'string' }, into: { type: 'string' }, check: { type: 'boolean' }, root: { type: 'string' }, rehearsal: { type: 'boolean' }, what: { type: 'string' }, until: { type: 'string' }, 'dry-run': { type: 'boolean' }, to: { type: 'string' } };
+const OPTIONS = { task: { type: 'string' }, 'allow-over': { type: 'string' }, pair: { type: 'string' }, series: { type: 'string' }, rerun: { type: 'string' }, 'accept-noisy': { type: 'string' }, out: { type: 'string' }, range: { type: 'string' }, 'task-repo': { type: 'string' }, 'task-base': { type: 'string' }, 'candidate-repo': { type: 'string' }, candidate: { type: 'string' }, force: { type: 'boolean' }, rid: { type: 'string' }, wait: { type: 'string' }, case: { type: 'string' }, times: { type: 'string' }, tasks: { type: 'string' }, 'key-file': { type: 'string' }, 'key-backup': { type: 'string' }, 'share-mount': { type: 'string' }, only: { type: 'string' }, register: { type: 'boolean' }, seal: { type: 'boolean' }, tag: { type: 'string' }, from: { type: 'string' }, into: { type: 'string' }, check: { type: 'boolean' }, root: { type: 'string' }, rehearsal: { type: 'boolean' }, what: { type: 'string' }, until: { type: 'string' }, 'dry-run': { type: 'boolean' }, to: { type: 'string' }, 'accept-harness': { type: 'string' }, 'prereg-tag': { type: 'string' } };
+/** The options that may be given with or without a value: `--accept-harness` alone is as good as `--accept-harness <12 hex>`, so a bare flag reaches stage-sync's refusal that names the value it needs (a bare string option is a usage error of the parser). */
+const OPTIONAL_VALUE = new Set(['--accept-harness']);
+const isBare = (arg, next) => OPTIONAL_VALUE.has(arg) && (next === undefined || next.startsWith('-'));
+/** `args` with each bare optional-value option written as `--name=` (an empty value). */
+const withOptionalValues = args => args.map((arg, i) => (isBare(arg, args[i + 1]) ? `${arg}=` : arg));
+
 /** The commands that run or score under the two scoring CPUs: every scoring of the quick run, the diagnostic, the re-score and a package validation included, so the numbers they compare are measured in the same conditions. */
 export const REEXEC = new Set(['run', 'rehearse', 'rescore', 'replay', 'package', 'stage-run']);
 
@@ -71,7 +81,7 @@ async function cmdCalibrate(values, io) {
   return EXIT.failed;
 }
 
-const COMMANDS = Object.freeze({ prepare: cmdPrepare, calibrate: cmdCalibrate, rehearse: cmdRehearse, init: cmdInit, quiet: cmdQuiet, run: cmdRun, status: cmdStatus, readback: cmdReadback, note: cmdNote, prune: cmdPrune, leakcheck: cmdLeakcheck, rescore: cmdRescore, replay: cmdReplay, repartition: cmdRepartition, 'heldout-open': cmdHeldoutOpen, 'heldout-close': cmdHeldoutClose, 'heldout-check': cmdHeldoutCheck, package: cmdPackage, 'register-memory': cmdRegisterMemory, workspaces: cmdWorkspaces, 'workspaces-copy': cmdWorkspacesCopy, 'stage-init': cmdStageInit, 'stage-run': cmdStageRun, 'stage-status': cmdStageStatus, 'stage-archive': cmdStageArchive, 'stage-free': cmdStageFree, 'stage-restore': cmdStageRestore });
+const COMMANDS = Object.freeze({ prepare: cmdPrepare, calibrate: cmdCalibrate, rehearse: cmdRehearse, init: cmdInit, quiet: cmdQuiet, run: cmdRun, status: cmdStatus, readback: cmdReadback, note: cmdNote, prune: cmdPrune, leakcheck: cmdLeakcheck, rescore: cmdRescore, replay: cmdReplay, repartition: cmdRepartition, 'heldout-open': cmdHeldoutOpen, 'heldout-close': cmdHeldoutClose, 'heldout-check': cmdHeldoutCheck, package: cmdPackage, 'register-memory': cmdRegisterMemory, workspaces: cmdWorkspaces, 'workspaces-copy': cmdWorkspacesCopy, 'stage-init': cmdStageInit, 'stage-run': cmdStageRun, 'stage-status': cmdStageStatus, 'stage-archive': cmdStageArchive, 'stage-free': cmdStageFree, 'stage-restore': cmdStageRestore, 'seed-commit': cmdSeedCommit, 'seed-reveal': cmdSeedReveal, 'stage-sync': cmdStageSync });
 
 /** SIGINT and SIGTERM abort the run: the reason and the exit code are recorded for the loop, then the controller aborts. */
 function armSignals(abort, ctl) {
@@ -82,7 +92,7 @@ function armSignals(abort, ctl) {
 export async function main(argv, seams = {}) {
   const [command, ...rest] = argv;
   let values;
-  try { values = parseArgs({ args: rest, options: OPTIONS, allowPositionals: false }).values; } catch (e) { process.stderr.write(`explore: usage error: ${e.message}\n`); return EXIT.config; }
+  try { values = parseArgs({ args: withOptionalValues(rest), options: OPTIONS, allowPositionals: false }).values; } catch (e) { process.stderr.write(`explore: usage error: ${e.message}\n`); return EXIT.config; }
   if (!Object.hasOwn(COMMANDS, command ?? '')) { process.stderr.write(`explore: '${command ?? ''}' is not a command; the commands are ${Object.keys(COMMANDS).join(', ')}\n`); return EXIT.config; }
   const abort = { reason: null, exit: 130 };
   const ctl = new AbortController();

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { ADMIN_ROLE_ACTOR_ID, MERGE_SETTINGS, PACKAGE_TASKS, RULESETS, TASK_REPO, applyGateProblems, applyRulesets, deepFrozenCopy, mergeSettingsProblems, readMergeSettings, readRulesets, rulesetProblems, rulesetsReadBack, scrub } from '../lib/github-lang.mjs';
+import { ADMIN_ROLE_ACTOR_ID, BENCH_OWNER_GO, BENCH_REPO, BENCH_RULESETS, MERGE_SETTINGS, PACKAGE_TASKS, RULESETS, TASK_REPO, applyGateProblems, applyRulesets, deepFrozenCopy, mergeSettingsProblems, readMergeSettings, readRulesets, rulesetProblems, rulesetsReadBack, scrub } from '../lib/github-lang.mjs';
 import { ALL_CALLS, asGitHub, brokenRunner, collector, fakeGitHub } from './support/github-fixtures.mjs';
 
 const byName = name => RULESETS.find(ruleset => ruleset.name === name);
@@ -661,4 +661,116 @@ test('No_test_reaches_the_network', () => {
   assert.ok(ALL_CALLS.every(call => call.args[0] === 'api'));
   const sent = ALL_CALLS.filter(call => call.method !== 'GET');
   assert.ok(sent.every(call => call.method === 'POST' && call.args.find(arg => arg.startsWith('repos/')) === `repos/${TASK_REPO}/rulesets`), 'the only write any test made was a POST to a fake');
+});
+
+// ---- F3.S1 (b), PR 5: the pre-registration tags of the BENCH repository (the owner's answer of 2026-11-19 to open point 20) ----------------------------------------------------------------------
+// A ruleset on this repository refuses the update and the deletion of `refs/tags/prereg/*`; the creation is the admin's only (the task repository's `spec-frozen-tags` pair). The same compare, reads and apply serve it; nothing of this is applied by a test.
+
+const PREREG = 'prereg-tags';
+const PREREG_CREATE = 'prereg-tags-create';
+const benchByName = name => BENCH_RULESETS.find(ruleset => ruleset.name === name);
+const benchPresent = () => BENCH_RULESETS.map((ruleset, index) => asGitHub(ruleset, 200 + index));
+const FROM_TASK = { [PREREG]: TAGS, [PREREG_CREATE]: CREATE };
+
+test('The_bench_repository_has_a_tag_pair_that_refuses_update_and_deletion_of_prereg_tags_and_lets_only_the_admin_create_one', () => {
+  assert.equal(BENCH_REPO, 'oleksandrdubyna88/dew_flow_benchmark');
+  assert.deepEqual(BENCH_RULESETS.map(ruleset => ruleset.name), [PREREG, PREREG_CREATE]);
+  const [guard, create] = BENCH_RULESETS;
+  for (const ruleset of BENCH_RULESETS) {
+    assert.equal(ruleset.target, 'tag');
+    assert.equal(ruleset.enforcement, 'active');
+    assert.deepEqual(ruleset.conditions.ref_name, { include: ['refs/tags/prereg/*'], exclude: [] }, 'exactly this pattern: the tag `prereg/lang-v2-<yyyymmdd>` and v1\'s `prereg/minigit-bare-20261030` are in it');
+  }
+  assert.deepEqual(guard.bypass_actors, [], 'no bypass of the update and deletion rules, not even the admin\'s');
+  assert.deepEqual(typesOf(guard), ['update', 'deletion', 'non_fast_forward']);
+  assert.deepEqual(typesOf(create), ['creation']);
+  assert.deepEqual(create.bypass_actors, [{ actor_id: ADMIN_ROLE_ACTOR_ID, actor_type: 'RepositoryRole', bypass_mode: 'always' }], 'creation: the admin role only');
+  assert.ok(Object.isFrozen(BENCH_RULESETS) && Object.isFrozen(guard.rules[0]) && Object.isFrozen(create.bypass_actors[0]));
+});
+
+test('The_bench_pair_is_the_task_repositorys_tag_pair_with_its_own_names_and_pattern_and_nothing_else_differs', () => {
+  for (const [name, taskName] of Object.entries(FROM_TASK)) {
+    const own = benchByName(name);
+    const theirs = byName(taskName);
+    assert.deepEqual({ ...own, name: 'x', conditions: null }, { ...theirs, name: 'x', conditions: null }, `${name} has the rules, target, enforcement and bypass of ${taskName}`);
+  }
+});
+
+test('The_rulesets_of_a_repository_are_the_data_of_that_repository_and_the_other_ones_are_not_asked_of_it', async () => {
+  const github = fakeGitHub({ rulesets: benchPresent() });
+  const back = await rulesetsReadBack({ repo: BENCH_REPO, run: github.run });
+  assert.equal(back.ok, true, back.reason);
+  assert.equal(back.value.equal, true);
+  assert.deepEqual(back.value.states.map(state => `${state.name} ${state.status}`), [`${PREREG} equal`, `${PREREG_CREATE} equal`], 'two states: the task repository\'s three are not asked of the bench repository');
+  const taskSide = await rulesetsReadBack({ repo: TASK_REPO, run: fakeGitHub({ rulesets: readBackOf() }).run });
+  assert.deepEqual(taskSide.value.states.map(state => state.name), RULESETS.map(ruleset => ruleset.name), 'the task repository is read against its own three, as before');
+});
+
+test('A_bench_read_back_names_each_kind_of_difference_and_a_bench_ruleset_missing_a_rule_is_different', async () => {
+  const lacking = benchPresent().map(ruleset => (ruleset.name === PREREG ? { ...ruleset, rules: ruleset.rules.filter(rule => rule.type !== 'deletion') } : ruleset));
+  const back = await rulesetsReadBack({ repo: BENCH_REPO, run: fakeGitHub({ rulesets: lacking }).run });
+  assert.equal(back.value.equal, false);
+  assert.deepEqual(back.value.states.find(state => state.name === PREREG).problems, ['missing rule: deletion']);
+  const widened = benchPresent().map(ruleset => (ruleset.name === PREREG ? { ...ruleset, conditions: { ref_name: { include: ['refs/tags/*'], exclude: [] } } } : ruleset));
+  const wide = await rulesetsReadBack({ repo: BENCH_REPO, run: fakeGitHub({ rulesets: widened }).run });
+  assert.ok(wide.value.states.find(state => state.name === PREREG).problems.includes('extra include ref: refs/tags/*'), wide.value.states.map(state => state.problems).join('|'));
+});
+
+test('A_ruleset_that_is_not_in_the_bench_data_and_targets_the_prereg_tags_is_named_and_left_alone', async () => {
+  const stranger = asGitHub({ name: 'other-prereg', target: 'tag', enforcement: 'active', conditions: { ref_name: { include: ['refs/tags/prereg/lang-v2-*'], exclude: [] } }, bypass_actors: [], rules: [{ type: 'update' }] }, 301);
+  const elsewhere = asGitHub({ name: 'release-tags', target: 'tag', enforcement: 'active', conditions: { ref_name: { include: ['refs/tags/v*'], exclude: [] } }, bypass_actors: [], rules: [{ type: 'deletion' }] }, 302);
+  const back = await rulesetsReadBack({ repo: BENCH_REPO, run: fakeGitHub({ rulesets: [...benchPresent(), stranger, elsewhere] }).run });
+  assert.deepEqual(back.value.strangers, [{ id: 301, name: 'other-prereg', target: 'tag' }], 'the one beside the prereg tags is named; a ruleset on other tags is not');
+  assert.equal(back.value.equal, true, 'a stranger never decides equality');
+});
+
+test('A_bench_apply_without_the_owners_go_of_2026_11_19_refuses_before_any_call', async () => {
+  assert.equal(BENCH_OWNER_GO, '2026-11-19');
+  for (const ownerGo of [undefined, '', '2026-11-18', '2026-11-20', 20261119, null]) {
+    const github = fakeGitHub();
+    const applied = await applyRulesets({ repo: BENCH_REPO, run: github.run, say: collector().say, ownerGo });
+    assert.equal(applied.ok, false, String(ownerGo));
+    assert.equal(applied.kind, 'refused');
+    assert.match(applied.reason, /owner's go of 2026-11-19/);
+    assert.deepEqual(github.calls, [], 'not even a read');
+  }
+  const stale = fakeGitHub();
+  const task = await applyRulesets({ repo: BENCH_REPO, run: stale.run, say: collector().say, ...GO });
+  assert.equal(task.ok, false, 'the task repository\'s go (packages and a dry-run record) does not open the bench repository');
+  assert.deepEqual(stale.calls, []);
+});
+
+test('A_bench_apply_under_the_go_creates_only_the_absent_ones_reads_each_back_and_never_updates_or_deletes', async () => {
+  const github = fakeGitHub();
+  const say = collector();
+  const applied = await applyRulesets({ repo: BENCH_REPO, run: github.run, say: say.say, ownerGo: BENCH_OWNER_GO });
+  assert.equal(applied.ok, true, applied.reason);
+  assert.deepEqual(applied.value.outcomes, [{ name: PREREG, outcome: 'created' }, { name: PREREG_CREATE, outcome: 'created' }]);
+  assert.deepEqual(say.lines, [`created ${PREREG}`, `created ${PREREG_CREATE}`]);
+  assert.deepEqual(github.writes().map(call => [call.method, call.args.find(arg => arg.startsWith('repos/'))]), [['POST', `repos/${BENCH_REPO}/rulesets`], ['POST', `repos/${BENCH_REPO}/rulesets`]], 'two creates, both to the bench repository, no PATCH, no PUT, no DELETE');
+  assert.deepEqual(github.writes().map(call => JSON.parse(call.input)), [...BENCH_RULESETS], 'the body of each POST is the data, nothing else');
+  assert.equal(applied.value.readBack.equal, true);
+  const again = fakeGitHub({ rulesets: github.state.rulesets });
+  const second = await applyRulesets({ repo: BENCH_REPO, run: again.run, say: collector().say, ownerGo: BENCH_OWNER_GO });
+  assert.deepEqual(second.value.outcomes, [{ name: PREREG, outcome: 'unchanged' }, { name: PREREG_CREATE, outcome: 'unchanged' }]);
+  assert.deepEqual(again.writes(), [], 'a second apply writes nothing');
+});
+
+test('A_present_bench_ruleset_that_differs_is_refused_and_nothing_is_written_even_under_the_go', async () => {
+  const different = benchPresent().map(ruleset => (ruleset.name === PREREG ? { ...ruleset, rules: [{ type: 'update' }] } : ruleset));
+  const github = fakeGitHub({ rulesets: different.slice(0, 1) });
+  const applied = await applyRulesets({ repo: BENCH_REPO, run: github.run, say: collector().say, ownerGo: BENCH_OWNER_GO });
+  assert.equal(applied.ok, false);
+  assert.equal(applied.kind, 'refused');
+  assert.match(applied.reason, /prereg-tags is present and differs \(missing rule: deletion; missing rule: non_fast_forward\)/);
+  assert.deepEqual(github.writes(), []);
+});
+
+test('A_repository_that_is_neither_the_task_nor_the_bench_repository_makes_no_call_and_the_sentence_names_both', async () => {
+  const github = fakeGitHub({ rulesets: benchPresent() });
+  const got = await rulesetsReadBack({ repo: 'octocat/hello-world', run: github.run });
+  assert.equal(got.kind, 'config');
+  assert.ok(got.reason.includes(TASK_REPO) && got.reason.includes(BENCH_REPO), got.reason);
+  assert.match(got.reason, /task repository/);
+  assert.deepEqual(github.calls, []);
 });

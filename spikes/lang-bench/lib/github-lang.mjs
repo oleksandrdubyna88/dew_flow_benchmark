@@ -7,6 +7,10 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { runBounded } from '../../minigit-bench/lib/run.mjs';
 
 export const TASK_REPO = 'oleksandrdubyna88/dew_flow_ai_language_comparison';
+/** The bench repository (this one): F3.S1 (b) puts a ruleset on its `refs/tags/prereg/*` (the owner's answer of 2026-11-19 to open point 20). */
+export const BENCH_REPO = 'oleksandrdubyna88/dew_flow_benchmark';
+/** The date of the owner's go to create the bench repository's two tag rulesets once; a later change of them needs its own go. */
+export const BENCH_OWNER_GO = '2026-11-19';
 /** The repository admin role, per the integrations provider docs: GitHub's own REST text gives no mapping. */
 export const ADMIN_ROLE_ACTOR_ID = 5;
 
@@ -50,6 +54,21 @@ export const RULESETS = freeze([
     rules: [{ type: 'creation' }],
   },
 ]);
+
+const PREREG_CONDITIONS = { ref_name: { include: ['refs/tags/prereg/*'], exclude: [] } };
+
+/**
+ * The bench repository's rulesets, the task repository's tag pair on the pre-registration tags: `prereg-tags` refuses the update, the deletion and the force push of `refs/tags/prereg/*` with no bypass, and `prereg-tags-create` leaves
+ * the creation to the admin role. The tag `prereg/lang-v2-<yyyymmdd>` is created once by the admin at step T and is then fixed; v1's `prereg/minigit-bare-20261030` is in the pattern too.
+ */
+export const BENCH_RULESETS = freeze([
+  { name: 'prereg-tags', target: 'tag', enforcement: 'active', conditions: structuredClone(PREREG_CONDITIONS), bypass_actors: [], rules: [{ type: 'update' }, { type: 'deletion' }, { type: 'non_fast_forward' }] },
+  { name: 'prereg-tags-create', target: 'tag', enforcement: 'active', conditions: structuredClone(PREREG_CONDITIONS), bypass_actors: [{ actor_id: ADMIN_ROLE_ACTOR_ID, actor_type: 'RepositoryRole', bypass_mode: 'always' }], rules: [{ type: 'creation' }] },
+]);
+
+/** The data of each repository this module serves, by repository: the task repository's three rulesets and the bench repository's two. */
+const RULESETS_BY_REPO = freeze({ [TASK_REPO]: RULESETS, [BENCH_REPO]: BENCH_RULESETS });
+const rulesetsOf = repo => RULESETS_BY_REPO[repo];
 
 /** The repository's merge settings, reported and never enforced (a repository setting is not a ruleset). */
 export const MERGE_SETTINGS = freeze({ allow_merge_commit: false, allow_squash_merge: true });
@@ -185,6 +204,9 @@ function dryRunProblems(firstLine, packagesSha256) {
 /** Why the apply may not start, in sentences (`[]` it may): `packages` is `packages.json` parsed (`null` when it could not be read), `packagesSha256` the sha256 of its bytes, and `recordFirstLine` the dry-run record's first line (`null` when it could not be read). Pure. */
 export const applyGateProblems = ({ packages, packagesSha256, recordFirstLine }) => [...packagesProblems(packages), ...dryRunProblems(recordFirstLine, packagesSha256)];
 
+/** Why the bench repository's apply may not start: the owner's go of 2026-11-19 is named as `ownerGo`, exactly that date. */
+export const benchGateProblems = ownerGo => (ownerGo === BENCH_OWNER_GO ? [] : [`the go of the owner is not named: --owner-go must be ${BENCH_OWNER_GO}, the date of the owner's go to create the two tag rulesets of ${BENCH_REPO} once`]);
+
 // ---- the calls through gh ---------------------------------------------------------------------------------------------------------------
 
 const ACCEPT = 'Accept: application/vnd.github+json';
@@ -221,10 +243,10 @@ async function ghApi(run, args, input) {
 const HOST = ['--hostname', 'github.com'];
 const getJson = (run, path) => ghApi(run, ['-H', ACCEPT, ...HOST, path]);
 const postJson = (run, path, body) => ghApi(run, ['--method', 'POST', '-H', ACCEPT, ...HOST, path, '--input', '-'], JSON.stringify(body));
-/** Every read and the apply are for the task repository only: a name that is not owner/name, or any other repository, is refused before the first call. */
+/** Every read and the apply are for the task repository and the bench repository only: a name that is not owner/name, or any other repository, is refused before the first call. */
 const badRepo = repo => {
   if (!REPO_NAME.test(String(repo))) return fail(`repository ${JSON.stringify(String(repo))} is not owner/name`, { kind: 'config' });
-  return repo === TASK_REPO ? null : fail(`repository ${JSON.stringify(repo)} is not the task repository ${TASK_REPO}: this module reads and writes that repository only`, { kind: 'config' });
+  return Object.hasOwn(RULESETS_BY_REPO, repo) ? null : fail(`repository ${JSON.stringify(repo)} is not the task repository ${TASK_REPO} or the bench repository ${BENCH_REPO}: this module reads and writes those two repositories only`, { kind: 'config' });
 };
 
 /** The list of the repository's rulesets, validated: -> `ok(entries)` | `fail`. A list as long as one page may have another page and is refused; an entry without a numeric id is refused. The one place both the full read and the read-back after a create get their list. */
@@ -271,17 +293,18 @@ const stateOf = (rulesets, expected) => {
 };
 
 /** A ruleset that is not in the data and targets the same refs as one that is: named so a reader sees it, never touched. */
-const isStranger = ruleset => !RULESETS.some(own => own.name === ruleset.name) && RULESETS.some(own => own.target === ruleset.target && refs(ruleset, 'include').some(ref => refs(own, 'include').some(wanted => overlaps(ref, wanted))));
+const isStranger = (ruleset, data) => !data.some(own => own.name === ruleset.name) && data.some(own => own.target === ruleset.target && refs(ruleset, 'include').some(ref => refs(own, 'include').some(wanted => overlaps(ref, wanted))));
 
 /** The line that names a stranger, for `--check` and `--apply` alike. */
 export const strangerLine = ({ name, id }) => `note: ruleset "${name}" (id ${id}) is not in the data and targets the same refs; it is left alone`;
 
-/** Reads every ruleset and says, for each of the data's, `equal`, `absent` or `different`. -> `ok({ equal, states, strangers })` | `fail`. */
+/** Reads every ruleset and says, for each of the repository's data, `equal`, `absent` or `different`. -> `ok({ equal, states, strangers })` | `fail`. */
 export async function rulesetsReadBack({ repo, run = runBounded }) {
   const read = await readRulesets(repo, run);
   if (!read.ok) return read;
-  const states = RULESETS.map(expected => stateOf(read.value, expected));
-  const strangers = read.value.filter(isStranger).map(({ id, name, target }) => ({ id, name, target }));
+  const data = rulesetsOf(repo);
+  const states = data.map(expected => stateOf(read.value, expected));
+  const strangers = read.value.filter(ruleset => isStranger(ruleset, data)).map(({ id, name, target }) => ({ id, name, target }));
   return ok({ equal: states.every(state => state.status === 'equal'), states, strangers });
 }
 
@@ -325,11 +348,11 @@ const stopped = (failure, { made, uncertain, rest, changed = [] }) => {
  * ones one by one, reading each back, and ends with a read-back of all three. It never updates or deletes. `say` gets one line per ruleset and one per stranger.
  * -> `ok({ outcomes, strangers, readBack })` | `fail(reason, { kind: 'refused' | 'differs' | 'env' | 'config' })`.
  */
-export async function applyRulesets({ repo, run = runBounded, say = () => {}, packages, packagesSha256, recordFirstLine }) {
+export async function applyRulesets({ repo, run = runBounded, say = () => {}, packages, packagesSha256, recordFirstLine, ownerGo }) {
   const wrong = badRepo(repo);
   if (wrong !== null) return wrong;
-  const unmet = applyGateProblems({ packages, packagesSha256, recordFirstLine });
-  if (unmet.length > 0) return fail(scrub(`refused: ${unmet.join('; ')}. The apply needs the owner's go of 2026-11-08; nothing was read or written.`), { kind: 'refused' });
+  const unmet = repo === BENCH_REPO ? benchGateProblems(ownerGo) : applyGateProblems({ packages, packagesSha256, recordFirstLine });
+  if (unmet.length > 0) return fail(scrub(`refused: ${unmet.join('; ')}. The apply needs the owner's go of ${repo === BENCH_REPO ? BENCH_OWNER_GO : '2026-11-08'}; nothing was read or written.`), { kind: 'refused' });
   const before = await rulesetsReadBack({ repo, run });
   if (!before.ok) return before;
   const { states, strangers } = before.value;
@@ -337,7 +360,8 @@ export async function applyRulesets({ repo, run = runBounded, say = () => {}, pa
   if (different.length > 0) return fail(scrub(`refused: ${different.map(state => `${state.name} is present and differs (${state.problems.join('; ')})`).join('; ')}. Updating a ruleset needs its own go of the owner, so nothing was written.`), { kind: 'refused' });
   for (const stranger of strangers) say(strangerLine(stranger));
   for (const state of states.filter(entry => entry.status === 'equal')) say(`unchanged ${state.name}`);
-  const absent = RULESETS.filter(ruleset => states.find(state => state.name === ruleset.name).status === 'absent');
+  const data = rulesetsOf(repo);
+  const absent = data.filter(ruleset => states.find(state => state.name === ruleset.name).status === 'absent');
   let made = [];
   for (const [index, ruleset] of absent.entries()) {
     const created = await createOne(repo, run, ruleset);
@@ -353,6 +377,6 @@ export async function applyRulesets({ repo, run = runBounded, say = () => {}, pa
     const names = problems.map(state => state.name);
     return stopped(failure, { made, uncertain: names.filter(name => made.includes(name)), rest: [], changed: names.filter(name => !made.includes(name)) });
   }
-  const outcomes = RULESETS.map(({ name }) => ({ name, outcome: made.includes(name) ? 'created' : 'unchanged' }));
+  const outcomes = data.map(({ name }) => ({ name, outcome: made.includes(name) ? 'created' : 'unchanged' }));
   return ok({ outcomes, strangers, readBack: after.value });
 }
