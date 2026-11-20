@@ -154,6 +154,21 @@ test('stage_status_prints_the_rounds_the_slots_the_pilot_and_the_five_spend_line
   assert.equal(readFileSync(ledgerFileOf(rig.dir), 'utf8').length > 0, true);
 });
 
+test('stage_status_reads_the_run_map_as_stage_run_does_so_a_dated_refuted_line_shows_the_stack_as_void_with_its_re_run_owed_and_its_charge_on_the_void_line', async () => {
+  const rig = await runRig({ lines: [GO_PILOT, GO_ALL, PILOT_GO_LINE, ...readbackHolds()] });
+  assert.equal((await stageRun({ values: { series: rig.dir, what: 'next' }, io: rig.io })).exit, 0);
+  const [slot] = SLOTS;
+  const [csharp, node] = [slot.rids.csharp[0], slot.rids.node[0]];
+  for (const [rid, usd] of [[csharp, 2], [node, 1]]) appendFileSync(ledgerFileOf(rig.dir), `${JSON.stringify({ kind: 'data', usd, what: 'completed', rid, t: '2026-11-20T10:00:00Z' })}\n`);
+  const statusText = () => { const lines = []; assert.equal(cmdStageStatus({ series: rig.dir }, ioOf(rig, lines)), 0); return lines.join('\n'); };
+  assert.match(statusText(), new RegExp(`slot 1 \\(task ${slot.task}\\): finished`), 'the control: before the dated line the slot is finished');
+  writeFileSync(rig.files.amendmentsFile, `${[GO_PILOT, GO_ALL, PILOT_GO_LINE, ...readbackHolds()].join('\n')}\n2026-11-24 | G-4 | refuted | ${csharp} | ~/e.md | the judge\n`);
+  const text = statusText();
+  assert.match(text, new RegExp(`slot 1 \\(task ${slot.task}\\): csharp void-rerunnable, node done`), 'the dated line makes the stack void and its re-run owed, as stage-run reads it');
+  assert.match(text, /spend \(\$3\.0000 in all\): pilot \$0\.0000, A\/A \$0\.0000, data \$1\.0000, void \$2\.0000, re-run \$0\.0000/, 'its charge is on the void line');
+  assert.equal(mapOf(rig.dir).sessions[csharp].status, 'scored', 'the stored run-map is not rewritten by a read');
+});
+
 test('explore_main_has_the_three_verbs_and_refuses_stage_run_without_its_arguments', async () => {
   const written = [];
   const seams = { home: (await runRig()).io.home, say: l => written.push(l) };

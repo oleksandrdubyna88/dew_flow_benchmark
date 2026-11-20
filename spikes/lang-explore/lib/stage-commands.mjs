@@ -8,8 +8,8 @@ import { ledgerFileOf } from './series.mjs';
 import { stageInit } from './stage-init.mjs';
 import { stageRun } from './stage-run.mjs';
 import { stageStatusLines } from './stage-status.mjs';
-import { amendmentsReport } from './stage-gates.mjs';
-import { openStage } from './stage-step.mjs';
+import { amendmentsReport, amendmentsText } from './stage-gates.mjs';
+import { mapAsRead, openStage } from './stage-step.mjs';
 import { loadWorld } from './world.mjs';
 
 const refused = (io, reason) => { io.say(reason); return 4; };
@@ -33,12 +33,15 @@ async function runCommand(values, io) {
 
 export const cmdStageRun = heldoutAware(runCommand);
 
-/** `stage-status --series <dir>`: the rounds, the slots, the pilot and the five spend lines. */
+const statusLines = ({ series, text }) => stageStatusLines({ state: series.state, map: mapAsRead({ series, read: { text } }), ledger: readLedger(ledgerFileOf(series.dir)) });
+
+/** `stage-status --series <dir>`: the rounds, the slots, the pilot and the five spend lines, over the run-map as `stage-run` reads it (a dated verdict applied, `mapAsRead`); an amendments file that cannot be read is a refusal, as it is for `stage-run`. */
 export function cmdStageStatus(values, io) {
   if (!values.series) return refused(io, 'stage-status needs --series <dir>');
   const series = openStage({ seriesDir: path.resolve(values.series), io });
-  if (!series.ok) return refused(io, series.reason);
-  stageStatusLines({ state: series.value.state, map: series.value.map, ledger: readLedger(ledgerFileOf(series.value.dir)) }).forEach(l => io.say(l));
+  const text = series.ok ? amendmentsText(io) : series;
+  if (!text.ok) return refused(io, text.reason);
+  statusLines({ series: series.value, text: text.value }).forEach(l => io.say(l));
   amendmentsReport(io).forEach(l => io.say(l));
   return 0;
 }

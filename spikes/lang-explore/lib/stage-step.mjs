@@ -41,8 +41,8 @@ export const exitOfRefusal = sentence => (sentence.includes('is stopped') ? EXIT
 /** The by-hand verdicts of the registered amendments about one session (every dated line, v1's reader), as the loop's `handVerdictsFor` takes them. */
 const handVerdictsOf = ({ series, read }) => rid => stageHandVerdictsFor(read.text, rid, series.state.seriesId);
 
-/** The run-map as the schedule reads it: a session a dated `refuted` line names is already a void (`reclassifyByHand`, v1's own rule, pure here), whichever slot it is in, so its re-run is the next step. The loop writes the same change when it starts. */
-const mapAsRead = ({ series, read }) => reclassifyByHand({ map: series.map, handVerdictsFor: handVerdictsOf({ series, read }) }).map;
+/** The run-map as the schedule reads it: a session a dated `refuted` line names is already a void (`reclassifyByHand`, v1's own rule, pure here), whichever slot it is in, so its re-run is the next step. The loop writes the same change when it starts. `stage-status` reads the run-map through this same function (coai code round 2, PR 3, finding 5). */
+export const mapAsRead = ({ series, read }) => reclassifyByHand({ map: series.map, handVerdictsFor: handVerdictsOf({ series, read }) }).map;
 
 const unitOrRefusal = ({ series, read, what }) => {
   const chosen = unitOf({ what, state: series.state, map: mapAsRead({ series, read }), gates: read.gates });

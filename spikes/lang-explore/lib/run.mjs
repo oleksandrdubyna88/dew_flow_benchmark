@@ -144,17 +144,26 @@ export async function prerequisites({ home, series, task, worldFn, tokenFn, held
   return quick ? fail(quick) : ok({ calibration, heldout, world, token, prompts });
 }
 
+/** The `harness-moved` event line of a one-task `run`'s refusal (an event, never a charge). */
+const recordMoved = ({ series, pair, problem, io }) => appendLedger(ledgerFileOf(series.dir), { event: 'harness-moved', pair, reason: problem, t: (io.now ?? systemClock)().toISOString() });
+
 /**
  * A series is run on one harness (`harness-moved.mjs`): a quick pair is refused BEFORE it is planned or launched when the harness of today is not the one the series was made with (or the series recorded none), so no session starts and
- * nothing is spent. Exit 3, resumable; the reason is a `harness-moved` event line in the ledger (an event, never a charge). The scoring step keeps its own check as the second line of defence. -> a result, or null.
+ * nothing is spent. Exit 3, resumable; the reason is a `harness-moved` event line in the ledger (an event, never a charge). A Stage 1 unit (`unit` given) is refused with the sentence only: every refusal of Stage 1 leaves the
+ * run-map and the ledger as they were (coai code round 2, PR 3, finding 6). The scoring step keeps its own check as the second line of defence. -> a result, or null.
  */
-function harnessRefusal({ series, pair, world, io, task }) {
+function harnessRefusal({ series, pair, world, io, task, unit }) {
+  const problem = harnessProblem({ series, world, task });
+  if (problem === null) return null;
+  if (!unit) recordMoved({ series, pair, problem, io });
+  return { exit: 3, message: problem };
+}
+
+/** Why the harness of today is not the one the series was made with (a quick world only), or null. */
+function harnessProblem({ series, world, task }) {
   if (world.quick !== true) return null;
   const inputs = seriesInputs(series.dir, task.id);
-  const problem = inputs.ok ? harnessMovedForStacks({ inputs: inputs.value, world, stacks: STACK_ORDER }) : `harness-moved: ${inputs.reason}`;
-  if (problem === null) return null;
-  appendLedger(ledgerFileOf(series.dir), { event: 'harness-moved', pair, reason: problem, t: (io.now ?? systemClock)().toISOString() });
-  return { exit: 3, message: problem };
+  return inputs.ok ? harnessMovedForStacks({ inputs: inputs.value, world, stacks: STACK_ORDER }) : `harness-moved: ${inputs.reason}`;
 }
 
 const quickProblem = ({ series, heldout, task }) => (isQuick(task) ? quickHeldoutProblem({ seriesDir: series.dir, heldout, task }) : null);
@@ -195,10 +204,10 @@ const runLocked = async a => (await finishedIfInterrupted(a)) ?? runPlanned(a);
 export const prerequisitesOf = ({ series, io, task }) => (io.runSeams?.prerequisitesFn ?? prerequisites)({ home: io.home, series, task, worldFn: io.worldFn, tokenFn: io.tokenFn, heldout: io.heldoutArgs });
 
 /** What the pair needs, or the answer that ends it here: a missing prerequisite (exit 4) or a harness that moved (exit 3, see `harnessRefusal`). -> `{ need }` | `{ answer }`. */
-async function readyOrRefused({ series, pair, io, task }) {
+async function readyOrRefused({ series, pair, io, task, unit }) {
   const need = await prerequisitesOf({ series, io, task });
   if (!need.ok) return { answer: { exit: 4, message: need.reason } };
-  const moved = harnessRefusal({ series, pair, world: need.value.world, io, task });
+  const moved = harnessRefusal({ series, pair, world: need.value.world, io, task, unit });
   return moved ? { answer: moved } : { need: need.value };
 }
 
@@ -217,7 +226,7 @@ async function runPlanned({ series, pair, rerun, io, explore, task }) {
  * -> `{ exit, message, pairFile?, problems? }`.
  */
 export async function runUnit({ series, pair, planned, io, task, pause = null, unit = null }) {
-  const ready = await readyOrRefused({ series, pair, io, task });
+  const ready = await readyOrRefused({ series, pair, io, task, unit });
   if (ready.answer) return ready.answer;
   return (io.runSeams?.loopFn ?? loopAndFinalize)({ series, pair, planned, ...ready.need, io, abort: io.abort, pause, unit });
 }

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { fail } from '../../minigit-bench/lib/result.mjs';
+import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { readLedger } from '../../minigit-bench/lib/ledger.mjs';
 import { REPO } from '../lib/paths.mjs';
 import { ledgerFileOf, runMapFileOf, seriesInputs } from '../lib/series.mjs';
@@ -78,6 +78,17 @@ test('A_run_refused_after_the_go_check_leaves_the_ledger_byte_for_byte_and_a_run
   rig.io.runSeams.prerequisitesFn = good;
   assert.equal((await next(rig)).exit, 0);
   assert.equal(goEvents(rig.dir).length, 1, 'the unit that launched has its one go event');
+});
+
+test('A_Stage_1_unit_on_a_moved_harness_is_refused_and_the_ledger_and_the_run_map_stay_byte_for_byte', async () => {
+  const rig = await runRig();
+  rig.io.runSeams.prerequisitesFn = async () => ok({ calibration: {}, heldout: {}, world: { quick: true, filesFor: () => ({}) }, token: 'fake-token', prompts: {} });
+  const before = [ledgerBytes(rig.dir), snapshot(rig.dir)];
+  const refused = await next(rig);
+  assert.deepEqual([refused.exit, /^harness-moved: /.test(refused.message)], [3, true], refused.message);
+  assert.deepEqual([ledgerBytes(rig.dir), snapshot(rig.dir)], before, 'a refusal of a Stage 1 unit leaves the ledger and the run-map as they were: no harness-moved event');
+  assert.equal((await next(rig)).exit, 3, 'the retry is refused the same way and still writes nothing');
+  assert.equal(ledgerBytes(rig.dir), before[0]);
 });
 
 test('A_run_the_context_refuses_after_the_prerequisites_adds_no_go_event_either', async () => {

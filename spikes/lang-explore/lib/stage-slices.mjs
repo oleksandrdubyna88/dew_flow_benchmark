@@ -41,15 +41,21 @@ async function oneSlice({ make, base, task, io }) {
   return made.ok ? made : fail(`task ${task.id}: ${made.reason}`);
 }
 
+/** The `[id, slice]` entries so far plus the next task's, or the first refusal (a refusal is carried on: the tasks after it are not made). */
+const withNext = ({ make, base, io }) => async (soFar, task) => {
+  const done = await soFar;
+  if (!done.ok) return done;
+  const one = await oneSlice({ make, base, task, io });
+  return one.ok ? ok([...done.value, [task.id, one.value]]) : one;
+};
+
+/** The `[id, slice]` entries of the tasks in order, up to the first task that refuses: `ok(entries)` | `fail`. */
+const entriesOf = ({ tasks, make, base, io }) => tasks.reduce(withNext({ make, base, io }), Promise.resolve(ok([])));
+
 /** The slice of every task of the freeze, in order; the first task whose held-out side or sources are not the registered ones refuses the series, named. -> `ok({ slices })` | `fail`. */
 export async function slicesOf({ io, base, make }) {
   const tasks = freezeTasks(base);
   if (!tasks.ok) return tasks;
-  const slices = {};
-  for (const task of tasks.value) {
-    const one = await oneSlice({ make, base, task, io });
-    if (!one.ok) return one;
-    slices[task.id] = one.value;
-  }
-  return ok({ slices });
+  const entries = await entriesOf({ tasks: tasks.value, make, base, io });
+  return entries.ok ? ok({ slices: Object.fromEntries(entries.value) }) : entries;
 }

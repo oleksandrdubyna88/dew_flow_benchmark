@@ -38,9 +38,12 @@ const rehearsalLines = seed => slotsOf({ seed }).filter(s => s.readback).flatMap
 /** The gates of a rehearsal series: its own seed, no pilot GO to wait for, and read-back lines that say `holds`. */
 const rehearsalGates = series => ({ seed: series.state.rehearsalSeed, seedRevealed: true, pilotGo: true, readbackLines: rehearsalLines(series.state.rehearsalSeed) });
 
+/** The text of the registered amendments file (`ok('')` when there is none): the one read `readGates`, the report and `stage-status` share. -> `ok(text)` | `fail`. */
+export const amendmentsText = io => readStageAmendments(seam(io, 'amendmentsFile', STAGE_AMENDMENTS_FILE));
+
 /** The report lines of the registered amendments (malformed lines of the four kinds, home paths): `stage-run` and `stage-status` say them. A file that cannot be read has none here (`readGates` refuses it). */
 export function amendmentsReport(io) {
-  const read = readStageAmendments(seam(io, 'amendmentsFile', STAGE_AMENDMENTS_FILE));
+  const read = amendmentsText(io);
   return read.ok ? reportLinesOf({ text: read.value, home: io.home }) : [];
 }
 
@@ -55,7 +58,7 @@ function paidGates({ series, io, lines, text }) {
  * What the unit's choice reads: `ok({ text, lines, gates: { seed, seedRevealed, pilotGo, readbackLines } })` | `fail`. The registered amendments file is read again at every call (a dated line merged since counts at once).
  */
 export function readGates({ series, io }) {
-  const read = readStageAmendments(seam(io, 'amendmentsFile', STAGE_AMENDMENTS_FILE));
+  const read = amendmentsText(io);
   if (!read.ok) return read;
   const lines = parseStageAmendments(read.value);
   if (isRehearsal(series.dir)) return ok({ text: read.value, lines, gates: rehearsalGates(series) });

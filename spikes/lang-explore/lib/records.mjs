@@ -106,7 +106,10 @@ const at = (o, dotted) => dotted.split('.').reduce((x, k) => (x === undefined ||
 /** The required paths a record lacks (a scored session's list is longer); `[]` means every metric is there. */
 const passesPaths = (record, scored) => (scored && at(record, 'explore.verdict') !== undefined ? PASSES_PATHS : []);
 
-export const missingPaths = (record, scored = true, stage = false) => [...REQUIRED_PATHS, ...(stage ? STAGE_PATHS : []), ...(scored ? SCORED_PATHS : []), ...passesPaths(record, scored)].filter(p => at(record, p) === undefined);
+/** The paths of `paths` (dotted) a record lacks. */
+export const lacksPaths = (record, paths) => paths.filter(p => at(record, p) === undefined);
+
+export const missingPaths = (record, scored = true, stage = false) => lacksPaths(record, [...REQUIRED_PATHS, ...(stage ? STAGE_PATHS : []), ...(scored ? SCORED_PATHS : []), ...passesPaths(record, scored)]);
 
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
 const writeJsonAtomic = (file, value) => { const tmp = `${file}.${process.pid}.tmp`; writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`); renameSync(tmp, file); };

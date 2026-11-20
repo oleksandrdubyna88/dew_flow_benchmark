@@ -7,7 +7,13 @@ import { test } from 'node:test';
 import { readLedger } from '../../minigit-bench/lib/ledger.mjs';
 import { ok } from '../../minigit-bench/lib/result.mjs';
 import { transition, writeRunMap } from '../../minigit-bench/lib/run-map.mjs';
-import { ledgerFileOf, runMapFileOf } from '../lib/series.mjs';
+import { ledgerFileOf, loadSeries, runMapFileOf } from '../lib/series.mjs';
+import { writeSessionFacts } from '../lib/stage-facts.mjs';
+import { finalizerOf } from '../lib/stage-final.mjs';
+import { readGates } from '../lib/stage-gates.mjs';
+import { owedUnits } from '../lib/stage-owed.mjs';
+import { unitOfSession } from '../lib/stage-unit.mjs';
+import { taskFromValues } from '../lib/tasks.mjs';
 import { stageRun } from '../lib/stage-run.mjs';
 import { GO_ALL, GO_PILOT, PILOT_GO_LINE, SEED, SLOTS, fakeLoop, mapOf, readbackHolds, runRig } from './stage-run-fixture.mjs';
 import { makeSeries } from './stage-series-fixture.mjs';
@@ -190,6 +196,65 @@ test('An_A_A_that_died_before_its_records_gets_its_facts_before_any_unit_is_offe
   assert.equal((await next(rig)).exit, 0);
   assert.equal(rids.every(rid => existsSync(path.join(rig.dir, 's', rid, 'stage-facts.json'))), true, 'the A/A has no pair record, but its sessions have their facts');
   assert.equal(existsSync(path.join(rig.dir, 'pairs', 'p0.json')), false, 'and no pair record is made for it');
+});
+
+const recordOf = (rig, rid) => JSON.parse(readFileSync(path.join(rig.dir, 's', rid, 'record.json'), 'utf8'));
+const finishEvents = rig => readLedger(ledgerFileOf(rig.dir)).filter(l => l.event === 'finished after interruption');
+
+/** A v1 record as far as the pair record reads it: its label, class and the cost and time leaves, none of them known. */
+const V1_RECORD = { ids: { label: 'paired' }, class: 'completed', cost: { headlineUsd: { known: false }, stopRuleUsd: { known: false } }, time: {}, quality: null };
+
+/** The state a death between the facts and the explore section leaves: each session has its directory, its facts (written once) and the v1 record WITHOUT the explore section. */
+function diedAfterFacts(rig, rids) {
+  for (const rid of rids) {
+    const dir = path.join(rig.dir, 's', rid);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, 'record.json'), `${JSON.stringify(V1_RECORD)}\n`);
+    writeSessionFacts({ sessionDir: dir, entry: mapOf(rig.dir).sessions[rid], world: {} });
+  }
+}
+
+test('An_A_A_whose_facts_are_written_and_whose_record_lacks_its_explore_section_gets_the_section_before_any_unit_is_offered_and_a_second_finish_leaves_the_same_bytes', async () => {
+  const rig = await runRig({ stage: { pilotRand: (() => { let n = 0; return () => `r${(n += 1)}`; })() } });
+  assert.equal((await stageRun({ values: { series: rig.dir, what: 'aa' }, io: rig.io })).exit, 0);
+  const rids = Object.keys(mapOf(rig.dir).sessions);
+  diedAfterFacts(rig, rids);
+  const facts = rid => readFileSync(path.join(rig.dir, 's', rid, 'stage-facts.json'), 'utf8');
+  const factsBefore = rids.map(facts);
+  assert.equal(rids.every(rid => recordOf(rig, rid).explore === undefined), true, 'the control: the facts are there and the record has no explore section');
+  assert.equal((await next(rig)).exit, 0);
+  assert.deepEqual(rids.map(rid => [recordOf(rig, rid).explore?.arm?.value, recordOf(rig, rid).explore?.kind?.value]), rids.map(() => ['bare', 'aa']), 'the record got its Stage 1 fields');
+  assert.deepEqual(rids.map(facts), factsBefore, 'the facts file is not rewritten');
+  assert.deepEqual(finishEvents(rig).map(e => e.pair), [0], 'one event, no charge');
+  const [unit] = owedUnits({ dir: rig.dir, state: loadSeries(rig.dir).value.state, map: mapOf(rig.dir), gates: readGates({ series: loadSeries(rig.dir).value, io: rig.io }).value.gates });
+  assert.equal(unit, undefined, 'nothing is owed any more');
+  const kept = rids.map(rid => readFileSync(path.join(rig.dir, 's', rid, 'record.json'), 'utf8'));
+  assert.equal((await next(rig)).exit, 0);
+  assert.deepEqual(rids.map(rid => readFileSync(path.join(rig.dir, 's', rid, 'record.json'), 'utf8')), kept, 'a second run leaves the records as they were');
+  assert.equal(finishEvents(rig).length, 1, 'and adds no event');
+});
+
+test('A_data_slot_whose_pair_record_exists_from_an_earlier_attempt_but_whose_records_lack_the_explore_section_is_finished_and_finishing_twice_leaves_the_same_bytes', async () => {
+  const rig = await runRig();
+  assert.equal((await next(rig)).exit, 0);
+  const [first] = SLOTS;
+  const rids = ['csharp', 'node'].map(stack => first.rids[stack][0]);
+  assert.equal(existsSync(path.join(rig.dir, 'pairs', 'p1.json')), true, 'the control: the pair record is there');
+  diedAfterFacts(rig, rids);
+  assert.equal((await next(rig)).exit, 0);
+  assert.equal(rig.log.length, 2, 'the next slot ran after the records were finished');
+  assert.deepEqual(rids.map(rid => recordOf(rig, rid).explore?.task?.value), [first.task, first.task], 'the records got their Stage 1 fields although the pair record existed');
+  assert.deepEqual(finishEvents(rig).map(e => e.pair), [1]);
+  const bytes = () => [...rids.map(rid => readFileSync(path.join(rig.dir, 's', rid, 'record.json'), 'utf8')), readFileSync(path.join(rig.dir, 'pairs', 'p1.json'), 'utf8')];
+  const kept = bytes();
+  const series = loadSeries(rig.dir).value;
+  const gates = readGates({ series, io: rig.io }).value.gates;
+  const unit = unitOfSession({ session: mapOf(rig.dir).sessions[rids[0]], state: series.state, gates });
+  const alias = taskFromValues({ task: unit.task }, rig.io.exploreFn).value.explore.cli.model;
+  finalizerOf({ unit, go: null, alias })({ seriesDir: rig.dir, map: mapOf(rig.dir), pair: 1, pause: null, world: {} });
+  finalizerOf({ unit, go: null, alias })({ seriesDir: rig.dir, map: mapOf(rig.dir), pair: 1, pause: null, world: {} });
+  assert.deepEqual(bytes().slice(0, 2), kept.slice(0, 2), 'a second and third finalize leave the session records byte for byte');
+  assert.equal(readFileSync(path.join(rig.dir, 's', rids[0], 'stage-facts.json'), 'utf8').length > 0, true);
 });
 
 test('The_pilot_steps_run_in_the_pilots_order_and_one_that_is_not_next_is_refused', async () => {

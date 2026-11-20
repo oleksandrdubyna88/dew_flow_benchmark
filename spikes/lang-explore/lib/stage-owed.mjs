@@ -1,11 +1,12 @@
 // The records an ENDED unit still owes (F3.S1 (a), PR 3, Opus review finding B). `runUnit` writes a unit's records (the facts of its sessions, the `explore` section of their records, a slot's pair record) in `finalizerOf`, after `runLoop`. A process that
 // dies between the last scoring and that call leaves a unit that the schedule sees as finished (`pairComplete`), so the records would never be written. `stage-run` therefore finishes them FIRST, with the same finalizer, before it offers any unit: free,
 // from the evidence the sessions kept (no session, no scoring, no charge); the ledger gets one `finished after interruption` event, which is no charge. Pure but for the files it reads; `finishOwedRecords` writes through `finalizerOf`.
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { appendLedger, readLedger } from '../../minigit-bench/lib/ledger.mjs';
 import { finishedEvent } from './finish.mjs';
 import { systemClock } from './clock.mjs';
+import { STAGE_PATHS, lacksPaths } from './records.mjs';
 import { prerequisitesOf } from './run.mjs';
 import { DATA_KIND } from './stage-schedule.mjs';
 import { ledgerFileOf, isOpenSession } from './series.mjs';
@@ -20,11 +21,19 @@ const pairFile = (dir, pair) => path.join(dir, 'pairs', `p${pair}.json`);
 /** An ended session whose directory is there and holds no facts file: the finalizer has not run over it. */
 const lacksFacts = (dir, session) => hasEnded(session) && existsSync(sessionDir(dir, session)) && !existsSync(path.join(sessionDir(dir, session), FACTS_FILE));
 
+const readJsonOrNull = file => { try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return null; } };
+
+/** An ended session whose `record.json` is there (v1 wrote it) and lacks a Stage 1 field of its `explore` section (`STAGE_PATHS`, the ones `missingPaths(record, scored, true)` asks of a Stage 1 record): the finalizer writes the facts BEFORE that section, so a death between the two leaves the facts and no section. A record that is absent or cannot be read is not owed here (`finalizeOne` says it). */
+function lacksStageFields(dir, session) {
+  const record = hasEnded(session) ? readJsonOrNull(path.join(sessionDir(dir, session), 'record.json')) : null;
+  return record !== null && lacksPaths(record, STAGE_PATHS).length > 0;
+}
+
 /** A unit with nothing open and an ended session. */
 const idle = mine => !mine.some(isOpenSession) && mine.some(hasEnded);
 
-/** Does the unit owe records: an ended session lacks its facts, or a data slot lacks its pair record. */
-const lacksRecords = ({ dir, unit, mine }) => mine.some(s => lacksFacts(dir, s)) || (unit.kind === DATA_KIND && !existsSync(pairFile(dir, unit.pair)));
+/** Does the unit owe records: an ended session lacks its facts or the Stage 1 fields of its record, or a data slot lacks its pair record. The finalizer is safe to run again over what is there (the facts file is written once, the explore section is rebuilt to the same bytes), so a unit that owes only one of them is finished whole. */
+const lacksRecords = ({ dir, unit, mine }) => mine.some(s => lacksFacts(dir, s) || lacksStageFields(dir, s)) || (unit.kind === DATA_KIND && !existsSync(pairFile(dir, unit.pair)));
 
 const owes = ({ dir, unit, map }) => { const mine = Object.values(map.sessions).filter(unit.belongs); return idle(mine) && lacksRecords({ dir, unit, mine }); };
 
