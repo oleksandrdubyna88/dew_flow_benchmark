@@ -6,7 +6,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { readLedger, isOwnCharge } from '../../minigit-bench/lib/ledger.mjs';
 import { loadGrowth } from '../lib/growth.mjs';
-import { HALT_EXIT, diskGate, folderBytes, reserveGate, ruleGate, sessionFloor, sessionsToRun } from '../lib/stage-disk.mjs';
+import { HALT_EXIT, diskGate, folderBytes, reserveGate, ruleGate, sessionBytesOf, sessionFloor, sessionsToRun } from '../lib/stage-disk.mjs';
 import { GOOD, MIB, PILOT, VOID, finished, mapWith, ridOf, seriesFolder, withPilot, writeSession } from './stage-fixture.mjs';
 
 const growth = loadGrowth().value;
@@ -146,4 +146,17 @@ test('The_session_size_the_disk_rule_reads_is_the_larger_of_the_registered_floor
   const planned = mapWith([[1, 'csharp', 1, 'planned']]);
   const folder = seriesFolder(t, planned, { cacheBytes: 4 * MIB });
   assert.deepEqual(sessionFloor({ floorBytes: MIB, series: folder, map: planned }), { bytes: MIB, source: 'floor' }, 'a session that has not ended is not read');
+});
+
+// ---- coai code round 1 (PR 4), C3: one gate call sizes each ended session once ------------------------------------------------------------------------------------------------------------------------------------------
+
+test('One_disk_gate_call_walks_each_ended_session_folder_once_for_the_reserve_and_the_rule_together', t => {
+  const map = slotsDone(2);
+  const ended = Object.values(map.sessions).filter(s => s.status === 'ran' || s.status === 'scored').length;
+  assert.ok(ended >= 10, `the fixture holds ended sessions: ${ended}`);
+  const walked = [];
+  const verdict = diskGate({ ...gateArgs(t, map), freeBytes: 10 ** 13, bytesOf: dir => { walked.push(dir); return sessionBytesOf(dir); } });
+  assert.equal(verdict.go, true, verdict.reason);
+  assert.equal(walked.length, ended, 'every ended session folder is sized once per gate call');
+  assert.equal(new Set(walked).size, walked.length, 'and no folder twice');
 });

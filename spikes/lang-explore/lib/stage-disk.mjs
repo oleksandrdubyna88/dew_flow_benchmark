@@ -59,9 +59,9 @@ const isEnded = s => s.status === 'ran' || s.status === 'scored';
 const freedListProblems = ({ series, map }) => Object.values(map?.sessions ?? {}).filter(isEnded)
   .filter(s => freedOf(sessionDir(series, s.rid))?.unreadable !== undefined).map(s => `${path.join(sessionDir(series, s.rid), FREED_FILE)} cannot be read: what the session held is unknown`);
 
-/** The size the rule reads for one session folder, from the registered floor and this series: `{ bytes, source: 'floor' | 'series' }`. A session that has not ended is not read. Written nowhere. */
-export function sessionFloor({ floorBytes, series, map }) {
-  const own = Object.values(map?.sessions ?? {}).filter(isEnded).map(s => sessionBytesOf(sessionDir(series, s.rid)));
+/** The size the rule reads for one session folder, from the registered floor and this series: `{ bytes, source: 'floor' | 'series' }`. A session that has not ended is not read. Written nowhere. `bytesOf(dir)` is the seam that sizes a session folder (`sessionBytesOf`). */
+export function sessionFloor({ floorBytes, series, map, bytesOf = sessionBytesOf }) {
+  const own = Object.values(map?.sessions ?? {}).filter(isEnded).map(s => bytesOf(sessionDir(series, s.rid)));
   const largest = Math.max(0, ...own);
   return largest > floorBytes ? { bytes: largest, source: 'series' } : { bytes: floorBytes, source: 'floor' };
 }
@@ -120,9 +120,8 @@ function sizing(args) {
 
 const freeCheck = freeBytes => (wholePositive(freeBytes) ? ok(freeBytes) : fail(`the free disk cannot be read (${String(freeBytes)}): freeBytes must be a positive whole number of bytes`));
 
-/** `ok({ session, left })` when the sizes, the count and the free bytes are all known, else the first `fail` that names what is not. */
-function reserveFacts(args) {
-  const sized = sizing(args);
+/** `ok({ session, left })` when the sizes (`sized`, from `sizing`), the count and the free bytes are all known, else the first `fail` that names what is not. */
+function reserveFacts(args, sized) {
   if (!sized.ok) return sized;
   const left = sessionsToRun(args);
   if (!left.ok) return left;
@@ -132,17 +131,16 @@ function reserveFacts(args) {
 
 const reserveSentence = ({ args, facts, need }) => `${args.freeBytes} bytes are free and the rest of the series needs ${need} bytes (${facts.left} sessions at most, each ${facts.session} bytes with its retries and its one void re-run${(args.extraCells ?? 0) > 0 ? `, a pilot repeat of ${args.extraCells} sessions included` : ''})`;
 
-/** The reserve before a paid launch (see the head of this file). `{ series, map, pilot, growth, floorBytes, freeBytes, extraCells }`. */
-export function reserveGate(args) {
-  const facts = reserveFacts(args);
+/** The reserve before a paid launch (see the head of this file). `{ series, map, pilot, growth, floorBytes, freeBytes, extraCells }`. `sized` is the sizing `diskGate` made once for both checks (made here when the gate is called alone). */
+export function reserveGate(args, sized = sizing(args)) {
+  const facts = reserveFacts(args, sized);
   if (!facts.ok) return halted(RESERVE_HALT, facts.reason);
   const need = facts.value.left * facts.value.session;
   return args.freeBytes >= need ? { go: true, need } : halted(RESERVE_HALT, reserveSentence({ args, facts: facts.value, need }));
 }
 
 /** The disk rule before a slot: free disk of at least twice the pair's worst case (v1's `diskRuleVerdict`, over the live session size). */
-export function ruleGate(args) {
-  const sized = sizing(args);
+export function ruleGate(args, sized = sizing(args)) {
   const verdict = sized.ok ? diskRuleVerdict({ freeBytes: args.freeBytes, pairWorstCaseBytes: sized.value.pair }) : { go: false, reason: sized.reason };
   return verdict.go ? { go: true } : halted(RULE_HALT, verdict.reason);
 }
@@ -151,10 +149,11 @@ export function ruleGate(args) {
 const eventOf = ({ verdict, args, now }) => ({ event: verdict.halt, t: now().toISOString(), freeBytes: args.freeBytes ?? null, ...(args.slot === undefined ? {} : { slot: args.slot }), reason: verdict.reason });
 
 /**
- * The reserve, then the rule: the first that halts. A halt writes its event line into `ledgerFile` when one is given; a go writes nothing. `slot` names the slot in the line. Pure but for the ledger.
+ * The reserve, then the rule: the first that halts. The sizing facts (every ended session walked) are made once and handed to both. A halt writes its event line into `ledgerFile` when one is given; a go writes nothing. `slot` names the slot in the line. Pure but for the ledger.
  */
 export function diskGate(args) {
-  const verdict = [reserveGate, ruleGate].map(gate => gate(args)).find(v => !v.go) ?? { go: true };
+  const sized = sizing(args);
+  const verdict = [reserveGate, ruleGate].map(gate => gate(args, sized)).find(v => !v.go) ?? { go: true };
   if (!verdict.go && args.ledgerFile) appendLedger(args.ledgerFile, eventOf({ verdict, args, now: args.now ?? systemClock }));
   return verdict;
 }
