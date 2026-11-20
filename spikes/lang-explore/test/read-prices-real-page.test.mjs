@@ -88,7 +88,9 @@ test('Rows_with_a_note_in_the_name_never_break_the_read_of_the_models_the_base_f
   assert.equal(page.value.prices.has('Claude Haiku 5.5'), false, 'a row with a note in its name is left unread');
   assert.equal(built(PAGE).ok, true);
   const only = buildPrices({ base: { models: [{ modelId: 'claude-haiku-5-5' }] }, page: page.value, day: 'x', cliVersion: '2.1.310' });
-  assert.match(only.reason, /claude-haiku-5-5 \(Claude Haiku 5\.5\): no row \(the rows it found: .*Claude Haiku 5\.5 \(for prompts up to 100,000 tokens\)/, 'a base model that has only noted rows is a refusal, and the noted rows are named');
+  assert.match(only.reason, /claude-haiku-5-5 \(Claude Haiku 5\.5\): the page also gives the row 'Claude Haiku 5\.5 \(for prompts up to 100,000 tokens\)' and 'Claude Haiku 5\.5 \(for prompts over 100,000 tokens\)': the pricing is tiered/, 'a base model that has only noted rows is a refusal (tiered), and the noted rows are named');
+  const other = buildPrices({ base: { models: [{ modelId: 'claude-haiku-5' }] }, page: page.value, day: 'x', cliVersion: '2.1.310' });
+  assert.match(other.reason, /claude-haiku-5 \(Claude Haiku 5\): no row \(the rows it found: .*Claude Haiku 5\.5 \(for prompts up to 100,000 tokens\)/, 'a base model with no row at all is a refusal naming the rows found');
   assert.equal(page.value.unreadable.get('Claude Mythos 5.2 (limited availability)'), 'its name carries a note, so the row is not read');
 });
 
@@ -151,6 +153,7 @@ test('The_notes_of_the_price_file_from_the_real_page_excerpt_are_exactly_these_l
 
 test('A_footnote_line_is_one_line_star_sup_number_one_space_sentence_and_nothing_that_is_not_that_is_taken_for_one', () => {
   const extra = PAGE.replace('## Fast mode', '1. A numbered list item.\n2. Cache hits and refreshes are another list item.\n* **MTok:** Million tokens.\n<sup>3</sup> alone\n\n## Fast mode');
+  assert.equal(parsePricingPage(extra).ok, true, parsePricingPage(extra).reason);
   assert.deepEqual(built(extra).value.notes, NOTES, 'a list item, a bullet and a bare sup are not footnotes; the unnumbered "All other models" line is not recorded (never guessed)');
   const twice = parsePricingPage(`${PAGE}\n*<sup>2 Another sentence for the same number.</sup>*\n`);
   assert.equal(twice.ok, false);

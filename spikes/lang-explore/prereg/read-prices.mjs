@@ -28,8 +28,14 @@ export const PRICE_HEADER = Object.freeze(['Model', 'Base input tokens', '5m cac
 const RATE_KEYS = Object.freeze(['input', 'cacheWrite5m', 'cacheWrite1h', 'cacheRead', 'output']);
 /** A price cell: `$<number> / MTok` and, directly after it, at most ONE footnote mark. Anything else is not a price. */
 const PRICE = /^\$(\d+(?:\.\d+)?) \/ MTok(?:<sup>(\d+)<\/sup>)?$/;
-/** A footnote line of the page: `*<sup>N sentence</sup>*`. */
-const FOOTNOTE = /^\*<sup>(\d+) (.+)<\/sup>\*$/;
+/**
+ * The ONE form of a footnote line this parser accepts (the real page's, 2026-11-20): a whole line, trimmed, that is `*<sup>` + the number (digits) + ONE space + the sentence (one line, no `</sup>` inside) + `</sup>*`, for example
+ * `*<sup>2 Cache hits and refreshes on Claude Opus 5.5 and Claude Sonnet 5.5 are priced at 0.05x the base input price.</sup>*`. Group 1 is the number, group 2 the sentence. A line that is not this is not a footnote: a list item, a bullet,
+ * a table line and `*<sup>All other models use the standard 0.1x multiplier.</sup>*` (no number) are skipped, and the unnumbered line is NOT recorded (it applies to the rates that carry no mark, and a price file never guesses which).
+ * A line that STARTS like a footnote (`*<sup>` and a digit) and is not this form (the sentence on the next line, text after the closing, no space after the number) is a refusal: `FOOTNOTE_START`.
+ */
+const FOOTNOTE = /^\*<sup>(\d+) ((?:(?!<\/sup>).)+)<\/sup>\*$/;
+const FOOTNOTE_START = /^\*<sup>\d/;
 const NOTED = 'its name carries a note, so the row is not read';
 const SEPARATOR = /^:?-+:?$/;
 
@@ -85,8 +91,25 @@ const conflictsOf = rows => [...new Set(rows.map(r => r.name))].filter(name => n
 /** The footnote lines of the page: a list of `[digits, sentence]`. */
 const footnoteLines = text => text.split('\n').map(line => FOOTNOTE.exec(line.trim())).filter(Boolean).map(f => [f[1], f[2]]);
 
+/** The lines (not table lines) that start like a footnote and are not in the `FOOTNOTE` form. */
+const brokenFootnotes = text => text.split('\n').map(line => line.trim()).filter(line => !line.startsWith('|') && FOOTNOTE_START.test(line) && !FOOTNOTE.test(line));
+
 /** The footnote numbers the page gives twice with different sentences. */
 const footnoteConflicts = lines => [...new Set(lines.map(([n]) => n))].filter(n => new Set(lines.filter(([m]) => m === n).map(([, sentence]) => sentence)).size > 1);
+
+/** The sentence for names the table gives twice with different content (a row with a note is not compared), or null. */
+function tableProblem(rows) {
+  const conflicts = conflictsOf(rows.filter(r => !r.noted));
+  return conflicts.length === 0 ? null : `the pricing page gives ${conflicts.join(', ')} twice with different content: a price is never chosen between two`;
+}
+
+/** The sentence for a footnote line that is not in the `FOOTNOTE` form, or for a number given twice with different sentences, or null. */
+function footnoteProblem(text) {
+  const broken = brokenFootnotes(text);
+  if (broken.length > 0) return `the pricing page has a footnote line that is not \`*<sup>N sentence</sup>*\` on one line: ${broken[0]}`;
+  const twice = footnoteConflicts(footnoteLines(text));
+  return twice.length === 0 ? null : `the pricing page gives footnote ${twice.join(', ')} twice with different sentences: a footnote is never chosen between two`;
+}
 
 /**
  * The page's price tables -> `ok({ prices: Map(display name -> { input, output, cacheRead, cacheWrite5m, cacheWrite1h }), marks: Map(display name -> { <rate>: '<footnote number>' }), footnotes: Map('<number>' -> sentence), unreadable: Map(name -> why) })`
@@ -98,11 +121,9 @@ export function parsePricingPage(text) {
   const priced = tables.filter(isPriceTable);
   if (priced.length === 0) return fail(noTableSentence(tables));
   const rows = priced.flatMap(group => group.slice(2)).map(rowOf);
-  const conflicts = conflictsOf(rows.filter(r => !r.noted));
-  if (conflicts.length > 0) return fail(`the pricing page gives ${conflicts.join(', ')} twice with different content: a price is never chosen between two`);
+  const problem = tableProblem(rows) ?? footnoteProblem(text);
+  if (problem) return fail(problem);
   const lines = footnoteLines(text);
-  const twice = footnoteConflicts(lines);
-  if (twice.length > 0) return fail(`the pricing page gives footnote ${twice.join(', ')} twice with different sentences: a footnote is never chosen between two`);
   return ok({ prices: new Map(rows.filter(r => r.rates).map(r => [r.name, r.rates])), marks: new Map(rows.filter(r => r.rates).map(r => [r.name, r.marks])), footnotes: new Map(lines), unreadable: new Map(rows.filter(r => r.why).map(r => [r.name, r.why])) });
 }
 
@@ -112,12 +133,23 @@ function markProblem({ wanted, page }) {
   return lost.length === 0 ? null : `${wanted.modelId} (${wanted.name}): ${lost.map(([rate, mark]) => `its ${rate} carries footnote mark ${mark} and the page has no footnote ${mark}`).join(' and ')}`;
 }
 
-/** The sentence for a model the page does not price, naming what it found, or null. */
-function modelProblem({ wanted, page }) {
-  if (page.prices.has(wanted.name)) return markProblem({ wanted, page });
+/** The noted rows (a note in the name) that are a tier of this model: their name before ` (` is the model's display name. */
+const tiersOf = ({ wanted, page }) => [...page.unreadable.keys()].filter(name => name.startsWith(`${wanted.name} (`));
+
+/** The sentence for a model the page prices more than once under notes (tiers), or null: the clean row is never chosen over a tier. */
+function tierProblem({ wanted, page }) {
+  const tiers = tiersOf({ wanted, page });
+  return tiers.length === 0 ? null : `${wanted.modelId} (${wanted.name}): the page also gives the row ${tiers.map(t => `'${t}'`).join(' and ')}: the pricing is tiered, so no price is chosen`;
+}
+
+/** The sentence for a model with no priced row, naming what the page holds. */
+function absentProblem({ wanted, page }) {
   if (page.unreadable.has(wanted.name)) return `${wanted.modelId} (${wanted.name}): its row cannot be read: ${page.unreadable.get(wanted.name)}`;
   return `${wanted.modelId} (${wanted.name}): no row (the rows it found: ${[...page.prices.keys(), ...page.unreadable.keys()].join(', ') || 'none'})`;
 }
+
+/** The sentence for a model the page does not price (or prices in tiers, or with a mark that has no footnote), naming what it found, or null. */
+const modelProblem = args => tierProblem(args) ?? (args.page.prices.has(args.wanted.name) ? markProblem(args) : absentProblem(args));
 
 /** One model of the price file, from its row. */
 const modelOf = ({ modelId, rates }) => ({ modelId, input: rates.input, output: rates.output, cacheRead: rates.cacheRead, cacheWrite5m: rates.cacheWrite5m, cacheWrite1h: rates.cacheWrite1h });
