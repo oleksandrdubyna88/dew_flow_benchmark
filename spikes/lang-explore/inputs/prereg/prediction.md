@@ -1,5 +1,3 @@
-DRAFT — for the team lead's review
-
 # Prediction — language comparison v2, Stage 1, six tasks, bare
 
 > **Written on 2026-11-20** by the team lead (the draft by the PR 6 writer), before the pre-registration tag and before any
