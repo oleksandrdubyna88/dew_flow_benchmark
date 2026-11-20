@@ -4,7 +4,8 @@
 // (the caller reads the line and passes `harnessAccepted`, the 12 hex of what it accepts); for every other identity there is no acceptance.
 import path from 'node:path';
 import { loadExplore } from './inputs.mjs';
-import { POLICY_FREE_FIELDS, READERS } from './stage-identity-readers.mjs';
+import { ok } from '../../minigit-bench/lib/result.mjs';
+import { POLICY_FREE_FIELDS, READERS, isResult } from './stage-identity-readers.mjs';
 import { RECORD_PATHS, readRecord } from './stage-record.mjs';
 
 export { POLICY_FREE_FIELDS };
@@ -12,14 +13,14 @@ export const IDENTITY_NAMES = Object.freeze(READERS.map(([name]) => name));
 const SHORT = 12;
 const short = value => String(value).slice(0, SHORT);
 
-/** One identity, read: `{ value }` or `{ unknown: why }` (a reader that throws is a unit of its own: the others are still read). A reader that answers `undefined` or `null` has no value: it is unreadable, never the text "undefined". */
+const hasValue = value => value !== undefined && value !== null;
+
+/** One identity, read: `{ value }` or `{ unknown: why }` (a reader that cannot answer gives a failed value, a unit of its own: the others are still read). A reader may answer a result (`ok(text)` / `fail(why)`) or a plain text; an answer that is missing (`undefined`, `null`) is unreadable, never the text "undefined". */
 async function readOne({ name, read, ctx }) {
-  try {
-    const value = await (ctx.readers?.[name] ?? read)(ctx);
-    return value === undefined || value === null ? { unknown: `${name} has no value: its reader answered ${value}` } : { value: String(value) };
-  } catch (e) {
-    return { unknown: e.message };
-  }
+  const answer = await (ctx.readers?.[name] ?? read)(ctx);
+  const result = isResult(answer) ? answer : ok(answer);
+  if (!result.ok) return { unknown: result.reason };
+  return hasValue(result.value) ? { value: String(result.value) } : { unknown: `${name} has no value: its reader answered ${result.value}` };
 }
 
 const exploreOf = ({ repo, explore }) => {

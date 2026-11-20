@@ -14,6 +14,7 @@ import { HALT } from '../../lang-bench/lib/exec-layer/certify.mjs';
 import { RECORD_PATHS, stageGuard, workspacesProblems } from '../lib/stage-guard.mjs';
 import { agentEnvVerdict, memoryCertification } from '../lib/stage-certify.mjs';
 import { IDENTITY_NAMES, identityProblems, liveIdentities } from '../lib/stage-identity.mjs';
+import { READERS } from '../lib/stage-identity-readers.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
 import { REPO, underHome } from '../lib/paths.mjs';
 import { resolveTask, taskPaths } from '../lib/tasks.mjs';
@@ -296,6 +297,18 @@ test('The_series_defaults_identity_is_unreadable_when_any_field_it_hashes_is_mis
   const w = identityWorld(t);
   assert.equal(typeof (await w.read()).seriesDefaults.value, 'string', 'the control: with every field the identity is read');
   for (const field of ['limits', 'caseWallMs', 'runCeilingMs']) assertUnreadable({ now: await w.read({ explore: { ...w.explore, quick: { ...w.explore.quick, [field]: undefined } } }), name: 'seriesDefaults', missing: new RegExp(field) });
+});
+
+// ---- coai code round 3 (PR 4), finding 3: a reader gives its failure as a value ------------------------------------------------------------------------------------------------------------------------------------------
+
+test('A_reader_with_a_missing_field_gives_a_value_that_says_so_and_does_not_throw', async () => {
+  const reader = name => READERS.find(([readerName]) => readerName === name)[1];
+  for (const [name, ctx, missing] of [['caps', { explore: { caps: {} } }, /capUsd/], ['caps', {}, /explore\.json cannot be loaded/], ['formatSha256', {}, /no task repository/], ['harness', {}, /PR 5/], ['seriesDefaults', { explore: { quick: {}, tasks: {} } }, /quick\.limits/]]) {
+    let answer;
+    await assert.doesNotReject(async () => { answer = await reader(name)({ repo: '/nonexistent', home: '/nonexistent', ...ctx }); }, `${name}: the reader does not throw`);
+    assert.equal(answer.ok, false, `${name}: the answer is a failed value`);
+    assert.match(answer.reason, missing, `${name}: ${answer.reason}`);
+  }
 });
 
 test('A_reader_that_answers_undefined_or_null_is_unreadable_and_never_the_text_of_it', async t => {
