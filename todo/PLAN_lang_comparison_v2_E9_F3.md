@@ -625,6 +625,11 @@ rest is rebuilt to the same bytes), and `next` finishes the records before it of
 `mapAsRead`, the function `stage-run` reads it through, so a dated `refuted` line shows the stack as void with its re-run owed and its charge on the `void`
 line; a moved harness refuses a Stage 1 unit (exit 3) without a `harness-moved` ledger event, so every refusal of Stage 1 leaves the run-map and the ledger as
 they were, and the one-task `run` keeps its event; `slicesOf` builds its slices without mutation.
+(9) *(coai code round 3, PR 3)*: the pair record `pairs/p<N>.json` is written whole or not at all (`run.mjs` `pairRecordFile` through `replaceJson`, a temporary file
+beside it and a rename; the file is rewritten on purpose, so `publishOnce` does not fit), and a data slot whose pair record cannot be read or parsed owes its records
+(`stage-owed.mjs` `lacksPair`), so `next` rewrites it before it offers a unit; the owner-go event is idempotent for one launch of a unit (`stage-step.mjs` `sayGo`
+looks in the ledger for an event of the same pair, `what` and `rids` and appends none when it is there), so a process that died between the event and the run-map
+leaves one event for the unit after its retry; the event gains a `rids` field, and a halted slot that is resumed (the same rids) adds no second event.
 
 ### (a) the guards before a paid pair — PR 4
 
