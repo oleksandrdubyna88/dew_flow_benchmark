@@ -314,3 +314,36 @@ test('A_free_that_is_not_given_the_unread_slots_is_refused_with_a_sentence_and_r
   }
   assert.equal(freeSeries({ series, unreadSlots: [] }).ok, true, 'an empty list is an answer: no slot waits');
 });
+
+// ---- coai code round 1 (PR 4), C2: a long operation says its progress ----------------------------------------------------------------------------------------------------------------------------------------------------
+
+const phaseLines = (lines, phase) => lines.filter(line => line.startsWith(`${phase}: `));
+const indexOfPhase = (lines, phase) => lines.findIndex(line => line.startsWith(`${phase}: `));
+
+test('Stage_archive_says_its_progress_in_the_listing_the_copying_and_the_verifying_phase_in_that_order_and_stage_restore_says_its_own', t => {
+  const series = seriesFolder(t, MAP, { cacheBytes: 50 });
+  const total = Object.keys(snapshotOf(series, { skip: SKIP })).length;
+  const lines = [];
+  const made = archiveSeries({ series, to: backupFolder(t), now: NOW, progress: line => lines.push(line), progressEvery: 10 });
+  assert.equal(made.ok, true, made.reason);
+  for (const phase of ['listing', 'copying', 'verifying']) {
+    const own = phaseLines(lines, phase);
+    assert.equal(own[0], `${phase}: 0 of ${total} file(s)`, `${phase} starts at 0`);
+    assert.ok(own.includes(`${phase}: 10 of ${total} file(s)`), `${phase} says a line every 10 files`);
+    assert.equal(own.at(-1), `${phase}: ${total} of ${total} file(s)`, `${phase} ends at the total`);
+  }
+  assert.ok(indexOfPhase(lines, 'listing') < indexOfPhase(lines, 'copying') && indexOfPhase(lines, 'copying') < indexOfPhase(lines, 'verifying'), 'in the order of the work');
+  assert.equal(freeSeries({ series, unreadSlots: [] }).ok, true);
+  const rid = ridOf(1, 'csharp');
+  const restoring = [];
+  assert.equal(restoreSeries({ series, rid, progress: line => restoring.push(line), progressEvery: 3 }).ok, true);
+  assert.deepEqual(restoring.filter(line => line.includes(rid)).filter(line => /of 4 file\(s\)$/.test(line)).filter(line => /^(verifying|restoring)/.test(line)).slice(0, 2), [`verifying ${rid} (archive copy): 0 of 4 file(s)`, `verifying ${rid} (archive copy): 3 of 4 file(s)`], 'the archive copy is verified first, a line every 3 files');
+  assert.equal(restoring.includes(`restoring ${rid}: 0 of 4 file(s)`) && restoring.includes(`restoring ${rid}: 4 of 4 file(s)`), true, 'then the files are placed');
+  assert.equal(restoring.includes(`verifying ${rid} (restored): 4 of 4 file(s)`), true, 'and the placed files are verified');
+});
+
+test('Without_a_progress_callback_a_long_operation_says_nothing_and_does_the_same_work', t => {
+  const { series } = archived(t);
+  assert.equal(freeSeries({ series, unreadSlots: [] }).ok, true);
+  assert.equal(restoreSeries({ series }).ok, true, 'a restore without a callback goes through');
+});

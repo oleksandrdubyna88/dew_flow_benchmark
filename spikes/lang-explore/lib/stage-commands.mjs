@@ -70,7 +70,7 @@ export function cmdStageArchive(values, io) {
   if (!series.ok) return refused(io, series.reason);
   if (!values.to) return refused(io, 'stage-archive needs --to <backup folder>: the private backup the copy goes to');
   const dir = series.value.dir;
-  return finish({ io, result: archiveSeries({ series: dir, to: path.resolve(values.to), now: io.now ?? systemClock, final: openReasonOf({ dir, io }) === null }), lines: archiveLines });
+  return finish({ io, result: archiveSeries({ series: dir, to: path.resolve(values.to), now: io.now ?? systemClock, final: openReasonOf({ dir, io }) === null, progress: io.say }), lines: archiveLines });
 }
 
 /** The read-back slots whose dated lines are not there yet (a slot `stage-free` leaves alone): `ok([slot])` | `fail` (gates that cannot be read). */
@@ -99,5 +99,5 @@ const restoreLines = r => [`restored ${r.restored.length} session(s): ${r.restor
 export function cmdStageRestore(values, io) {
   const series = seriesOfValues({ values, io, verb: 'stage-restore' });
   if (!series.ok) return refused(io, series.reason);
-  return finish({ io, result: restoreSeries({ series: series.value.dir, rid: values.rid }), lines: restoreLines });
+  return finish({ io, result: restoreSeries({ series: series.value.dir, rid: values.rid, progress: io.say }), lines: restoreLines });
 }

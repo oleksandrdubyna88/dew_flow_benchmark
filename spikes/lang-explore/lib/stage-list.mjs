@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { lstatSync, readlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { mapSaying } from './stage-progress.mjs';
 import { sha256OfFile, walkEntries } from './workspaces-tree.mjs';
 
 export const LIST_SKIP = Object.freeze(['series.lock', 'archive.json']);
@@ -21,12 +22,12 @@ export function hashAt(file) {
   return st.isFile() ? sha256OfFile(file) : null;
 }
 
-/** `ok([{ rel, kind, size, mode, target, hash }])` of every file and link of the series folder, or a `fail` naming an entry that is neither (an archive records neither a socket nor a device). */
-export function listSeries(series) {
+/** `ok([{ rel, kind, size, mode, target, hash }])` of every file and link of the series folder (`report` = `{ say, every }` says the hashing's progress), or a `fail` naming an entry that is neither (an archive records neither a socket nor a device). */
+export function listSeries(series, report) {
   const entries = walkEntries(series, { skip: rel => LIST_SKIP.includes(rel) });
   const odd = entries.find(e => e.kind === 'other');
   if (odd !== undefined) return fail(`${odd.rel} is neither a regular file nor a link: the archive records neither`);
-  return ok(entries.map(e => ({ ...e, hash: e.kind === 'link' ? hashOfLink(e.target) : sha256OfFile(path.join(series, e.rel)) })));
+  return ok(mapSaying({ items: entries, phase: 'listing', report, fn: e => ({ ...e, hash: e.kind === 'link' ? hashOfLink(e.target) : sha256OfFile(path.join(series, e.rel)) }) }));
 }
 
 /** The text of a list: `sha256  path`, one line each, a newline after the last. */
@@ -36,4 +37,4 @@ export const listText = entries => `${entries.map(e => `${e.hash}  ${e.rel}`).jo
 export const parseList = text => new Map(text.split('\n').map(line => LINE.exec(line)).filter(Boolean).map(m => [m[2], m[1]]));
 
 /** The sentences for every entry of `entries` that `root` does not hold with the listed hash: `<path>: missing or differs in the copy`. */
-export const copyProblems = ({ entries, root }) => entries.filter(e => hashAt(path.join(root, e.rel)) !== e.hash).map(e => `${e.rel}: missing from the copy, or it differs from the source`);
+export const copyProblems = ({ entries, root, report }) => mapSaying({ items: entries, phase: 'verifying', report, fn: e => (hashAt(path.join(root, e.rel)) === e.hash ? null : `${e.rel}: missing from the copy, or it differs from the source`) }).filter(line => line !== null);

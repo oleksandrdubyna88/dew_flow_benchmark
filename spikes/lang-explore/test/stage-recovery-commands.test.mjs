@@ -56,7 +56,7 @@ test('stage_archive_copies_the_series_to_the_backup_and_records_it_and_stage_fre
   assert.match(early.text, /has no archive recorded: run stage-archive --series .* --to <backup folder> first/);
   const archived = await verb(rig, ['stage-archive', '--series', rig.dir, '--to', backup]);
   assert.equal(archived.exit, 0, archived.text);
-  assert.match(archived.text, /^archived \d+ file\(s\), \d+ bytes, to .*; the list [0-9a-f]{12} is .*\.sha256list; slots finished: 1, 2$/);
+  assert.match(archived.text.split('\n').at(-1), /^archived \d+ file\(s\), \d+ bytes, to .*; the list [0-9a-f]{12} is .*\.sha256list; slots finished: 1, 2$/, 'the summary is the last line, after the progress lines');
   const entries = JSON.parse(readFileSync(path.join(rig.dir, 'archive.json'), 'utf8')).archives;
   assert.equal(entries.length, 1, 'the archive is recorded once');
   assert.equal(existsSync(path.join(entries[0].copy, 'run-map.json')), true, 'the copy holds the series');
@@ -89,7 +89,7 @@ test('stage_restore_through_the_command_layer_brings_one_session_or_all_back_and
   const [first, second] = [...sessionsOf(1), ...sessionsOf(2)];
   const one = await verb(rig, ['stage-restore', '--series', rig.dir, '--rid', first]);
   assert.equal(one.exit, 0, one.text);
-  assert.equal(one.text, `restored 1 session(s): ${first}`);
+  assert.equal(one.text.split('\n').at(-1), `restored 1 session(s): ${first}`);
   assert.equal(cacheLeft(rig.dir, first), 4, 'the cache folders of that session are back');
   assert.equal(cacheLeft(rig.dir, second), 0, 'another freed session stays freed');
   const wrong = await verb(rig, ['stage-restore', '--series', rig.dir, '--rid', first]);
@@ -102,7 +102,7 @@ test('stage_restore_through_the_command_layer_brings_one_session_or_all_back_and
   assert.match(last.text, /session\(s\) of this series are freed .*run stage-restore --series .* first/);
   const all = await verb(rig, ['stage-restore', '--series', rig.dir]);
   assert.equal(all.exit, 0, all.text);
-  assert.match(all.text, /^restored 3 session\(s\): /);
+  assert.match(all.text.split('\n').at(-1), /^restored 3 session\(s\): /);
   assert.equal((await verb(rig, ['stage-archive', '--series', rig.dir, '--to', backup])).exit, 0, 'with every session whole the last archive goes through');
 });
 
@@ -115,6 +115,20 @@ test('stage_free_through_the_command_layer_names_the_sessions_that_are_already_f
   const again = await verb(rig, ['stage-free', '--series', rig.dir]);
   assert.equal(again.exit, 0, again.text);
   assert.equal(again.text, `freed 0 file(s), 0 bytes, of 0 session(s)\nalready freed, left alone (stage-restore first to free again): ${freedRids.join(', ')}`);
+});
+
+test('stage_archive_and_stage_restore_print_one_progress_line_per_phase_before_their_last_line', async t => {
+  const { rig } = await seriesWith(2);
+  const archived = await verb(rig, ['stage-archive', '--series', rig.dir, '--to', backupFolder(t)]);
+  assert.equal(archived.exit, 0, archived.text);
+  const lines = archived.text.split('\n');
+  for (const phase of ['listing', 'copying', 'verifying']) assert.match(archived.text, new RegExp(`^${phase}: (\\d+) of \\1 file\\(s\\)$`, 'm'), `${phase} ends at its total`);
+  assert.match(lines.at(-1), /^archived \d+ file\(s\)/, 'the summary is still the last line');
+  assert.equal((await verb(rig, ['stage-free', '--series', rig.dir])).exit, 0);
+  const restored = await verb(rig, ['stage-restore', '--series', rig.dir]);
+  assert.equal(restored.exit, 0, restored.text);
+  assert.match(restored.text, /^restoring [0-9a-f]{6}: 4 of 4 file\(s\)$/m, 'a restore says its progress per session');
+  assert.match(restored.text.split('\n').at(-1), /^restored 4 session\(s\)/, 'and the summary is the last line');
 });
 
 test('Each_recovery_verb_takes_the_series_lock_and_a_held_lock_refuses_it_naming_the_holder', async t => {

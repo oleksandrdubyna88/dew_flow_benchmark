@@ -16,6 +16,7 @@ import { readRunMap } from '../../minigit-bench/lib/run-map.mjs';
 import { systemClock } from './clock.mjs';
 import { isVoid, pairComplete, runMapFileOf } from './series.mjs';
 import { STAGE_ROUNDS } from './stage-schedule.mjs';
+import { mapSaying } from './stage-progress.mjs';
 import { copyProblems, hashAt, listSeries, listText, parseList, sha256Text } from './stage-list.mjs';
 import { FREEZE_TASKS } from './workspaces-sources.mjs';
 import { walkEntries } from './workspaces-tree.mjs';
@@ -117,24 +118,25 @@ function recordArchive({ series, to, dest, entries, text, now }) {
   return ok(entry);
 }
 
-function archiveLocked({ series, to, now, hooks }) {
-  const listed = listSeries(series);
+function archiveLocked({ series, to, now, hooks, report }) {
+  const listed = listSeries(series, report);
   if (!listed.ok) return listed;
   const dest = destOf({ series, to });
-  listed.value.forEach(entry => copyEntry({ series, dest, entry }));
+  mapSaying({ items: listed.value, phase: 'copying', report, fn: entry => copyEntry({ series, dest, entry }) });
   hooks.afterCopy?.(dest);
-  const problems = copyProblems({ entries: listed.value, root: dest });
+  const problems = copyProblems({ entries: listed.value, root: dest, report });
   if (problems.length > 0) return fail(`the copy differs from the source (${problems.length} file(s)): ${problems.slice(0, 5).join('; ')}; nothing is recorded`);
   return recordArchive({ series, to, dest, entries: listed.value, text: listText(listed.value), now });
 }
 
 /**
  * `stage-archive`: copy the whole series to `to`, verify the copy file by file against the sha256 list, record it in `archive.json` (the list's sha256, the bytes, the place, the date and the slots finished at that time). It deletes nothing.
+ * `progress(sentence)` (optional) hears one line per phase step: listing, copying and verifying, every `progressEvery` files (500 by default).
  * `final: true` is the last archive after the series ended and refuses a series that still holds a freed session. -> `ok(entry)` | `fail(sentence)`.
  */
-export function archiveSeries({ series, to, now = systemClock, final = false, hooks = {} }) {
+export function archiveSeries({ series, to, now = systemClock, final = false, hooks = {}, progress, progressEvery }) {
   const refused = archiveRefusal({ series, to, final });
-  return refused ? fail(refused) : withSeriesLock(series, () => archiveLocked({ series, to, now, hooks }));
+  return refused ? fail(refused) : withSeriesLock(series, () => archiveLocked({ series, to, now, hooks, report: { say: progress, every: progressEvery } }));
 }
 
 // ---- who is freed ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -250,7 +252,7 @@ export function freeSeries({ series, unreadSlots, now = systemClock }) {
 const copyOf = ({ freed, rid, item }) => path.join(freed.archive.copy, 's', rid, item.path);
 
 /** The sentences for every listed file whose archived copy does not have the listed hash (nothing is placed before every copy is verified). */
-const restoreProblems = ({ freed, rid }) => freed.removed.filter(item => hashAt(copyOf({ freed, rid, item })) !== item.sha256).map(item => `${item.path}: the archived copy is missing or differs from the listed sha256`);
+const restoreProblems = ({ freed, rid, report }) => mapSaying({ items: freed.removed, phase: `verifying ${rid} (archive copy)`, report, fn: item => (hashAt(copyOf({ freed, rid, item })) === item.sha256 ? null : `${item.path}: the archived copy is missing or differs from the listed sha256`) }).filter(line => line !== null);
 
 function placeItem({ series, freed, rid, item }) {
   const target = path.join(sessionDir(series, rid), item.path);
@@ -264,32 +266,32 @@ function placeItem({ series, freed, rid, item }) {
   renameSync(tmp, target);
 }
 
-function restoreSession({ series, rid }) {
+function restoreSession({ series, rid, report }) {
   const freed = oldFreed(sessionDir(series, rid));
-  const problems = restoreProblems({ freed, rid });
+  const problems = restoreProblems({ freed, rid, report });
   if (problems.length > 0) return fail(`session ${rid} is not restored: ${problems.join('; ')}`);
-  freed.removed.forEach(item => placeItem({ series, freed, rid, item }));
-  const wrong = freed.removed.filter(item => hashAt(path.join(sessionDir(series, rid), item.path)) !== item.sha256);
+  mapSaying({ items: freed.removed, phase: `restoring ${rid}`, report, fn: item => placeItem({ series, freed, rid, item }) });
+  const wrong = mapSaying({ items: freed.removed, phase: `verifying ${rid} (restored)`, report, fn: item => (hashAt(path.join(sessionDir(series, rid), item.path)) === item.sha256 ? null : item) }).filter(item => item !== null);
   if (wrong.length > 0) return fail(`session ${rid}: ${wrong.map(w => w.path).join(', ')} do not match the listed bytes after the copy`);
   rmSync(path.join(sessionDir(series, rid), FREED_FILE));
   return ok(freed.removed.length);
 }
 
 /** The sessions restored one after the other; the first refusal ends it (what was restored stays restored). */
-function restoreAll({ series, rids }) {
+function restoreAll({ series, rids, report }) {
   const done = [];
   for (const rid of rids) {
-    const restored = restoreSession({ series, rid });
+    const restored = restoreSession({ series, rid, report });
     if (!restored.ok) return restored;
     done.push(rid);
   }
   return ok({ restored: done });
 }
 
-function restoreLocked({ series, rid }) {
+function restoreLocked({ series, rid, report }) {
   const rids = freedRids(series, rid);
-  return rid !== undefined && rids.length === 0 ? fail(`session ${rid} is not freed: there is no ${FREED_FILE} in it`) : restoreAll({ series, rids });
+  return rid !== undefined && rids.length === 0 ? fail(`session ${rid} is not freed: there is no ${FREED_FILE} in it`) : restoreAll({ series, rids, report });
 }
 
-/** `stage-restore`: the freed files of one session (`rid`) or of every freed session copied back from the archive, each verified against `freed.json`'s list, and `freed.json` removed. A copy that differs is refused and nothing of that session is placed. -> `ok({ restored })` | `fail`. */
-export const restoreSeries = ({ series, rid }) => withSeriesLock(series, () => restoreLocked({ series, rid }));
+/** `stage-restore`: the freed files of one session (`rid`) or of every freed session copied back from the archive, each verified against `freed.json`'s list, and `freed.json` removed. A copy that differs is refused and nothing of that session is placed. `progress(sentence)` (optional) hears the verifying and restoring of each session. -> `ok({ restored })` | `fail`. */
+export const restoreSeries = ({ series, rid, progress, progressEvery }) => withSeriesLock(series, () => restoreLocked({ series, rid, report: { say: progress, every: progressEvery } }));
