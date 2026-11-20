@@ -2,15 +2,24 @@
 // `pilot` and `A/A` are the charges of the sessions of those kinds at attempt 1, `data` and `void` those of the data sessions at attempt 1 (the ledger's own `data` and `void` kinds), and `re-run` the charges of every session of attempt 2
 // (open point 14, answered 2026-11-19: the split of the five lines is registered). The five lines add up to what the ledger holds. Pure over the run-map and the ledger lines.
 import { isOwnCharge } from '../../minigit-bench/lib/ledger.mjs';
-import { STACK_ORDER, pairComplete, stackState } from './series.mjs';
+import { STACK_ORDER, isVoid, pairComplete, stackState } from './series.mjs';
 import { DATA_KIND, STAGE_ROUNDS } from './stage-schedule.mjs';
 import { FREEZE_TASKS } from './workspaces-sources.mjs';
 
 export const SPEND_LINES = Object.freeze(['pilot', 'A/A', 'data', 'void', 're-run']);
 const LINE_OF_KIND = Object.freeze({ pilot: 'pilot', aa: 'A/A', data: 'data', void: 'void' });
 
-/** The spend line a charge belongs to: `re-run` for a session of attempt 2 (whatever its kind), else the line of its ledger kind; `null` for a charge of a kind the five lines do not hold (a prior or rehearsal charge). */
-const lineOf = (map, charge) => (map.sessions[charge.rid]?.attempt === 2 ? 're-run' : (LINE_OF_KIND[charge.kind] ?? null));
+/** The line of the ledger's kind (`data` for a data charge, `void` for a ledger `void`); `null` for a kind the five lines do not hold. */
+const lineOfKind = charge => LINE_OF_KIND[charge.kind] ?? null;
+
+/** A data charge of a session the run-map holds as a void NOW (the scorer's `voidOne` or a dated line voided it after its launch, so its ledger line still says `data`) belongs on `void`. */
+const lineOfData = (session, line) => (line === 'data' && session !== undefined && isVoid(session) ? 'void' : line);
+
+/** The spend line a charge belongs to: `re-run` for a session of attempt 2 (whatever its kind), else the line of its ledger kind, `void` when the run-map's session is a void at read time; `null` for a charge of a kind the five lines do not hold (a prior or rehearsal charge). */
+const lineOf = (map, charge) => {
+  const session = map.sessions[charge.rid];
+  return session?.attempt === 2 ? 're-run' : lineOfData(session, lineOfKind(charge));
+};
 
 /** The spend on the five lines and the total the ledger holds: `{ lines: { pilot, 'A/A', data, void, 're-run' }, other, total }` (`other` is what no line holds; zero for a Stage 1 series). */
 export function spendLines({ map, ledger }) {

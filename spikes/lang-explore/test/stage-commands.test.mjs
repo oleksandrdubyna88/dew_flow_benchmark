@@ -120,6 +120,16 @@ test('The_spend_lines_are_pilot_A_A_data_void_and_re_run_and_they_sum_to_the_led
   assert.deepEqual([prior.other, prior.total], [7, 19], 'a charge no line holds is shown apart, so the lines plus it still add up');
 });
 
+test('An_attempt_1_session_voided_after_its_launch_is_a_void_charge_whatever_kind_its_ledger_line_has_and_the_lines_still_sum', () => {
+  const session = (rid, over) => [rid, { rid, kind: 'data', attempt: 1, pair: 1, stack: 'node', status: 'scored', ...over }];
+  const map = { sessions: Object.fromEntries([session('d1', { data: true, class: 'completed' }), session('v1', { data: false, class: 'void: harness' }), session('s1', { data: false, class: 'stop: auth' }), session('p1', { kind: 'pilot', data: false, class: 'void: harness' })]) };
+  const charge = (rid, kind, usd) => ({ kind, usd, what: 'x', rid, t: '2026-11-20T10:00:00Z' });
+  const ledger = [charge('d1', 'data', 3), charge('v1', 'data', 0.5), charge('s1', 'data', 0.25), charge('p1', 'pilot', 2)];
+  const got = spendLines({ map, ledger });
+  assert.deepEqual(got.lines, { pilot: 2, 'A/A': 0, data: 3.25, void: 0.5, 're-run': 0 }, 'a void by the scorer or a dated line (status scored, data false) is on the void line; a stop and a pilot session are not');
+  assert.equal(Object.values(got.lines).reduce((a, b) => a + b, 0) + got.other, got.total, 'the five lines add up to the ledger');
+});
+
 test('stage_status_prints_the_rounds_the_slots_the_pilot_and_the_five_spend_lines', async () => {
   const rig = await runRig({ loop: { voids: s => s.stack === 'csharp' && s.attempt === 1 && s.pair === 1 } });
   const run = async what => stageRun({ values: { series: rig.dir, what }, io: rig.io });
