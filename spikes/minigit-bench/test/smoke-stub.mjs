@@ -1,5 +1,10 @@
-// The stub `claude` of the smoke tests: a script that speaks the CLI's stream-json init and result events, calls the broker once with the credential it was given and writes the token file on purpose.
-// `version` is what its init event says (`claude_code_version`): the one thing a test of a pinned CLI changes.
+// The fakes of the smoke tests: the stub `claude` (a script that speaks the CLI's stream-json init and result events, calls the broker once with the credential it was given and writes the token file on purpose)
+// and a home that holds a fake token the way v1's reader wants it. `version` is what the stub's init event says (`claude_code_version`): the one thing a test of a pinned CLI changes.
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { TOKEN_FILE_PARTS } from '../capture/capture-env.mjs';
+import { tmpDir } from './helpers.mjs';
+
 export const smokeStub = (version = '2.1.310') => `#!/usr/bin/env node
 const fs = require('node:fs'); const http = require('node:http');
 const say = o => process.stdout.write(JSON.stringify(o) + '\\n');
@@ -15,3 +20,13 @@ const post = (url, body, headers) => new Promise((resolve, reject) => { const u 
   say({ type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0.009232, result: 'DONE' });
 })();
 `;
+
+/** A home that holds a token file the way v1's reader wants it (mode 600 in a directory of mode 700): the fake token a test gives, never a real one. */
+export function homeWithToken(token, prefix = 'smoke-home') {
+  const home = tmpDir(prefix);
+  const file = path.join(home, ...TOKEN_FILE_PARTS);
+  mkdirSync(path.dirname(file), { recursive: true });
+  chmodSync(path.dirname(file), 0o700);
+  writeFileSync(file, `${token}\n`, { mode: 0o600 });
+  return home;
+}

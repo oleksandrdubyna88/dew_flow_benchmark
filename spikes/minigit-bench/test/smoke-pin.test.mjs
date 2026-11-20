@@ -1,31 +1,20 @@
 // The smoke on a CLI other than v1's own pin (the seam `smokeInputs({ claude, cliPin })`): a version and a binary given to it reach the preflight, the plan and meta.json; given nothing, v1 is what it was.
 // A stub `claude` and a stub upstream stand in for the CLI and the API: nothing here is paid, and no real token, network or CLI is used.
 import assert from 'node:assert/strict';
-import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { TOKEN_FILE_PARTS } from '../capture/capture-env.mjs';
 import { loadStacks } from '../lib/host-checks.mjs';
 import { runSmoke, smokeInputs } from '../lib/smoke-run.mjs';
 import { main } from '../smoke-session.mjs';
 import { fakeToken, prices, sseAnswer, sseBody, chunksOf, stubUpstream } from './broker-stub.mjs';
 import { DOTNET_PIN, TS_DIR } from './box-helpers.mjs';
 import { sandboxGate, spikeDir, tmpDir } from './helpers.mjs';
-import { smokeStub } from './smoke-stub.mjs';
+import { homeWithToken, smokeStub } from './smoke-stub.mjs';
 
 const PINNED = '2.1.329';
 const FIXTURE = path.join(spikeDir, 'test', 'fixtures', 'real', 'claude-2.1.310-bare-smoke');
 const V1_PIN = JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'stacks.json'), 'utf8')).pins.claude;
-
-/** A home that holds a token file the way v1's reader wants it (mode 600 in a directory of mode 700): the fake token, never a real one. */
-function homeWithToken(token) {
-  const home = tmpDir('pin-home');
-  const file = path.join(home, ...TOKEN_FILE_PARTS);
-  mkdirSync(path.dirname(file), { recursive: true });
-  chmodSync(path.dirname(file), 0o700);
-  writeFileSync(file, `${token}\n`, { mode: 0o600 });
-  return home;
-}
 
 /** An executable file in a folder of its own: the stub's source, or an empty script when the test never runs it. */
 function binaryNamed(name, source = '#!/bin/sh\n') {
