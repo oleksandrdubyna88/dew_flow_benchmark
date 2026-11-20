@@ -3,6 +3,7 @@
 // Everything runs on fakes: a stand-in for the CLI copy, a fake home with a fake token, a fake of v1's `main` where a test reads what the wrapper asked of it (it can leave what v1's steps leave), and v1's own `main` where the subject
 // is v1's (the out dir, the dry run, a real sanitise of a stub capture). No real CLI, network or token is used and nothing is paid.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -11,6 +12,7 @@ import { TOKEN_FILE_PARTS } from '../../minigit-bench/capture/capture-env.mjs';
 import { crosscheckPolicyFrom } from '../../minigit-bench/capture/policy-input.mjs';
 import { renderVerdicts, verdictBlockOf } from '../../minigit-bench/capture/verdicts.mjs';
 import { smokeEvidence } from '../../minigit-bench/lib/aa-facts.mjs';
+import { acquireGuardedLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { loadSmoke } from '../../minigit-bench/lib/smoke-load.mjs';
 import { computeSmokeVerdicts } from '../../minigit-bench/lib/smoke-verdicts.mjs';
 import { fakeToken } from '../../minigit-bench/test/broker-stub.mjs';
@@ -18,7 +20,7 @@ import { sandboxGate, spikeDir, tmpDir } from '../../minigit-bench/test/helpers.
 import { binaryNamed, homeWithToken, stubSmokeSession } from '../../minigit-bench/test/smoke-stub.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
 import { INPUTS, REPO } from '../lib/paths.mjs';
-import { FIXTURES_DIR, fixtureNameOf, main, stagingOf } from '../prereg/smoke-pinned.mjs';
+import { FIXTURES_DIR, fixtureNameOf, lockFileOf, main, recordOf, stagingOf } from '../prereg/smoke-pinned.mjs';
 
 const VERSION = '2.1.329';
 const COPY_BYTES = '#!/bin/sh\necho 2.1.329 (stand-in for the pinned CLI)\n';
@@ -43,7 +45,8 @@ function pinnedWorld({ version = VERSION, bytes = COPY_BYTES, pinnedSha = sha(CO
   writeFileSync(explore, JSON.stringify({ ...registered, cli: { ...registered.cli, version, pathParts: parts, sha256: pinnedSha } }, null, 2));
   assert.equal(loadExplore(explore).ok, true, loadExplore(explore).reason);
   const fixtures = path.join(tmpDir('pinned-fixtures'), 'real');
-  return { home, explore, binary, fixtures, fixture: path.join(fixtures, fixtureNameOf(version)), staging: stagingOf(path.join(fixtures, fixtureNameOf(version))), out: path.join(tmpDir('pinned-out'), 'r1') };
+  const fixture = path.join(fixtures, fixtureNameOf(version));
+  return { home, explore, binary, fixtures, fixture, staging: stagingOf(fixture), record: recordOf(stagingOf(fixture)), lock: lockFileOf(fixture), out: path.join(tmpDir('pinned-out'), 'r1') };
 }
 
 /** What v1's steps leave when they succeed (`argv` is the call): the raw session dir with a finished run's meta.json, the sanitised capture where `--to` says, SMOKE.md where `--fixture` says. */
@@ -60,16 +63,16 @@ function fakeSmoke({ codes = {}, effects = {} } = {}) {
 }
 const succeeding = () => fakeSmoke({ effects: leaves });
 
-/** A raw session dir as the paid run leaves it: a meta.json with the outcome and the version the CLI reported, and one more file to see it untouched. */
-function rawCapture(dir, { outcome = { ok: true, label: 'ok' }, cliVersion = VERSION } = {}) {
+/** A raw session dir as the paid run leaves it: a meta.json with the outcome, the version the CLI reported and the run's own identity (`rid`, `sessionId`: one per dir), and one more file to see it untouched. */
+function rawCapture(dir, { outcome = { ok: true, label: 'ok' }, cliVersion = VERSION, rid = `rid-${sha(dir).slice(0, 8)}` } = {}) {
   mkdirSync(dir, { recursive: true });
-  writeFileSync(path.join(dir, 'meta.json'), `${JSON.stringify({ outcome, cliVersion })}\n`);
+  writeFileSync(path.join(dir, 'meta.json'), `${JSON.stringify({ rid, sessionId: `session-${rid}`, outcome, cliVersion })}\n`);
   writeFileSync(path.join(dir, 'stream.ndjson'), '{"type":"system"}\n');
   return dir;
 }
 
 /** Every file under a folder with its hash, sorted: what "untouched" means for a raw capture. */
-const treeOf = dir => readdirSync(dir, { recursive: true, withFileTypes: true }).filter(e => e.isFile()).map(e => `${path.relative(dir, path.join(e.parentPath, e.name))} ${sha(readFileSync(path.join(e.parentPath, e.name)))}`).sort();
+const treeOf = dir => readdirSync(dir, { recursive: true, withFileTypes: true }).filter(e => e.isFile()).map(e => `${path.relative(dir, path.join(e.parentPath, e.name))} ${sha(readFileSync(path.join(e.parentPath, e.name)))}`).toSorted();
 
 /** The wrapper run over a world with these flags: `{ code, lines }`. `smoke` is a fake, or v1's own `main` by default. */
 async function runWrapper(world, flags, smoke) {
@@ -86,7 +89,7 @@ test('The_wrapper_runs_v1s_run_then_sanitise_and_verdicts_on_a_staging_folder_an
   const { code, text } = await runWrapper(world, fresh(world), smoke.fn);
   assert.equal(code, 0, text);
   assert.deepEqual(smoke.calls.map(c => c.argv), [['run', '--out', world.out], ['sanitise', '--from', world.out, '--to', world.staging], ['verdicts', '--fixture', world.staging]]);
-  assert.deepEqual(readdirSync(world.fixture).sort(), ['SMOKE.md', 'meta.json'], 'the fixture folder is the staging folder, renamed');
+  assert.deepEqual(readdirSync(world.fixture).toSorted(), ['SMOKE.md', 'meta.json'], 'the fixture folder is the staging folder, renamed');
   assert.equal(existsSync(world.staging), false);
   assert.equal(path.basename(world.fixture), `claude-${VERSION}-bare-smoke`, 'the name is the one B-T1 looks the fixture up by');
   assert.match(smoke.calls[2].opts.command, /smoke-pinned\.mjs --out /, 'SMOKE.md names the command that was run, not v1\'s');
@@ -207,7 +210,7 @@ test('A_sanitise_that_fails_leaves_no_fixture_folder_and_no_staging_folder_the_r
   assert.equal(code, 5);
   assert.deepEqual(smoke.calls.map(c => c.argv[0]), ['run', 'sanitise'], 'verdicts never ran');
   assert.deepEqual([existsSync(world.fixture), existsSync(world.staging)], [false, false]);
-  assert.deepEqual(raw.map(l => l.split(' ')[0]).sort(), ['meta.json', 'stream.ndjson'], 'the raw capture is there');
+  assert.deepEqual(raw.map(l => l.split(' ')[0]).toSorted(), ['meta.json', 'stream.ndjson'], 'the raw capture is there');
   assert.match(text, new RegExp(`--from sanitise --raw ${world.out.replaceAll('.', '\\.')}`), 'the message names the way on, which needs no second session');
 });
 
@@ -229,7 +232,7 @@ test('A_resume_from_sanitise_redoes_sanitise_and_verdicts_from_the_raw_capture_r
   const { code, text } = await runWrapper(world, resume(world, 'sanitise'), smoke.fn);
   assert.equal(code, 0, text);
   assert.deepEqual(smoke.calls.map(c => c.argv), [['sanitise', '--from', world.out, '--to', world.staging], ['verdicts', '--fixture', world.staging]], 'no run verb: nothing is launched');
-  assert.deepEqual(readdirSync(world.fixture).sort(), ['SMOKE.md', 'meta.json']);
+  assert.deepEqual(readdirSync(world.fixture).toSorted(), ['SMOKE.md', 'meta.json']);
   assert.equal(existsSync(world.staging), false);
 });
 
@@ -241,12 +244,98 @@ test('A_resume_from_verdicts_redoes_only_the_verdicts_on_the_kept_staging_folder
   assert.equal(refused.code, 3);
   assert.match(refused.text, /no sanitised copy .*--from sanitise/);
   assert.deepEqual(none.calls, []);
-  leaves.sanitise(['sanitise', '--from', world.out, '--to', world.staging]);
+  await runWrapper(world, resume(world, 'sanitise'), fakeSmoke({ effects: leaves, codes: { verdicts: 5 } }).fn);
   const smoke = succeeding();
   const done = await runWrapper(world, resume(world, 'verdicts'), smoke.fn);
   assert.equal(done.code, 0, done.text);
   assert.deepEqual(smoke.calls.map(c => c.argv), [['verdicts', '--fixture', world.staging]]);
-  assert.deepEqual(readdirSync(world.fixture).sort(), ['SMOKE.md', 'meta.json']);
+  assert.deepEqual(readdirSync(world.fixture).toSorted(), ['SMOKE.md', 'meta.json']);
+});
+
+test('The_staging_folder_is_bound_to_its_raw_capture_so_a_verdicts_resume_with_another_valid_raw_dir_or_a_changed_meta_json_is_refused_naming_both', async () => {
+  const world = pinnedWorld();
+  const other = rawCapture(path.join(tmpDir('raw-other-valid'), 'r1'));
+  rawCapture(world.out);
+  await runWrapper(world, fresh(world), fakeSmoke({ effects: leaves, codes: { verdicts: 5 } }).fn);
+  assert.deepEqual(JSON.parse(readFileSync(world.record, 'utf8')).raw, world.out, 'the record names the raw dir the staging folder was made from');
+  const wrong = fakeSmoke();
+  const refused = await runWrapper(world, resume(world, 'verdicts', other), wrong.fn);
+  assert.equal(refused.code, 3, refused.text);
+  assert.ok(refused.text.includes(world.out) && refused.text.includes(other), 'the sentence names the recorded raw dir and the supplied one');
+  assert.deepEqual(wrong.calls, [], 'verdicts did not run on a copy of another capture');
+  rawCapture(world.out, { rid: 'rewritten' });
+  const changed = await runWrapper(world, resume(world, 'verdicts'), fakeSmoke().fn);
+  assert.equal(changed.code, 3);
+  assert.match(changed.text, /not the capture it was made from/);
+  rawCapture(world.out);
+  const right = succeeding();
+  const done = await runWrapper(world, resume(world, 'verdicts'), right.fn);
+  assert.equal(done.code, 0, done.text);
+  assert.deepEqual(readdirSync(world.fixture).toSorted(), ['SMOKE.md', 'meta.json'], 'the record is not part of the published fixture');
+  assert.deepEqual([existsSync(world.record), existsSync(world.staging)], [false, false], 'and it is gone beside it too');
+});
+
+test('A_lock_held_by_a_live_run_refuses_a_second_run_or_resume_before_any_launch_naming_the_holder_and_before_the_fixture_check', async () => {
+  const world = pinnedWorld();
+  rawCapture(world.out);
+  mkdirSync(world.fixture, { recursive: true });
+  writeFileSync(path.join(world.fixture, 'meta.json'), '{}\n');
+  const held = acquireGuardedLock({ dir: path.dirname(world.lock), name: path.basename(world.lock) });
+  assert.equal(held.ok, true, held.reason);
+  for (const flags of [fresh(world), resume(world, 'sanitise')]) {
+    const smoke = fakeSmoke();
+    const { code, text } = await runWrapper(world, flags, smoke.fn);
+    assert.equal(code, 3, `with [${flags}]`);
+    assert.match(text, new RegExp(`in use by pid ${process.pid} .*${path.basename(world.lock).replaceAll('.', '\\.')}`), 'names the holder and its lock file');
+    assert.doesNotMatch(text, /is not empty/, 'the lock is asked before the fixture folder');
+    assert.deepEqual(smoke.calls, [], 'no launch');
+  }
+  held.value.release();
+  rmSync(world.fixture, { recursive: true });
+  const free = succeeding();
+  assert.equal((await runWrapper(world, fresh(world), free.fn)).code, 0, 'with the lock free the same run goes on');
+  assert.equal(existsSync(world.lock), false);
+});
+
+test('A_lock_whose_holder_is_gone_is_taken_over_and_every_way_out_releases_the_lock', async () => {
+  const world = pinnedWorld();
+  const dead = spawnSync(process.execPath, ['-e', '0']).pid;
+  mkdirSync(path.dirname(world.lock), { recursive: true });
+  writeFileSync(world.lock, `${JSON.stringify({ pid: dead, startTime: '1', at: '2026-11-20T00:00:00.000Z' })}\n`);
+  const smoke = succeeding();
+  const done = await runWrapper(world, fresh(world), smoke.fn);
+  assert.equal(done.code, 0, done.text);
+  assert.equal(smoke.calls.length, 3, 'the stale lock did not stop the run');
+  assert.equal(existsSync(world.lock), false, 'released after a success');
+  const failing = pinnedWorld();
+  await runWrapper(failing, fresh(failing), fakeSmoke({ effects: leaves, codes: { sanitise: 5 } }).fn);
+  assert.equal(existsSync(failing.lock), false, 'released after a failed step');
+  const refused = pinnedWorld();
+  await runWrapper(refused, resume(refused, 'sanitise', path.join(tmpDir('no-raw'), 'r1')), fakeSmoke().fn);
+  assert.equal(existsSync(refused.lock), false, 'released after a refusal');
+});
+
+test('A_dry_run_takes_no_lock_and_is_not_stopped_by_a_held_one', async () => {
+  const world = pinnedWorld();
+  mkdirSync(path.dirname(world.lock), { recursive: true });
+  const mine = acquireGuardedLock({ dir: path.dirname(world.lock), name: path.basename(world.lock) });
+  const { code, text } = await runWrapper(world, fresh(world, '--dry-run'), fakeSmoke().fn);
+  assert.equal(code, 0, text);
+  mine.value.release();
+});
+
+test('The_resume_line_a_failed_step_prints_is_shell_quoted_for_a_path_with_a_space_and_one_with_a_quote', async () => {
+  const world = pinnedWorld();
+  const folder = tmpDir('quoted');
+  const explore = path.join(folder, "it's here", 'explore.json');
+  mkdirSync(path.dirname(explore), { recursive: true });
+  cpSync(world.explore, explore);
+  const out = path.join(folder, 'my raw', 'r1');
+  const spaced = { ...world, explore, out };
+  const { code, text } = await runWrapper(spaced, fresh(spaced), fakeSmoke({ effects: leaves, codes: { sanitise: 5 } }).fn);
+  assert.equal(code, 5);
+  const quoted = `'${folder}/it'\\''s here/explore.json'`;
+  assert.ok(text.includes(`--explore ${quoted} --from sanitise --raw '${out}'`), text);
 });
 
 test('A_resume_refuses_a_raw_dir_that_holds_no_completed_run_of_the_pinned_CLI_and_names_it', async () => {

@@ -10,18 +10,25 @@
 //   partial fixture folder, and the raw capture is never written to.
 //   A failure after the paid session never needs a second one: the second form redoes the later steps from the raw capture, and launches nothing. `--from sanitise` redoes sanitise and verdicts (a stale `.pending` folder is removed first);
 //   `--from verdicts` redoes verdicts and the rename on the `.pending` folder a failed verdicts step kept. Both refuse a raw dir that holds no completed run of the pinned CLI (its meta.json: outcome ok, `cliVersion` the pin), naming it.
+//   The staging folder is bound to its raw capture: before sanitise runs, `<pending>.source.json` (beside the folder, never in it, removed at the rename) records the raw dir, meta.json's `rid` and `sessionId` and the sha256 of meta.json, and
+//   `--from verdicts --raw <dir>` refuses a raw capture that is not that one, naming both.
+//   One paid session only: a real run or a resume first takes the per-version lock `.claude-<version>-bare-smoke.lock` beside the fixture folder (v1's `acquireGuardedLock`: O_EXCL, the owner's pid and start time; a lock whose owner is gone is taken
+//   over), BEFORE the fixture check, and holds it through run, sanitise, verdicts and rename; a live holder refuses a second run or resume, naming it. The lock is released on every way out. A dry run takes none.
 //   `--dry-run` (first form only): runs every check of the copy (it is there, sha256, mode 0555, the version's form), does NOT refuse a fixture folder that exists (it says the folder exists, a real run would refuse it), reads the token as v1's
 //   dry run does (that rule is v1's: a home without a token is v1's refusal) and launches nothing.
 // Exit 0 done | 3 the environment (the copy, the raw dir or the fixture folder is refused; v1's own: no token, preflight, bad out dir) | 4 usage | 5 `explore.json` cannot be read, or v1's session, sanitise or verdicts failed.
-import { existsSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { shellQuote } from '../../minigit-bench/capture/capture-plan.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { acquireGuardedLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { main as v1Main } from '../../minigit-bench/smoke-session.mjs';
 import { loadExplore, pinnedPaths } from '../lib/inputs.mjs';
 import { INPUTS, V1 } from '../lib/paths.mjs';
-import { EXIT, parseFlags, said } from './generator.mjs';
+import { EXIT, parseFlags, said, writeAtomically } from './generator.mjs';
 import { cliPinProblems } from './pin-cli.mjs';
 
 const ENVIRONMENT = 3;
@@ -32,6 +39,10 @@ export const FIXTURES_DIR = path.join(V1, 'test', 'fixtures', 'real');
 export const fixtureNameOf = version => `claude-${version}-bare-smoke`;
 /** Where the fixture is built before it is renamed to its name: a hidden sibling of the fixture folder (the same volume, so the rename is one step). */
 export const stagingOf = fixture => path.join(path.dirname(fixture), `.${path.basename(fixture)}.pending`);
+/** The record of the raw capture a staging folder was made from: a sibling of the folder, so the published fixture never holds it. */
+export const recordOf = staging => `${staging}.source.json`;
+/** The per-version lock of the one paid session: a hidden sibling of the fixture folder. */
+export const lockFileOf = fixture => path.join(path.dirname(fixture), `.${path.basename(fixture)}.lock`);
 const USAGE_RUN = 'usage: smoke-pinned.mjs --out <dir outside every git tree> [--dry-run] [--explore <file>]';
 const USAGE_RESUME = 'usage: smoke-pinned.mjs --from sanitise|verdicts --raw <the out dir of the paid run> [--explore <file>] (it launches nothing: no --out, no --dry-run)';
 const COMMAND = 'node spikes/lang-explore/prereg/smoke-pinned.mjs --out ~/rsd/lang-v2/smoke/<UTC stamp>';
@@ -73,13 +84,28 @@ function planOf({ file, home, fixturesDir }) {
   return ok({ version, pin: { claude: path.resolve(pinnedPaths(explore, home).claudeBinary), cliPin: version }, fixture: path.join(fixturesDir, fixtureNameOf(version)) });
 }
 
+/** The raw dir's meta.json: `ok({ meta, text })` | `fail(sentence)` when it cannot be read or is not JSON. */
+function readMeta(raw) {
+  try {
+    const text = readFileSync(path.join(raw, 'meta.json'), 'utf8');
+    return ok({ meta: JSON.parse(text), text });
+  } catch (e) {
+    return fail(`${raw} holds no readable meta.json (${e.code ?? e.message}): it is not a finished run of the smoke`);
+  }
+}
+
 /** The sentence for a raw dir that is not a finished run of the pinned CLI (its meta.json: it reads, the outcome is ok, the CLI that ran was the pinned one), or null. */
 function rawProblem(raw, version) {
-  let meta;
-  try { meta = JSON.parse(readFileSync(path.join(raw, 'meta.json'), 'utf8')); } catch (e) { return `${raw} holds no readable meta.json (${e.code ?? e.message}): it is not a finished run of the smoke`; }
+  const read = readMeta(raw);
+  if (!read.ok) return read.reason;
+  const { meta } = read.value;
   if (meta.outcome?.ok !== true) return `${raw} holds no completed run: its meta.json outcome is '${meta.outcome?.label ?? 'missing'}', not ok`;
   return meta.cliVersion === version ? null : `${raw} was captured on CLI ${meta.cliVersion}, the pin is ${version}`;
 }
+
+/** What identifies a raw capture: its dir, the run's `rid` and `sessionId`, the sha256 of its meta.json. */
+const identityOf = (raw, { meta, text }) => ({ raw, rid: meta.rid ?? null, sessionId: meta.sessionId ?? null, metaSha256: createHash('sha256').update(text).digest('hex') });
+const describeIdentity = i => `${i.raw} (rid ${i.rid}, session ${i.sessionId}, meta.json sha256 ${String(i.metaSha256).slice(0, 12)})`;
 
 /** The fixture folder's gate: a real run or a resume refuses a folder that has something in it; a dry run only says so. -> an exit code, or null to go on. */
 function fixtureGate({ fixture, dry, say }) {
@@ -89,23 +115,51 @@ function fixtureGate({ fixture, dry, say }) {
   return null;
 }
 
-/** The staging folder made ready for `from`: sanitise starts on none (a stale one is a killed run's, removed), verdicts needs the one a failed verdicts step kept. -> `ok` | `fail`. */
-function stagingReady({ from, staging }) {
-  if (from === 'verdicts') return existsSync(staging) ? ok(null) : fail(`there is no sanitised copy at ${staging} to run the verdicts on: run again with --from sanitise`);
+/** The record of `staging`: `ok(identity)` | `fail` when there is none or it cannot be read. */
+function recordRead(staging) {
+  try {
+    return ok(JSON.parse(readFileSync(recordOf(staging), 'utf8')));
+  } catch {
+    return fail(`there is no record of which raw capture ${staging} was made from: run again with --from sanitise`);
+  }
+}
+
+/** `--from verdicts`: the kept staging folder must be there and be bound to THIS raw capture. -> `ok` | `fail` naming the recorded capture and the given one. */
+function boundTo({ staging, identity }) {
+  if (!existsSync(staging)) return fail(`there is no sanitised copy at ${staging} to run the verdicts on: run again with --from sanitise`);
+  const recorded = recordRead(staging);
+  if (!recorded.ok) return recorded;
+  const same = Object.keys(identity).every(key => recorded.value[key] === identity[key]);
+  return same ? ok(null) : fail(`${staging} was made from ${describeIdentity(recorded.value)}; the raw capture given is ${describeIdentity(identity)}, not the capture it was made from. Give the recorded one, or redo from the start with --from sanitise`);
+}
+
+/** `--from sanitise`: no staging folder (a stale one is a killed run's, removed) and a fresh record, written before sanitise runs so a staging folder never exists without it. -> `ok` | `fail`. */
+function freshStaging({ staging, identity }) {
+  mkdirSync(path.dirname(staging), { recursive: true });
   rmSync(staging, { recursive: true, force: true });
-  return ok(null);
+  rmSync(recordOf(staging), { force: true });
+  const written = writeAtomically(recordOf(staging), `${JSON.stringify(identity, null, 2)}\n`);
+  return written.ok ? ok(null) : written;
+}
+
+/** The staging folder and its record made ready for `from`. -> `ok` | `fail`. */
+function prepared({ from, raw, staging }) {
+  const read = readMeta(raw);
+  if (!read.ok) return read;
+  const identity = identityOf(raw, read.value);
+  return from === 'verdicts' ? boundTo({ staging, identity }) : freshStaging({ staging, identity });
 }
 
 /** v1's verbs that make the fixture from the raw capture, from `from` on: sanitise into the staging folder, then the verdicts on it. */
 const verbsFrom = ({ from, raw, staging }) => [...(from === 'sanitise' ? [['sanitise', '--from', raw, '--to', staging]] : []), ['verdicts', '--fixture', staging]];
 
-const resumeLine = ({ step, raw, explore }) => `node spikes/lang-explore/prereg/smoke-pinned.mjs --explore ${explore} --from ${step} --raw ${raw}`;
+const resumeLine = ({ step, raw, explore }) => `node spikes/lang-explore/prereg/smoke-pinned.mjs --explore ${shellQuote(explore)} --from ${step} --raw ${shellQuote(raw)}`;
 /** What is said when a step after the paid session fails: the raw capture is untouched and the way on needs no second session. */
 const stoppedAfter = ({ verb, code, raw, explore }) => `stopped after ${verb} (exit ${code}); no fixture folder was made and the raw capture ${raw} is untouched. Redo it without a second session: ${resumeLine({ step: verb, raw, explore })}`;
 
 /** A step after the paid session failed: a sanitise that failed leaves no staging folder (what it wrote is not whole), a verdicts that failed keeps it; says the way on. -> the step's exit code. */
 function stopped({ verb, code, staging, raw, ctx }) {
-  if (verb === 'sanitise') rmSync(staging, { recursive: true, force: true });
+  if (verb === 'sanitise') [staging, recordOf(staging)].forEach(file => rmSync(file, { recursive: true, force: true }));
   return said(ctx.say, stoppedAfter({ verb, code, raw, explore: ctx.explore }), code);
 }
 
@@ -113,6 +167,7 @@ function stopped({ verb, code, staging, raw, ctx }) {
 function renamedIntoPlace({ staging, fixture, raw, explore }) {
   try {
     renameSync(staging, fixture);
+    rmSync(recordOf(staging), { force: true });
     return ok(fixture);
   } catch (e) {
     return fail(`cannot rename ${staging} to ${fixture}: ${e.code ?? e.message}; the sanitised copy is kept. Redo the last step: ${resumeLine({ step: 'verdicts', raw, explore })}`);
@@ -124,7 +179,7 @@ const concluded = ({ say, done }) => (done.ok ? said(say, `smoke fixture written
 /** The fixture from the raw capture: the verbs from `from` on, each through v1's `main` (the first that does not end 0 stops the rest), then the rename. */
 async function finish({ from, raw, plan, ctx }) {
   const staging = stagingOf(plan.fixture);
-  const ready = stagingReady({ from, staging });
+  const ready = prepared({ from, raw, staging });
   if (!ready.ok) return said(ctx.say, ready.reason, ENVIRONMENT);
   for (const argv of verbsFrom({ from, raw, staging })) {
     const code = await ctx.smoke(argv, ctx.opts);
@@ -156,6 +211,26 @@ async function resumed({ v, plan, ctx }) {
   return gated ?? finish({ from: v.from, raw, plan, ctx });
 }
 
+/** The per-version lock of the one paid session: `ok({ release })` | `fail` naming a live holder. A lock whose owner is gone is taken over. */
+function lockTaken({ plan }) {
+  const lock = lockFileOf(plan.fixture);
+  mkdirSync(path.dirname(lock), { recursive: true });
+  const busy = o => fail(`a smoke on CLI ${plan.version} is in use by pid ${o.pid} (started ${o.startTime}): it holds ${lock}. One paid session only: wait for it to end, then redo what it left with --from sanitise|verdicts --raw <its out dir>`);
+  return acquireGuardedLock({ dir: path.dirname(lock), name: path.basename(lock), busy });
+}
+
+/** A dry run launches nothing and takes no lock; a run or a resume holds the lock through every step and releases it on every way out. */
+async function dispatch({ v, plan, ctx }) {
+  if (v['dry-run'] === true) return freshRun({ v, plan, ctx });
+  const locked = lockTaken({ plan });
+  if (!locked.ok) return said(ctx.say, locked.reason, ENVIRONMENT);
+  try {
+    return await (fromOf(v) === 'run' ? freshRun : resumed)({ v, plan, ctx });
+  } finally {
+    locked.value.release();
+  }
+}
+
 /** The command: -> the exit code. `home`, `smoke` (v1's `main`) and `fixturesDir` are the tests' seams. */
 export async function main(argv, say = line => process.stdout.write(`${line}\n`), { home = os.homedir(), smoke = v1Main, fixturesDir = FIXTURES_DIR } = {}) {
   const flags = parseFlags(argv, { 'dry-run': { type: 'boolean' }, explore: { type: 'string' }, from: { type: 'string' }, raw: { type: 'string' } });
@@ -165,7 +240,7 @@ export async function main(argv, say = line => process.stdout.write(`${line}\n`)
   const plan = planOf({ file: explore, home, fixturesDir });
   if (!plan.ok) return said(say, plan.reason, plan.exit);
   const ctx = { say, smoke, explore, opts: { io: ioOver(say), home, pin: plan.value.pin, command: COMMAND } };
-  return fromOf(flags.value) === 'run' ? freshRun({ v: flags.value, plan: plan.value, ctx }) : resumed({ v: flags.value, plan: plan.value, ctx });
+  return dispatch({ v: flags.value, plan: plan.value, ctx });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = await main(process.argv.slice(2));
