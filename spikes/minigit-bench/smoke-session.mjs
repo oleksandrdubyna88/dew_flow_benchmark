@@ -3,6 +3,7 @@
 //   node smoke-session.mjs --out <dir outside every git tree> [--dry-run]     the one paid session (cap $0.20)
 //   node smoke-session.mjs sanitise --from <that dir> --to <fixture dir>      fail-closed copy for the repository
 //   node smoke-session.mjs verdicts --fixture <fixture dir>                   writes SMOKE.md (computed, never typed)
+// A caller that smokes a CLI other than v1's own (the Stage 1 wrapper) gives `main` a `pin` (`{ claude, cliPin }`: the binary and its version, see `smokeInputs`), a `home` and the `command` SMOKE.md names; given none, this is v1 as it was.
 // Exit codes: 0 done - 3 environment (no token, preflight failed, bad out dir) - 4 usage - 5 the session or the sanitise failed - 130/143 cancelled.
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -19,6 +20,7 @@ import { computeSmokeVerdicts, renderSmoke } from './lib/smoke-verdicts.mjs';
 import { readSecretFile } from './lib/secrets.mjs';
 import { TOKEN_FILE_PARTS } from './capture/capture-env.mjs';
 
+const V1_COMMAND = 'node spikes/minigit-bench/smoke-session.mjs --out ~/rsd/minigit/smoke/<UTC stamp>';
 const OK = 0;
 const ENVIRONMENT = 3;
 const USAGE = 4;
@@ -33,12 +35,11 @@ function parse(argv, options) {
   }
 }
 
-async function run({ values, io }) {
-  const home = os.homedir();
+async function run({ values, io, home, pin }) {
   const out = path.resolve(values.out);
   const problems = outProblems(out, { home });
   if (problems.length > 0) { problems.forEach(p => say(io.err, p)); return ENVIRONMENT; }
-  const inputs = smokeInputs({ home });
+  const inputs = smokeInputs({ home, ...pin });
   if (!inputs.ok) { say(io.err, inputs.reason); return ENVIRONMENT; }
   if (values['dry-run']) {
     say(io.out, JSON.stringify({ out, claude: inputs.value.claudeBinary, pins: inputs.value.stacks.pins, tsDir: inputs.value.tsDir, capUsd: 0.2, token: 'present, mode checked, not shown' }, null, 2));
@@ -57,12 +58,12 @@ async function run({ values, io }) {
   return m.outcome.ok ? OK : FAILED;
 }
 
-function sanitise({ values, io }) {
+function sanitise({ values, io, home }) {
   const staging = mkdtempSync(path.join(path.resolve(values.from), '..', '.smoke-stage-'));
   try {
     const staged = stageSmoke(path.resolve(values.from), staging);
     if (!staged.ok) { say(io.err, staged.reason); return FAILED; }
-    const token = readSecretFile({ home: os.homedir(), parts: TOKEN_FILE_PARTS, label: 'token' });
+    const token = readSecretFile({ home, parts: TOKEN_FILE_PARTS, label: 'token' });
     const result = sanitiseCapture({ from: staging, to: path.resolve(values.to), token: token.ok ? token.value : null, optional: staged.value.filter(f => !f.startsWith('transcripts')) });
     if (result.ok) { say(io.out, `sanitised ${result.value.files.length} file(s) into ${values.to}`); return OK; }
     say(io.err, result.reason);
@@ -73,14 +74,13 @@ function sanitise({ values, io }) {
   }
 }
 
-function verdicts({ values, io }) {
+function verdicts({ values, io, command }) {
   const dir = path.resolve(values.fixture);
   const smoke = loadSmoke(dir);
   if (!smoke.ok) { say(io.err, smoke.reason); return FAILED; }
   const inputs = crosscheckPolicyFrom(SPIKE, values);
   if (!inputs.ok) { say(io.err, inputs.reason); return ENVIRONMENT; }
   const rows = computeSmokeVerdicts(smoke.value, inputs.value);
-  const command = 'node spikes/minigit-bench/smoke-session.mjs --out ~/rsd/minigit/smoke/<UTC stamp>';
   writeFileSync(path.join(dir, 'SMOKE.md'), renderSmoke({ meta: smoke.value.meta, rows, command }));
   say(io.out, `wrote ${path.join(dir, 'SMOKE.md')}: ${rows.map(r => `${r.id} ${r.verdict}`).join(', ')}`);
   return OK;
@@ -93,7 +93,7 @@ const VERBS = Object.freeze({
 });
 
 /** The CLI as a function: exit code out, nothing thrown for a usage error. A bare `--out ...` is the `run` verb. */
-export async function main(argv, { io = { out: process.stdout, err: process.stderr } } = {}) {
+export async function main(argv, { io = { out: process.stdout, err: process.stderr }, home = os.homedir(), pin = {}, command = V1_COMMAND } = {}) {
   const [first, ...rest] = argv;
   const verb = VERBS[first] ? first : 'run';
   const spec = VERBS[verb];
@@ -101,7 +101,7 @@ export async function main(argv, { io = { out: process.stdout, err: process.stde
   if (!parsed.ok) { say(io.err, `${parsed.reason}\nusage: smoke-session.mjs [run] --out <dir> [--dry-run] | sanitise --from <dir> --to <dir> | verdicts --fixture <dir>`); return USAGE; }
   const missing = spec.need.filter(k => !parsed.value[k]);
   if (missing.length > 0) { say(io.err, `${verb} needs ${missing.map(k => `--${k}`).join(' ')}`); return USAGE; }
-  return spec.fn({ values: parsed.value, io });
+  return spec.fn({ values: parsed.value, io, home, pin, command });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) process.exitCode = await main(process.argv.slice(2));
