@@ -53,8 +53,14 @@ export function checksOf({ layout, plan, result }) {
   };
 }
 
-/** Everything the smoke needs from the host, as values: `{ ok, value: { token, claudeBinary, prices, stacks } } | fail`. */
-export function smokeInputs({ home = os.homedir(), env = process.env, claude = null } = {}) {
+/** The stacks with the CLI pin moved to `cliPin` (a new value; the loaded file's own is untouched), or the stacks as they are when none is given. */
+const stacksPinnedTo = (stacks, cliPin) => (cliPin ? { ...stacks, pins: { ...stacks.pins, claude: cliPin } } : stacks);
+
+/**
+ * Everything the smoke needs from the host, as values: `{ ok, value: { token, claudeBinary, prices, stacks } } | fail`. `claude` is the binary to run (default: the one on PATH) and `cliPin` the version it must be: the preflight checks the binary against it, the plan carries it
+ * and the read-back checks the init event by it (default: the pin of `inputs/stacks.json`). Given neither, the inputs are v1's own, byte for byte.
+ */
+export function smokeInputs({ home = os.homedir(), env = process.env, claude = null, cliPin = null } = {}) {
   const token = readSecretFile({ home, parts: TOKEN_FILE_PARTS, label: 'token' });
   if (!token.ok) return token;
   const onPath = claude ?? findOnPath('claude', env.PATH);
@@ -63,7 +69,7 @@ export function smokeInputs({ home = os.homedir(), env = process.env, claude = n
   if (!stacks.ok) return stacks;
   const prices = loadPrices(readJson(path.join(SPIKE, 'inputs', 'prices-2026-10-29.json')));
   if (!prices.ok) return prices;
-  return ok({ token: token.value, claudeBinary: realpathSync(onPath), prices: prices.value, stacks: stacks.value, tsDir: path.join(home, ...stacks.value.typescriptToolchainDir) });
+  return ok({ token: token.value, claudeBinary: realpathSync(onPath), prices: prices.value, stacks: stacksPinnedTo(stacks.value, cliPin), tsDir: path.join(home, ...stacks.value.typescriptToolchainDir) });
 }
 
 /** Retire stale sessions, preflight, claim the layout, launch, write checks.json -> `ok({ layout, plan, result })` or `fail(reason, { exit })`. */
