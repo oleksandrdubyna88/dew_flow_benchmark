@@ -196,13 +196,10 @@ function judgeSession({ series, rid, archive }) {
 
 const oldFreed = dir => (existsSync(path.join(dir, FREED_FILE)) ? JSON.parse(readFileSync(path.join(dir, FREED_FILE), 'utf8')) : { removed: [] });
 
-/** `freed.json`, written BEFORE anything is removed (a kill in between leaves a list that covers more than was removed, never less); an earlier list of the same session is kept and extended. */
+/** `freed.json`, written BEFORE anything is removed (a kill in between leaves a list that covers more than was removed, never less). It names ONE archive and the whole list that archive holds: a session that already has one is never freed again (`freeLocked`). */
 function writeFreed({ series, rid, archive, removable, now }) {
-  const dir = sessionDir(series, rid);
-  const have = oldFreed(dir).removed;
-  const added = removable.map(r => freedItem(rid, r.entry, r.hash));
-  const merged = [...new Map([...have, ...added].map(f => [f.path, f])).values()].sort((a, b) => (a.path < b.path ? -1 : 1));
-  writeJson(path.join(dir, FREED_FILE), { archive: { listSha256: archive.entry.listSha256, to: archive.entry.to, copy: archive.entry.copy, listFile: archive.entry.listFile, date: archive.entry.date }, freedOn: now().toISOString(), removed: merged });
+  const removed = removable.map(r => freedItem(rid, r.entry, r.hash)).sort((a, b) => (a.path < b.path ? -1 : 1));
+  writeJson(path.join(sessionDir(series, rid), FREED_FILE), { archive: { listSha256: archive.entry.listSha256, to: archive.entry.to, copy: archive.entry.copy, listFile: archive.entry.listFile, date: archive.entry.date }, freedOn: now().toISOString(), removed });
 }
 
 const subFolders = dir => readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => path.join(dir, e.name));
@@ -232,13 +229,16 @@ function freeLocked({ series, unreadSlots, now }) {
   const archive = verifiedArchive(series);
   const map = archive.ok ? readRunMap(runMapFileOf(series)) : archive;
   if (!map.ok) return map;
-  const done = eligibleRids({ map: map.value, unreadSlots }).map(rid => freeSession({ series, rid, archive: archive.value, now }));
-  return ok({ sessions: done.filter(d => d.removed.length > 0).map(d => d.rid), removed: done.flatMap(d => d.removed), bytes: done.reduce((n, d) => n + d.bytes, 0), kept: done.flatMap(d => d.kept) });
+  const eligible = eligibleRids({ map: map.value, unreadSlots });
+  const held = new Set(freedRids(series));
+  const done = eligible.filter(rid => !held.has(rid)).map(rid => freeSession({ series, rid, archive: archive.value, now }));
+  return ok({ sessions: done.filter(d => d.removed.length > 0).map(d => d.rid), removed: done.flatMap(d => d.removed), bytes: done.reduce((n, d) => n + d.bytes, 0), kept: done.flatMap(d => d.kept), alreadyFreed: eligible.filter(rid => held.has(rid)) });
 }
 
 /**
  * `stage-free`: remove the three cache folders (`FREEABLE`) of sessions that are final in a finished slot, each file only when the newest verified archive lists it with the same sha256 and its archived copy has it too. `unreadSlots` are the
- * read-back slots whose dated lines do not exist yet (`unreadReadbackSlots`): such a slot is no finished slot for this verb. -> `ok({ sessions, removed, bytes, kept })` (`kept` names every file left, with the reason) | `fail`.
+ * read-back slots whose dated lines do not exist yet (`unreadReadbackSlots`): such a slot is no finished slot for this verb. A session that already holds a `freed.json` is not freed again (its list names the one archive that holds its files): it is named in
+ * `alreadyFreed`. A final session's caches do not change after it ends, so nothing is lost; `stage-restore` it first to free it again. -> `ok({ sessions, removed, bytes, kept, alreadyFreed })` (`kept` names every file left, with the reason) | `fail`.
  */
 export function freeSeries({ series, unreadSlots = [], now = systemClock }) {
   return withSeriesLock(series, () => freeLocked({ series, unreadSlots, now }));

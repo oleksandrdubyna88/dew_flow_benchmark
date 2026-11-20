@@ -81,7 +81,9 @@ function unreadSlotsOf({ series, io }) {
   return ok(unreadReadbackSlots({ map: mapAsRead({ series, read: read.value }), slots: seedRevealed ? slotsOf({ seed }) : [], readbackLines }).map(row => row.slot));
 }
 
-const freeLines = r => [`freed ${r.removed.length} file(s), ${r.bytes} bytes, of ${r.sessions.length} session(s)`, ...r.kept.map(k => `kept ${k.path}: ${k.why}`)];
+const alreadyLine = r => (r.alreadyFreed.length === 0 ? [] : [`already freed, left alone (stage-restore first to free again): ${r.alreadyFreed.join(', ')}`]);
+
+const freeLines = r => [`freed ${r.removed.length} file(s), ${r.bytes} bytes, of ${r.sessions.length} session(s)`, ...alreadyLine(r), ...r.kept.map(k => `kept ${k.path}: ${k.why}`)];
 
 /** `stage-free --series <dir>`: remove the three cache folders of final sessions in finished slots, each file only when the verified archive proves it; a read-back slot waits for its dated lines. */
 export function cmdStageFree(values, io) {

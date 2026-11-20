@@ -106,6 +106,17 @@ test('stage_restore_through_the_command_layer_brings_one_session_or_all_back_and
   assert.equal((await verb(rig, ['stage-archive', '--series', rig.dir, '--to', backup])).exit, 0, 'with every session whole the last archive goes through');
 });
 
+test('stage_free_through_the_command_layer_names_the_sessions_that_are_already_freed_and_leaves_them_alone', async t => {
+  const { rig, rids } = await seriesWith(2);
+  assert.equal((await verb(rig, ['stage-archive', '--series', rig.dir, '--to', backupFolder(t)])).exit, 0);
+  assert.equal((await verb(rig, ['stage-free', '--series', rig.dir])).exit, 0);
+  const freedRids = rids.filter(rid => existsSync(path.join(rig.dir, 's', rid, 'freed.json'))).sort();
+  assert.ok(freedRids.length > 0, 'the first free freed sessions');
+  const again = await verb(rig, ['stage-free', '--series', rig.dir]);
+  assert.equal(again.exit, 0, again.text);
+  assert.equal(again.text, `freed 0 file(s), 0 bytes, of 0 session(s)\nalready freed, left alone (stage-restore first to free again): ${freedRids.join(', ')}`);
+});
+
 test('Each_recovery_verb_takes_the_series_lock_and_a_held_lock_refuses_it_naming_the_holder', async t => {
   const { rig } = await seriesWith(1);
   const backup = backupFolder(t);

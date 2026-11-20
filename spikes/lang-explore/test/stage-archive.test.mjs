@@ -30,6 +30,7 @@ const archived = t => {
 const archiveEntries = series => JSON.parse(readFileSync(path.join(series, 'archive.json'), 'utf8')).archives;
 const flipByte = file => { const bytes = readFileSync(file); bytes[0] ^= 0xff; writeFileSync(file, bytes); };
 const freedFiles = rids => rids.flatMap(cacheFilesOf);
+const freedFileOf = (series, rid) => JSON.parse(readFileSync(path.join(series, 's', rid, 'freed.json'), 'utf8'));
 
 test('A_copy_that_differs_from_the_source_in_one_byte_fails_the_archives_verification', t => {
   const series = seriesFolder(t, MAP, { cacheBytes: 50 });
@@ -273,4 +274,29 @@ test('An_archive_whose_backup_folder_is_inside_the_series_or_a_link_into_it_is_r
 
 test('Two_paths_overlap_when_they_are_equal_or_one_is_inside_the_other_and_a_longer_name_is_not_inside', () => {
   assert.deepEqual([['/a/s', '/a/s'], ['/a/s/x', '/a/s'], ['/a/s', '/a/s/x'], ['/a/sx', '/a/s'], ['/a/t', '/a/s']].map(([a, b]) => stageArchive.pathsOverlap(a, b)), [true, true, true, false, false]);
+});
+
+// ---- coai code round 1 (PR 4), finding B: a session is freed once; its archive is the one `freed.json` names ------------------------------------------------------------------------------------------------------
+
+test('A_session_that_is_already_freed_is_named_and_left_alone_by_the_next_free_and_stage_restore_still_brings_it_back_from_its_own_archive', t => {
+  const { series } = archived(t);
+  const before = snapshotOf(series, { skip: SKIP });
+  assert.equal(freeSeries({ series, unreadSlots: [] }).ok, true, 'archive A, then the first free');
+  const rids = [ridOf(1, 'csharp'), ridOf(1, 'node')];
+  const late = path.join(series, 's', rids[0], 'box', 'npm', 'late.tgz');
+  mkdirSync(path.dirname(late), { recursive: true });
+  writeFileSync(late, 'a cache file made after the first free');
+  const second = archiveSeries({ series, to: backupFolder(t), now: NOW });
+  assert.equal(second.ok, true, `archive B at another place: ${second.reason}`);
+  const named = freedFileOf(series, rids[0]);
+  const again = freeSeries({ series, unreadSlots: [] });
+  assert.equal(again.ok, true, again.reason);
+  assert.equal(existsSync(late), true, 'the second free removes nothing in a session that is already freed');
+  assert.deepEqual(again.value.sessions, [], 'it frees no session');
+  assert.deepEqual([...again.value.alreadyFreed].sort(), [...rids].sort(), 'and names the sessions it left alone');
+  assert.deepEqual(freedFileOf(series, rids[0]), named, 'freed.json still names archive A and its whole list');
+  assert.equal(named.archive.listSha256, archiveEntries(series)[0].listSha256, 'the archive of the first free');
+  assert.equal(restoreSeries({ series }).ok, true, 'the restore from A brings the sessions back');
+  const restored = snapshotOf(series, { skip: SKIP });
+  for (const file of rids.flatMap(cacheFilesOf)) assert.equal(restored[file], before[file], `${file} is back with its listed bytes`);
 });
