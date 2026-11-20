@@ -10,6 +10,7 @@ import { openSeries, planSession, readRunMap, transition, writeRunMap } from '..
 import { loadGrowth } from '../lib/growth.mjs';
 import { ledgerFileOf, runMapFileOf } from '../lib/series.mjs';
 import { FREEABLE, archiveSeries, freeSeries, freedSessionProblem, restoreSeries } from '../lib/stage-archive.mjs';
+import * as stageArchive from '../lib/stage-archive.mjs';
 import { diskGate } from '../lib/stage-disk.mjs';
 import { readbackSlots, unreadReadbackSlots } from '../lib/stage-schedule.mjs';
 import { GOOD, PILOT, SLOTS, backupFolder, cacheFilesOf, finished, mapWith, ridOf, seriesFolder, sha256Text, snapshotOf, withPilot, writeSession } from './stage-fixture.mjs';
@@ -236,4 +237,40 @@ test('stage_free_leaves_a_read_back_slot_alone_until_its_dated_lines_exist', t =
   assert.deepEqual(read, [], 'with both dated lines the slot no longer awaits');
   const freed = freeSeries({ series, unreadSlots: read.map(u => u.slot) });
   assert.deepEqual(freed.value.sessions.sort(), rbRids.sort(), 'and the verb frees its sessions');
+});
+
+// ---- coai code round 1 (PR 4), finding A: the archive's place may never be the series itself ------------------------------------------------------------------------------------------------------------------------
+
+/** The files beside the series (in its parent) that an archive of it would have made: its copy and its list. */
+const besideSeries = series => readdirSync(path.dirname(series)).filter(name => name.startsWith(path.basename(series)) && name !== path.basename(series) && !name.endsWith('.owner'));
+
+/** An archive to `to` is refused with a sentence about the place, and nothing is copied, written beside the series or recorded. */
+function assertPlaceRefused({ t, to, what }) {
+  const series = seriesFolder(t, MAP, { cacheBytes: 50 });
+  const target = to(series);
+  const before = snapshotOf(series, { skip: SKIP });
+  const refused = archiveSeries({ series, to: target, now: NOW });
+  assert.equal(refused.ok, false, `${what}: the archive is refused`);
+  assert.match(refused.reason, /series folder/, `${what}: the sentence names the series folder: ${refused.reason}`);
+  assert.deepEqual(snapshotOf(series, { skip: SKIP }), before, `${what}: nothing was copied into the series`);
+  assert.equal(existsSync(path.join(series, 'archive.json')), false, `${what}: nothing is recorded`);
+  assert.deepEqual(besideSeries(series), [], `${what}: no copy and no list is written beside the series`);
+  return series;
+}
+
+test('An_archive_whose_backup_folder_is_the_parent_of_the_series_is_refused_because_the_copy_would_be_the_series_itself', t => {
+  assertPlaceRefused({ t, to: series => path.dirname(series), what: 'the parent folder' });
+});
+
+test('An_archive_whose_backup_folder_is_a_link_to_the_parent_of_the_series_is_refused', t => {
+  assertPlaceRefused({ t, what: 'a link to the parent', to: series => { const link = path.join(backupFolder(t), 'link-to-parent'); symlinkSync(path.dirname(series), link); return link; } });
+});
+
+test('An_archive_whose_backup_folder_is_inside_the_series_or_a_link_into_it_is_refused', t => {
+  assertPlaceRefused({ t, to: series => path.join(series, 'private'), what: 'a folder inside the series' });
+  assertPlaceRefused({ t, what: 'a link into the series', to: series => { const link = path.join(backupFolder(t), 'link-into-series'); symlinkSync(path.join(series, 'private'), link); return link; } });
+});
+
+test('Two_paths_overlap_when_they_are_equal_or_one_is_inside_the_other_and_a_longer_name_is_not_inside', () => {
+  assert.deepEqual([['/a/s', '/a/s'], ['/a/s/x', '/a/s'], ['/a/s', '/a/s/x'], ['/a/sx', '/a/s'], ['/a/t', '/a/s']].map(([a, b]) => stageArchive.pathsOverlap(a, b)), [true, true, true, false, false]);
 });

@@ -7,7 +7,7 @@
 //   restoreSeries  copies a freed session's files back from the archive, verifies them against `freed.json`'s list and removes `freed.json`.
 // Who needs a freed folder: nothing between the halt and the report reads `FREEABLE` (the scoring builds from `work/` over the registered snapshot, never the session's cache). The final hash list of the record (PR 13) and the last archive
 // after the series ended do need the whole tree, and each refuses a series that still holds a `freed.json` (`freedSessionProblem`), naming `stage-restore`.
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, rmdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { acquireSeriesLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { makeWritable } from '../../minigit-bench/lib/cache-snapshot.mjs';
@@ -79,12 +79,27 @@ function copyEntry({ series, dest, entry }) {
   renameSync(tmp, target);
 }
 
-const isInside = (child, parent) => path.resolve(child).startsWith(`${path.resolve(parent)}${path.sep}`);
+/** The real path of `p` as far as it exists (every link resolved); the part that is not there yet is appended as written. A link cannot hide where a folder really is. */
+function realIn(p) {
+  const abs = path.resolve(p);
+  const parent = path.dirname(abs);
+  if (existsSync(abs)) return realpathSync(abs);
+  return parent === abs ? abs : path.join(realIn(parent), path.basename(abs));
+}
 
-/** The sentence for a backup folder that is missing or is the series folder itself or inside it, or null. */
+const within = (child, parent) => child === parent || child.startsWith(`${parent}${path.sep}`);
+
+/** True when two real paths are the same folder or one is inside the other. */
+export const pathsOverlap = (a, b) => within(a, b) || within(b, a);
+
+/** The folder the copy of a series goes to: the series' own name under the backup folder. */
+const destOf = ({ series, to }) => path.join(to, path.basename(path.resolve(series)));
+
+/** The sentence for a backup folder that is missing, or whose copy would be the series folder, inside it or around it (links followed), or null. */
 function locationProblem({ series, to }) {
   if (!existsSync(to)) return `the backup folder ${to} is not there: mount the share or create the folder, and run again`;
-  return isInside(to, series) || path.resolve(to) === path.resolve(series) ? `the backup folder ${to} is inside the series folder: an archive is a copy elsewhere` : null;
+  const dest = destOf({ series, to });
+  return pathsOverlap(realIn(dest), realIn(series)) ? `the archive's place ${dest} is the series folder, inside it or around it (links followed): an archive is a copy elsewhere` : null;
 }
 
 /** The sentence refusing an archive before anything is read, or null. */
@@ -105,7 +120,7 @@ function recordArchive({ series, to, dest, entries, text, now }) {
 function archiveLocked({ series, to, now, hooks }) {
   const listed = listSeries(series);
   if (!listed.ok) return listed;
-  const dest = path.join(to, path.basename(path.resolve(series)));
+  const dest = destOf({ series, to });
   listed.value.forEach(entry => copyEntry({ series, dest, entry }));
   hooks.afterCopy?.(dest);
   const problems = copyProblems({ entries: listed.value, root: dest });
