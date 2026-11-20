@@ -1475,6 +1475,44 @@ GREEN: review file 18/18, take file 9/9, and the files below. The complexity of 
 
 **Counts after the review** (each file alone, all green): `stage-prereg-take.test.mjs` 9, `stage-prereg-take-review.test.mjs` 18 (new), `stage-prereg-guard.test.mjs` 49, `stage-prereg-wiring.test.mjs` 32, `stage-prereg.test.mjs` 23, `stage-prereg-tools.test.mjs` 33, `stage-series.test.mjs` 9, `stage-run.test.mjs` 19, `network.test.mjs` 3, `commands.test.mjs` 15, lang-explore `code-shape.test.mjs` 177, v1 `prereg-guard.test.mjs` 18, v1 `code-shape.test.mjs` 65, v1 `registered-text.test.mjs` 7. v1's `prereg.test.mjs` is 14 of 15: `The_prereg_names_no_heldout_case` fails with `leakcheck FAILED: held-out text found in 2 place(s): spikes/minigit-bench/test/seed.test.mjs, git log -p origin/main..HEAD`; it scans this branch's history against `origin/main` and was not caused by a change of this review (no held-out file was read to look at it).
 
+### PR 5b: read-prices meets the real page (2026-11-20, branch `fix/lang-v2-read-prices`, cut from main 9e930582; same method: tests first, RED on the current code, fix, GREEN, the old behaviour back as one mutation per point, RED again, fix restored)
+
+The first real read of the pricing page (fetched 2026-11-20) was a refusal. Two gaps: `PRICE_HEADER` was written before anyone had seen the page (`Base Input Tokens ... Cache Hits & Refreshes`; the real header is `Base input tokens ... Cache hits and refreshes`), and some price cells end with a footnote mark (`$0.20 / MTok<sup>1</sup>`). A third gap showed in the real page: the name cells with a note in parentheses (`Claude Haiku 5.5 (for prompts up to 100,000 tokens)` and `(... over 100,000 tokens)`) lost the note, so the two rows had the same name and different prices, and the whole table was refused as a conflict. Decision of the team lead (plan point Q6: exact, never guesses). Each file alone, `low-priority.mjs taskset -c 0-5 node --test --test-concurrency=1`. Commits: tests and fixture 78986aca (red), code 92a3f56e.
+
+The fixture is `test/fixtures/pricing-page-2026-11-20.excerpt.md`: an excerpt of the real page (the price table and its footnote lines byte for byte, plus the fast-mode table, which has another header, so the choice of the right table is tested). Public text; its first line says where and when it was taken. The new tests are in `test/read-prices-real-page.test.mjs` (8 tests; no network).
+
+RED on the code of PR 5: `read-prices-real-page.test.mjs`, pass 0, fail 8 of 8. The first assertion of each: (1) the header, `Expected values to be strictly deep-equal` (actual `Base Input Tokens`, `5m Cache Writes`, ... , expected the real header); (2) to (5) `TypeError: Cannot read properties of undefined (reading 'prices')` (the parse of the real page is a refusal, so there is no page value); (6) `AssertionError: the previous header` (the old code still read the old header); (7) and (8) `the pricing page has no table with the exact header row | Model | Base Input Tokens | 5m Cache Writes | 1h Cache Writes | Cache Hits & Refreshes | Output Tokens |: it holds the tables | Model | Base input tokens | 5m cache writes ...` (the real page's table was listed as found and not read).
+
+The fix (`prereg/read-prices.mjs`):
+
+1. **The real header.** `PRICE_HEADER` is exactly `Model | Base input tokens | 5m cache writes | 1h cache writes | Cache hits and refreshes | Output tokens`; the match is the same exact cell comparison after the trim the parser already does. No case folding, no "&" for "and".
+2. **One footnote mark.** A price cell is `$<number> / MTok`, optionally followed directly by exactly one `<sup><digits></sup>`, and nothing else. `rowOf` records the marks per rate (`marks`); the number in the cell is the price. Any other trailing text, a second mark, a space before the mark, a non-digit mark and an empty mark are refused naming the cell (`Cache hits and refreshes is '<cell>', not a price in the form $5 / MTok`).
+3. **The mark is recorded with its sentence.** `parsePricingPage` reads the page's `*<sup>N sentence</sup>*` lines (`footnotes`); the price file's `notes` get one line per footnote the base models carry: `footnote 2 (claude-opus-5-5 cacheRead, claude-sonnet-5-5 cacheRead): Cache hits and refreshes on Claude Opus 5.5 and Claude Sonnet 5.5 are priced at 0.05x the base input price.` A mark of a base model whose sentence is not on the page is a refusal: `claude-opus-5-5 (Claude Opus 5.5): its cacheRead carries footnote mark 2 and the page has no footnote 2`. A footnote number given twice with different sentences is a refusal. The footnote of a model the base file does not use (footnote 3, Sonnet 5) is not recorded.
+4. **Rows with a note in the name.** `plainName` no longer cuts the parenthesis off. A name with `(` is a row with a note: it is left unread (`unreadable`, why `its name carries a note, so the row is not read`), is not compared for conflicts and never breaks the table; it is named, with its note, in the "rows it found" list of a refusal. Only a base model with no clean row is a refusal.
+5. The five base models read exactly the base file's figures from the real page (Opus 5.5 `4 / 20 / 0.2 / 5 / 8`); a run of the tool on the whole real page (`--from-file`, no network) wrote the file, and `--check` of it passed.
+
+Tests adjusted in `stage-prereg-tools.test.mjs` (six; they encoded the old header or the old reading of a row with a note; nothing was weakened):
+- `A_model_id_is_named_the_way_the_pricing_page_names_it_and_the_page_is_read_by_its_exact_header`: the row `Claude Old 1 (deprecated)` is now left unread with the note sentence, and the same row without the note still names its cell (`5m cache writes is 'n/a' ...`);
+- `A_page_without_the_exact_header_row_is_refused_naming_the_headers_it_found_and_nothing_is_guessed`: the header sentence and the variants use the real header;
+- `A_price_cell_is_read_only_in_the_form_dollars_per_MTok_and_a_name_given_twice_with_different_content_is_refused`: `Base input tokens is '4 USD' ...`;
+- `The_price_file_has_the_base_files_models_each_from_its_own_row_and_never_an_older_price`: the "rows it found" list names `Claude Old 1 (deprecated)`;
+- `A_pricing_page_that_changed_its_header_writes_no_file_and_exits_5_naming_what_it_found` and `A_header_that_is_not_the_exact_one_is_refused_and_no_file_is_written`: the text they change is the real header's (`Output tokens`, `Cache hits and refreshes`).
+
+GREEN: `read-prices-real-page.test.mjs` 8/8, `stage-prereg-tools.test.mjs` 33/33, `code-shape.test.mjs` 177/177 (the complexity of every new function is at most 4), `network.test.mjs` 3/3.
+
+The old behaviour back, one mutation per point (code of 92a3f56e with one edit; the two files `read-prices-real-page` and `stage-prereg-tools` together, 41 tests), each RED, then the fix restored:
+
+| Mutation | Result | First message |
+|---|---|---|
+| case folding (`c.toLowerCase() === b[i].toLowerCase()` in `sameCells`) | pass 39, fail 2 | `the real header folded to lower case` (`true !== false`) and, in the old file, `lower case` |
+| "&" for "and" (`c.replace(' & ', ' and ')` in `sameCells`) | pass 40, fail 1 | `an ampersand for "and"` (`true !== false`) |
+| a second mark allowed (`(?:<sup>(\d+)<\/sup>){0,2}`) | pass 40, fail 1 | `$0.20 / MTok<sup>2</sup><sup>1</sup>` (`true !== false`) |
+| the mark dropped silently (`marks: {}`) | pass 38, fail 3 | `Expected values to be strictly equal` `0 !== 2` (no footnote notes), `true !== false` (a mark with no sentence not refused) and the byte test |
+| a mark with no sentence not refused (`markProblem` always null) | pass 40, fail 1 | `A_mark_whose_footnote_sentence_is_not_on_the_page_is_refused_...`: `true !== false` |
+| a row with a note read (the `(` test off) | pass 39, fail 2 | `Rows_with_a_note_in_the_name_never_break_the_read_...`: `+ undefined - 'its name carries a note, so the row is not read'`, and the adjusted test of `stage-prereg-tools` |
+
+Counts after the change (each file alone, all green): `read-prices-real-page.test.mjs` 8 (new), `stage-prereg-tools.test.mjs` 33, `code-shape.test.mjs` 177, `network.test.mjs` 3.
+
 ## Test leftovers — the C# helper, the start-of-run sweep, the audit, the container pass (E6)
 
 Every test that makes a folder outside its own process keeps the four promises of the leftovers rule: a name from one helper, an owner record, removal by its run, and collection by the next run when this one was killed. The tests of this repository get that from a helper in `tests/Bench.Tests/Leftovers/`. This section says what the helper is, what runs at the start and the end of a run, and what it does not cover.
