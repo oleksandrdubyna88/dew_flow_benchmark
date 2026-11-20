@@ -286,7 +286,7 @@ test('The_guard_names_an_identity_that_differs_from_the_manifest_and_asks_the_pa
   const refused = await stageGuard({ ...w.args, deps: { ...w.args.deps, live: async () => moved } });
   assert.equal(refused.ok, false, 'a live identity that differs from the manifest refuses the guard');
   assert.ok(refused.problems.some(p => p.startsWith('contract differs')), refused.problems.join(' | '));
-  const free = await stageGuard({ ...w.args, paid: false });
+  const free = await stageGuard({ ...w.args, paid: false, deps: { ...w.args.deps, preregGuard: async () => ['asked although the launch is free'] } });
   assert.equal(free.ok, true, 'a free launch asks none of the paid checks');
   const unwired = await stageGuard({ ...w.args, paid: true, deps: { ...w.args.deps, preregGuard: undefined } });
   assert.equal(unwired.ok, false, 'a paid launch with no pre-registration guard handed in is refused');
