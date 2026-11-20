@@ -911,11 +911,11 @@ node .agents/conventions/tools/low-priority.mjs taskset -c 0-5 node --test --tes
 |---|---|---|
 | 42, 43, 44, 45, 46, 47, 48, 49, 50 | `stage-guard.test.mjs` (18; fixture `stage-guard-fixture.mjs`) | the guard names every problem of the frozen record, the twelve references, the six spec blobs at the tag (a change outside a spec is the permitted one), W, the pinned commit, the hash list, the twelve workspaces by tree hash, all 41 identities against the manifest (the list written out so it cannot shrink), memory certification and the agent box's environment; two more tests read the live identities from the places that own them and ask the paid checks for a paid launch only |
 | 51, 51a, 51b, 51c, 52, 53, 54h | `stage-disk.test.mjs` (10) | the reserve before every launch over what is still to run, a pilot repeat's two sessions, what the ended sessions really hold, the rule's halt with its ledger line, a missing or zero size refused, the session size live and written nowhere |
-| 54, 54a to 54g | `stage-archive.test.mjs` (17) | a copy that differs in one byte is no archive; `stage-free` removes only the three cache folders of final sessions of finished slots; nothing that the verified archive does not prove; a missing or changed archive refuses; `stage-restore` back to the listed bytes; the halted-archived-freed-resumed series ends with the records of one that never halted; the last archive refuses a freed session; a read-back slot waits |
+| 54, 54a to 54g | `stage-archive.test.mjs` (23) | a copy that differs in one byte is no archive; `stage-free` removes only the three cache folders of final sessions of finished slots; nothing that the verified archive does not prove; a missing or changed archive refuses; `stage-restore` back to the listed bytes; the halted-archived-freed-resumed series ends with the records of one that never halted; the last archive refuses a freed session; a read-back slot waits |
 | 55, 56, 57, 58 | `stage-heldout.test.mjs` (7) | the slot's folder made and removed, whether the slot ends or throws, and a folder that cannot be closed keeps the slot's `result`; a stale folder removed first; the slot refused when the key's backup cannot be verified; only the slot's own task in clear |
 | 59 (real) | `stage-guard-real.test.mjs` (3; 2 pass and 1 skips without `LANG_V2_TASK_REPO`) | the probe passes on this host and reads the peak of an empty program; the probe `stage-run` runs by default (`hostProbe`) does the same over the pinned toolchains and the registered memory value; the real record and the task repository at W pass the task-repository half |
 | wiring: the default guard, the environment, memory, disk, the held-out folder, the order, `stage-init` at W | `stage-wiring.test.mjs` (9) | through `stage-run` and `stage-init` with PR 3's fakes: each refusal leaves the run-map and the ledger byte for byte as they were (the disk halt adds its one event line), a rehearsal still runs its round with the stub rig |
-| the three verbs on the command line | `stage-recovery-commands.test.mjs` (8) | through `main`: the table, the options, what each verb says and exits with, the read-back slot that waits for its lines, the last archive that refuses a freed session, each verb taking the series lock |
+| the three verbs on the command line | `stage-recovery-commands.test.mjs` (9) | through `main`: the table, the options, what each verb says and exits with, the read-back slot that waits for its lines, the last archive that refuses a freed session, each verb taking the series lock |
 
 **Observed red, green, red** (2026-11-19 and 2026-11-20; "red first" = the test against missing code, or the code of `HEAD` put back; "red again" = one mutation of the fix at a time, the file put back from a copy; scenarios 42 to 58 are from the logs of the first session, `[S..: what was broken]`):
 
@@ -1076,7 +1076,36 @@ GREEN: 18/18 (the file is named as one problem and the record's missing field is
 RED again (`stage-guard.mjs` from the commit before): the same ENOENT
 ```
 
-**Files run alone after the last commit** (`taskset -c 0-5 node --test --test-concurrency=1`, 2026-11-20; pass, 0 fail each): `stage-amendments` 9, `stage-archive` 17, `stage-commands` 12, `stage-disk` 10, `stage-facts` 3, `stage-guard-real` 3 (2 pass, 1 skipped), `stage-guard` 18, `stage-heldout` 7, `stage-loop` 8, `stage-recovery-commands` 8, `stage-rounds` 16, `stage-run` 19, `stage-schedule` 53, `stage-series` 8, `stage-wiring` 9, `commands` 15, `code-shape` 156, `quick-freeze-workspaces` 15, `quick-freeze-record` 1, `quick-freeze-consumers` 4, `quick-workspace` 9 (8 pass, 1 skipped), `quick-heldout-sealed-readers` 8, `quick-heldout-entry-points` 14, `quick-run-harness-gate` 3, `workspace` 8; lang-bench `spec-freeze-record` 27.
+### PR 4 coai code round 2 (2026-11-20, seven findings, head `87e5b132`)
+
+Same method: the test against the code of `HEAD` (red), the fix (green), the old code put back (red again), the fix restored from a copy. R3 is a convention fix with no change of behaviour and no red test (`restoreAll` is recursive and keeps the early return on a failed restore; `stage-archive` and `stage-recovery-commands` stay green). R1, R2, R3 and R4 are in one commit because they share `stage-archive.mjs`.
+
+```
+## R1. no copy through a link in an existing backup (stage-archive.test.mjs, 2 tests; commit 536d2eb9)
+RED (HEAD code): A_backup_that_already_holds_a_link_on_the_way_to_a_listed_file_refuses_the_whole_archive...: AssertionError: s: the archive is refused (the link was at `s`; the same test also covers `s/<rid>/box` and `s/<rid>/box/nuget`; the old code wrote a file outside the backup)
+ A_target_that_is_itself_a_link_or_a_planted_temporary_link_is_replaced_and_never_written_through: AssertionError: the copy differs from the source (1 file(s)): pairs/p1.json: missing from the copy, or it differs from the source (a link planted at `<target>.<pid>.tmp` was written through and then renamed into the target)
+GREEN: stage-archive 21/21 at that commit (the archive is refused whole, the link named, nothing outside changed, nothing recorded; a link at a target or at its temporary name is replaced, the temporary name is removed first and copied with COPYFILE_EXCL)
+RED again (`stage-archive.mjs` from `HEAD`): the same two messages
+## R2. the final archive looks for freed sessions under the lock (stage-archive.test.mjs; commit 536d2eb9)
+RED: The_final_archive_refuses_a_session_that_a_free_made_between_its_first_look_and_its_lock: AssertionError: the final archive sees the freed sessions under the lock (a free run from `hooks.beforeLock` was not seen)
+GREEN: passes (the refusal is `lockedRefusal` in `archiveLocked`, before the listing)
+RED again: the same message
+## R4. an archive.json with no list of archives (stage-archive.test.mjs, `{}`, `{"archives": null}`, `{"archives": "none"}`; commit 536d2eb9)
+RED: An_archive_json_without_a_list_of_archives_is_refused...: TypeError: Cannot read properties of undefined (reading 'at')
+GREEN: both the free and the archive refuse with "archive.json ... holds no list of archives"; the archive copies nothing first
+RED again: the same TypeError
+## R5 and R6. the free says its progress (stage-archive.test.mjs, stage-recovery-commands.test.mjs; commit fae64e3f)
+RED: Stage_free_says_its_progress_per_session_while_it_verifies...: AssertionError: 5ef225: verifying says a line every 3 files
+ stage_free_prints_its_progress_lines_before_its_summary: AssertionError: a session's verifying ends at its total
+GREEN: stage-archive 22/22, stage-recovery-commands 9/9 (lines `verifying <rid>: n of N file(s)` and `removing <rid>: n of N file(s)`, a line every `progressEvery` files; the command wires `io.say`; the older command test now reads the summary line by its text)
+RED again (the callback not handed to `freeLocked`): the same two messages
+## R7. the listing says it started and counts while it walks (stage-archive.test.mjs; commit b98d83f3)
+RED: The_archive_listing_says_it_started_before_the_walk_and_a_line_every_N_entries...: AssertionError: the first line is said before the walk (actual 'listing: 0 of 52 file(s)', expected 'listing: started')
+GREEN: stage-archive 23/23 (`listing: started`, then `listing: N entries walked` every N entries, then the hashing lines; `streamEntries` is the lazy walk `walkEntries` sorts)
+RED again (the "started" line removed): AssertionError: the first line is said before the walk (actual 'listing: 10 entries walked')
+```
+
+**Files run alone after the last commit (coai code round 2)** (`taskset -c 0-5 node --test --test-concurrency=1`, 2026-11-20; pass, 0 fail each): `stage-amendments` 9, `stage-archive` 23, `stage-commands` 12, `stage-disk` 10, `stage-facts` 3, `stage-guard-real` 3 (2 pass, 1 skipped), `stage-guard` 18, `stage-heldout` 7, `stage-loop` 8, `stage-recovery-commands` 9, `stage-rounds` 16, `stage-run` 19, `stage-schedule` 53, `stage-series` 8, `stage-wiring` 9, `commands` 15, `code-shape` 156, `quick-freeze-workspaces` 15, `quick-freeze-record` 1, `quick-freeze-consumers` 4, `quick-workspace` 9 (8 pass, 1 skipped), `quick-heldout-sealed-readers` 8, `quick-heldout-entry-points` 14, `quick-run-harness-gate` 3, `workspace` 8; lang-bench `spec-freeze-record` 27.
 
 **What this does not prove.** The wiring tests run the fake loop (`io.runSeams.loopFn`), so no real held-out folder is made, no real probe runs inside `stage-run`, and the disk gate reads a fake free-bytes function and a fake floor; each real half is tested alone (`stage-heldout.test.mjs` with invented keys, 59 with the layer). The default `io.stage.floorBytes` is read from the pre-registration's manifest, which is PR 6's file and does not exist yet: until then a paid launch is refused by the guard first and by the missing size second. A rehearsal now runs the probe once per unit; with `--until round` that is one empty program per slot.
 
