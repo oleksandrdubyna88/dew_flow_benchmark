@@ -248,3 +248,13 @@ test('The_environment_check_judges_the_quick_profile_the_agent_box_is_built_from
   assert.equal(refused.ok, false, 'a heap key that only the quick profile adds is refused');
   assert.ok(refused.problems.some(p => p.includes('DOTNET_GCHeapHardLimit')), refused.problems?.join(' | '));
 });
+
+test('The_disk_check_of_a_paid_unit_says_through_io_say_that_it_sizes_the_ended_sessions', async () => {
+  const rig = await runRig();
+  const said = [];
+  rig.io.say = line => said.push(line);
+  assert.equal((await next(rig)).exit, 0);
+  assert.ok(said.includes('disk check: sizing 0 ended session(s)'), `the first unit has no ended session: ${said.join(' | ')}`);
+  assert.equal((await next(rig)).exit, 0);
+  assert.ok(said.some(line => /^disk check: sizing [1-9]\d* ended session\(s\)$/.test(line)), 'the next unit sizes the sessions that ended');
+});

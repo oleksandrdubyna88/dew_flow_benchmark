@@ -17,11 +17,11 @@ export function* countedSaying({ items, phase, report = {} }) {
 }
 
 /**
- * `items.map(fn)` that says `<phase>: <done> of <total> file(s)` through `report.say` before the first item, after every `report.every`th item and after the last. `report` is `{ say, every }`; none is a silent run.
+ * `items.map(fn)` that says `<phase>: <done> of <total> <unit>` (`file(s)` unless `unit` says another) through `report.say` before the first item, after every `report.every`th item and after the last. `report` is `{ say, every }`; none is a silent run.
  */
-export function mapSaying({ items, phase, report = {}, fn }) {
+export function mapSaying({ items, phase, report = {}, fn, unit = 'file(s)' }) {
   const { say = () => {}, every = PROGRESS_EVERY } = report;
-  const line = done => say(`${phase}: ${done} of ${items.length} file(s)`);
+  const line = done => say(`${phase}: ${done} of ${items.length} ${unit}`);
   const result = items.map((item, i) => {
     if (i % every === 0) line(i);
     return fn(item);

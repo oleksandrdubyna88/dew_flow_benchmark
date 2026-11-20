@@ -224,3 +224,16 @@ test('A_halt_does_not_append_its_event_line_through_a_link_at_the_ledger_and_is_
     rmSync(outside, { force: true });
   }
 });
+
+// ---- coai code round 3 (PR 4), finding 4: the disk check says what it is doing while it sizes the ended sessions ------------------------------------------------------------------------------------------------------
+
+test('The_disk_gate_says_how_many_ended_sessions_it_sizes_and_a_line_every_N_sessions', t => {
+  const map = slotsDone(2);
+  const ended = Object.values(map.sessions).filter(s => s.status === 'ran' || s.status === 'scored').length;
+  const lines = [];
+  const verdict = diskGate({ ...gateArgs(t, map), freeBytes: 10 ** 13, say: line => lines.push(line), sayEvery: 4 });
+  assert.equal(verdict.go, true, verdict.reason);
+  assert.equal(lines[0], `disk check: sizing ${ended} ended session(s)`, 'the first line says how many');
+  assert.deepEqual(lines.slice(1), [`disk check: 0 of ${ended} session(s)`, `disk check: 4 of ${ended} session(s)`, `disk check: 8 of ${ended} session(s)`, `disk check: ${ended} of ${ended} session(s)`], 'then a line every 4 sessions and one at the end');
+  assert.equal(diskGate({ ...gateArgs(t, map), freeBytes: 10 ** 13 }).go, true, 'without a callback the gate says nothing and answers the same');
+});

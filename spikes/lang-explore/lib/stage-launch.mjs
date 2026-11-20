@@ -87,7 +87,7 @@ function freeOf({ series, io }) {
 const slotOf = unit => (unit.kind === 'data' ? unit.pair : unit.what);
 
 const gateArgs = ({ series, map, unit, growth, io }) => ({
-  series: series.dir, map, pilot: series.state.pilot, growth, floorBytes: floorOf({ io }), freeBytes: freeOf({ series, io }), slot: slotOf(unit), extraCells: unit.extraCells ?? 0, ledgerFile: ledgerFileOf(series.dir), now: io.now ?? systemClock,
+  series: series.dir, map, pilot: series.state.pilot, growth, floorBytes: floorOf({ io }), freeBytes: freeOf({ series, io }), say: io.say, slot: slotOf(unit), extraCells: unit.extraCells ?? 0, ledgerFile: ledgerFileOf(series.dir), now: io.now ?? systemClock,
 });
 
 /** The result of a gate's verdict: a go; a halt (exit 3, resumable once the space is there, its event line is in the ledger); or a refusal (exit 4: a size that cannot be read, no ledger line). */

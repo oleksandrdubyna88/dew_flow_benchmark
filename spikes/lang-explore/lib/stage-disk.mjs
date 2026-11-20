@@ -16,6 +16,7 @@ import { systemClock } from './clock.mjs';
 import { diskRuleVerdict, growthProblem } from './growth.mjs';
 import { MAX_ATTEMPTS, STACK_ORDER, isVoid, stateOfSessions } from './series.mjs';
 import { lstatOf } from './safe-place.mjs';
+import { mapSaying } from './stage-progress.mjs';
 import { FREED_FILE } from './stage-archive.mjs';
 import { DATA_SLOTS, pilotPlan } from './stage-schedule.mjs';
 import { walkEntries } from './workspaces-tree.mjs';
@@ -79,9 +80,11 @@ function freedProblem(dir) {
 /** The sentences for every `freed.json` of an ended session whose sizes cannot be counted. */
 const freedListProblems = ({ series, map }) => Object.values(map?.sessions ?? {}).filter(isEnded).map(s => freedProblem(sessionDir(series, s.rid))).filter(problem => problem !== null);
 
-/** The size the rule reads for one session folder, from the registered floor and this series: `{ bytes, source: 'floor' | 'series' }`. A session that has not ended is not read. Written nowhere. `bytesOf(dir)` is the seam that sizes a session folder (`sessionBytesOf`). */
-export function sessionFloor({ floorBytes, series, map, bytesOf = sessionBytesOf }) {
-  const own = Object.values(map?.sessions ?? {}).filter(isEnded).map(s => bytesOf(sessionDir(series, s.rid)));
+/** The size the rule reads for one session folder, from the registered floor and this series: `{ bytes, source: 'floor' | 'series' }`. A session that has not ended is not read. Written nowhere. `bytesOf(dir)` is the seam that sizes a session folder (`sessionBytesOf`); `say(sentence)` (optional, with `sayEvery`) says `disk check: sizing N ended session(s)` and then a line every N sessions. */
+export function sessionFloor({ floorBytes, series, map, bytesOf = sessionBytesOf, say = () => {}, sayEvery }) {
+  const ended = Object.values(map?.sessions ?? {}).filter(isEnded);
+  say(`disk check: sizing ${ended.length} ended session(s)`);
+  const own = mapSaying({ items: ended, phase: 'disk check', report: { say, every: sayEvery }, unit: 'session(s)', fn: s => bytesOf(sessionDir(series, s.rid)) });
   const largest = Math.max(0, ...own);
   return largest > floorBytes ? { bytes: largest, source: 'series' } : { bytes: floorBytes, source: 'floor' };
 }
