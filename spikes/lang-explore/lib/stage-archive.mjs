@@ -236,11 +236,12 @@ function freeLocked({ series, unreadSlots, now }) {
 }
 
 /**
- * `stage-free`: remove the three cache folders (`FREEABLE`) of sessions that are final in a finished slot, each file only when the newest verified archive lists it with the same sha256 and its archived copy has it too. `unreadSlots` are the
+ * `stage-free`: remove the three cache folders (`FREEABLE`) of sessions that are final in a finished slot, each file only when the newest verified archive lists it with the same sha256 and its archived copy has it too. `unreadSlots` (REQUIRED, an array: a call without it is refused) are the
  * read-back slots whose dated lines do not exist yet (`unreadReadbackSlots`): such a slot is no finished slot for this verb. A session that already holds a `freed.json` is not freed again (its list names the one archive that holds its files): it is named in
  * `alreadyFreed`. A final session's caches do not change after it ends, so nothing is lost; `stage-restore` it first to free it again. -> `ok({ sessions, removed, bytes, kept, alreadyFreed })` (`kept` names every file left, with the reason) | `fail`.
  */
-export function freeSeries({ series, unreadSlots = [], now = systemClock }) {
+export function freeSeries({ series, unreadSlots, now = systemClock }) {
+  if (!Array.isArray(unreadSlots)) return fail('stage-free needs unreadSlots, the read-back slots whose dated lines do not exist yet (an empty list says none wait): without it a slot that still awaits its judge could be freed');
   return withSeriesLock(series, () => freeLocked({ series, unreadSlots, now }));
 }
 

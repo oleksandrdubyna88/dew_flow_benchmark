@@ -61,7 +61,7 @@ test('stage_free_removes_only_the_three_cache_folders_of_final_sessions_in_finis
   assert.deepEqual([...FREEABLE], ['box/nuget', 'box/npm', 'box/home/.dotnet'], 'the closed list');
   const { series } = archived(t);
   const before = snapshotOf(series, { skip: SKIP });
-  const freed = freeSeries({ series });
+  const freed = freeSeries({ series, unreadSlots: [] });
   assert.equal(freed.ok, true, freed.reason);
   const after = snapshotOf(series, { skip: SKIP });
   const gone = freedFiles([ridOf(1, 'csharp'), ridOf(1, 'node')]);
@@ -85,7 +85,7 @@ test('stage_free_removes_nothing_that_is_not_in_the_verified_archive_with_the_sa
   appendFileSync(changed, 'changed after the archive');
   const copied = path.join(archiveEntries(series)[0].copy, 's', ridOf(1, 'node'), 'box', 'npm', '_cacache', 'c.tgz');
   flipByte(copied);
-  const freed = freeSeries({ series });
+  const freed = freeSeries({ series, unreadSlots: [] });
   assert.equal(freed.ok, true, freed.reason);
   assert.equal(existsSync(added), true, 'a file the archive does not list is kept');
   assert.equal(existsSync(changed), true, 'a file whose hash is not the listed one is kept');
@@ -99,7 +99,7 @@ test('stage_free_removes_nothing_that_is_not_in_the_verified_archive_with_the_sa
 
 test('stage_free_refuses_when_the_archive_is_not_at_its_place_or_no_longer_verifies', t => {
   const bare = seriesFolder(t, MAP, { cacheBytes: 50 });
-  const none = freeSeries({ series: bare });
+  const none = freeSeries({ series: bare, unreadSlots: [] });
   assert.equal(none.ok, false, 'no archive recorded');
   assert.match(none.reason, /stage-archive/, 'it names the verb that makes one');
   const cases = [
@@ -111,7 +111,7 @@ test('stage_free_refuses_when_the_archive_is_not_at_its_place_or_no_longer_verif
     const { series } = archived(t);
     const before = snapshotOf(series, { skip: SKIP });
     damage(archiveEntries(series)[0]);
-    const refused = freeSeries({ series });
+    const refused = freeSeries({ series, unreadSlots: [] });
     assert.equal(refused.ok, false, `${what}: refused`);
     assert.deepEqual(snapshotOf(series, { skip: SKIP }), before, `${what}: nothing was removed and nothing was written`);
   }
@@ -120,7 +120,7 @@ test('stage_free_refuses_when_the_archive_is_not_at_its_place_or_no_longer_verif
 test('stage_restore_brings_a_freed_session_back_to_its_listed_bytes_and_a_copy_that_differs_is_refused', t => {
   const { series } = archived(t);
   const before = snapshotOf(series, { skip: SKIP });
-  assert.equal(freeSeries({ series }).ok, true);
+  assert.equal(freeSeries({ series, unreadSlots: [] }).ok, true);
   const rid = ridOf(1, 'csharp');
   const restored = restoreSeries({ series, rid });
   assert.equal(restored.ok, true, restored.reason);
@@ -132,7 +132,7 @@ test('stage_restore_brings_a_freed_session_back_to_its_listed_bytes_and_a_copy_t
   assert.equal(bad.ok, true, 'a second session restores on its own');
   assert.deepEqual(snapshotOf(series, { skip: SKIP }), before, 'every byte of the series is as it was before anything was freed');
   const again = archived(t);
-  assert.equal(freeSeries({ series: again.series }).ok, true);
+  assert.equal(freeSeries({ series: again.series, unreadSlots: [] }).ok, true);
   const copy = path.join(archiveEntries(again.series)[0].copy, 's', rid, 'box', 'npm', '_cacache', 'c.tgz');
   flipByte(copy);
   const refused = restoreSeries({ series: again.series, rid });
@@ -184,7 +184,7 @@ test('A_series_that_halted_on_the_disk_rule_was_archived_freed_and_resumed_ends_
   assert.equal(stopped.go, false, 'the disk rule halts before slot 3');
   const to = backupFolder(t);
   assert.equal(archiveSeries({ series: halted, to, now: NOW }).ok, true);
-  const freed = freeSeries({ series: halted });
+  const freed = freeSeries({ series: halted, unreadSlots: [] });
   assert.equal(freed.ok, true, freed.reason);
   assert.equal(freed.value.sessions.length, 4, 'the four sessions of slots 1 and 2');
   assert.equal(diskGate({ ...gate, freeBytes: 10 ** 13 }).go, true, 'the space is there: the series goes on');
@@ -201,7 +201,7 @@ test('A_series_that_halted_on_the_disk_rule_was_archived_freed_and_resumed_ends_
 test('The_final_hash_list_and_the_last_archive_refuse_a_series_that_still_holds_a_freed_session', t => {
   const { series, to } = archived(t);
   assert.equal(freedSessionProblem(series), null, 'nothing is freed yet');
-  assert.equal(freeSeries({ series }).ok, true);
+  assert.equal(freeSeries({ series, unreadSlots: [] }).ok, true);
   const problem = freedSessionProblem(series);
   assert.match(problem, /stage-restore/, 'it names the verb that brings the folders back');
   assert.ok(problem.includes(ridOf(1, 'csharp')) && problem.includes(ridOf(1, 'node')), `and the sessions: ${problem}`);
@@ -299,4 +299,18 @@ test('A_session_that_is_already_freed_is_named_and_left_alone_by_the_next_free_a
   assert.equal(restoreSeries({ series }).ok, true, 'the restore from A brings the sessions back');
   const restored = snapshotOf(series, { skip: SKIP });
   for (const file of rids.flatMap(cacheFilesOf)) assert.equal(restored[file], before[file], `${file} is back with its listed bytes`);
+});
+
+// ---- coai code round 1 (PR 4), C1: a free that is not told the unread slots is refused ------------------------------------------------------------------------------------------------------------------------------------
+
+test('A_free_that_is_not_given_the_unread_slots_is_refused_with_a_sentence_and_removes_nothing', t => {
+  const { series } = archived(t);
+  const before = snapshotOf(series, { skip: SKIP });
+  for (const args of [{ series }, { series, unreadSlots: undefined }, { series, unreadSlots: '3' }]) {
+    const refused = freeSeries(args);
+    assert.equal(refused.ok, false, `${JSON.stringify(args.unreadSlots)}: refused`);
+    assert.match(refused.reason, /unreadSlots/, 'the sentence names the missing argument');
+    assert.deepEqual(snapshotOf(series, { skip: SKIP }), before, 'nothing was removed and nothing was written');
+  }
+  assert.equal(freeSeries({ series, unreadSlots: [] }).ok, true, 'an empty list is an answer: no slot waits');
 });
