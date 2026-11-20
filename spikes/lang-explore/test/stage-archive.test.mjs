@@ -568,3 +568,18 @@ test('A_session_folder_that_is_a_link_is_never_freed_into_or_restored_into_and_n
   assert.deepEqual(snapshotOf(moved), before, 'a session folder that is a link: nothing behind it is freed or written');
   assert.ok(freed.value.kept.some(k => k.path.startsWith(`s/${rid}/`)), 'and its roots are named as kept');
 });
+
+test('A_freed_session_folder_that_became_a_link_is_not_restored_into_and_nothing_outside_changes', t => {
+  const { series } = archived(t);
+  const rid = ridOf(1, 'csharp');
+  assert.equal(freeSeries({ series, reading: readingOf(series) }).ok, true);
+  const folder = path.join(series, 's', rid);
+  const moved = path.join(backupFolder(t), 'moved-session');
+  renameSync(folder, moved);
+  symlinkSync(moved, folder);
+  const before = snapshotOf(moved);
+  const refused = restoreSeries({ series, rid });
+  assert.equal(refused.ok, false, 'the restore is refused');
+  assert.ok(refused.reason.includes(folder), `the link is named: ${refused.reason}`);
+  assert.deepEqual(snapshotOf(moved), before, 'nothing behind the link was written or removed');
+});
