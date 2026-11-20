@@ -450,3 +450,20 @@ test('An_archive_json_without_a_list_of_archives_is_refused_with_a_sentence_by_t
     assert.deepEqual(snapshotOf(series, { skip: ['series.lock'] }), before, `${text}: nothing in the series changed`);
   }
 });
+
+// ---- coai code round 2 (PR 4), R5 and R6: the free says its progress while it verifies and while it removes ------------------------------------------------------------------------------------------------------------
+
+test('Stage_free_says_its_progress_per_session_while_it_verifies_the_caches_and_while_it_removes_them', t => {
+  const { series } = archived(t);
+  const [first, second] = [ridOf(1, 'csharp'), ridOf(1, 'node')];
+  const lines = [];
+  const freed = freeSeries({ series, reading: readingOf(series), progress: line => lines.push(line), progressEvery: 3 });
+  assert.equal(freed.ok, true, freed.reason);
+  for (const rid of [first, second]) {
+    const own = lines.filter(line => line.includes(rid));
+    assert.deepEqual(own.filter(line => line.startsWith('verifying')), [`verifying ${rid}: 0 of 4 file(s)`, `verifying ${rid}: 3 of 4 file(s)`, `verifying ${rid}: 4 of 4 file(s)`], `${rid}: verifying says a line every 3 files`);
+    assert.deepEqual(own.filter(line => line.startsWith('removing')), [`removing ${rid}: 0 of 4 file(s)`, `removing ${rid}: 3 of 4 file(s)`, `removing ${rid}: 4 of 4 file(s)`], `${rid}: removing says a line every 3 files`);
+    assert.ok(own.findIndex(line => line.startsWith('verifying')) < own.findIndex(line => line.startsWith('removing')), `${rid}: verify first, then remove`);
+  }
+  assert.equal(freeSeries({ series, reading: readingOf(series) }).ok, true, 'without a callback the free says nothing and does the same work');
+});

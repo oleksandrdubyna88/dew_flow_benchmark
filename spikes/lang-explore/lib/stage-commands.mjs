@@ -96,7 +96,7 @@ export function cmdStageFree(values, io) {
   const series = seriesOfValues({ values, io, verb: 'stage-free' });
   if (!series.ok) return refused(io, series.reason);
   const dir = series.value.dir;
-  return finish({ io, result: freeSeries({ series: dir, reading: readingOf({ dir, io }), now: io.now ?? systemClock }), lines: freeLines });
+  return finish({ io, result: freeSeries({ series: dir, reading: readingOf({ dir, io }), now: io.now ?? systemClock, progress: io.say }), lines: freeLines });
 }
 
 const restoreLines = r => [`restored ${r.restored.length} session(s): ${r.restored.join(', ') || 'none'}`];

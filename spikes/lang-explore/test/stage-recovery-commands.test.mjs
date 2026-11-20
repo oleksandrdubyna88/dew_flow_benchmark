@@ -30,6 +30,9 @@ async function seriesWith(slots) {
   return { rig, rids, sessionsOf: pair => Object.values(readRunMap(runMapFileOf(rig.dir)).value.sessions).filter(s => s.pair === pair).map(s => s.rid) };
 }
 
+/** The summary line of a `stage-free` output (the progress lines come before it). */
+const summaryOf = text => text.split('\n').find(line => line.startsWith('freed '));
+
 const cacheLeft = (dir, rid) => cacheFilesOf(rid).filter(rel => existsSync(path.join(dir, rel))).length;
 
 test('The_three_recovery_verbs_are_commands_of_explore_and_each_names_what_it_needs', async t => {
@@ -70,7 +73,7 @@ test('stage_free_through_the_command_layer_frees_the_closed_list_of_finished_slo
   assert.equal((await verb(rig, ['stage-archive', '--series', rig.dir, '--to', backup])).exit, 0);
   const freed = await verb(rig, ['stage-free', '--series', rig.dir]);
   assert.equal(freed.exit, 0, freed.text);
-  assert.match(freed.text, /^freed 16 file\(s\), 640 bytes, of 4 session\(s\)/, 'the four sessions of slots 1 and 2 (four files each, 40 bytes each)');
+  assert.match(summaryOf(freed.text), /^freed 16 file\(s\), 640 bytes, of 4 session\(s\)/, 'the four sessions of slots 1 and 2 (four files each, 40 bytes each)');
   const [slot1, slot3] = [sessionsOf(1), sessionsOf(3)];
   assert.deepEqual(slot1.map(rid => cacheLeft(rig.dir, rid)), [0, 0], 'a finished slot is freed');
   assert.deepEqual(slot3.map(rid => cacheLeft(rig.dir, rid)), [4, 4], 'the read-back slot is no finished slot for this verb until its lines exist: the judge\'s reading comes first');
@@ -78,7 +81,7 @@ test('stage_free_through_the_command_layer_frees_the_closed_list_of_finished_slo
   appendFileSync(rig.files.amendmentsFile, `${readbackHolds().filter(line => slot3.some(rid => line.includes(rid))).join('\n')}\n`);
   const again = await verb(rig, ['stage-free', '--series', rig.dir]);
   assert.equal(again.exit, 0, again.text);
-  assert.match(again.text, /^freed 8 file\(s\), 320 bytes, of 2 session\(s\)/, 'with its dated lines the read-back slot is freed too');
+  assert.match(summaryOf(again.text), /^freed 8 file\(s\), 320 bytes, of 2 session\(s\)/, 'with its dated lines the read-back slot is freed too');
   assert.deepEqual(slot3.map(rid => cacheLeft(rig.dir, rid)), [0, 0]);
 });
 
@@ -164,4 +167,14 @@ test('stage_free_keeps_every_session_of_a_read_back_slot_whose_one_session_is_re
   assert.equal(freed.exit, 0, freed.text);
   assert.deepEqual(rids.map(rid => cacheLeft(rig.dir, rid)), [4, 4], 'a refuted session is a void whose re-run is owed: the slot is not finished, so neither of its sessions is freed');
   assert.deepEqual(sessionsOf(1).map(rid => cacheLeft(rig.dir, rid)), [0, 0], 'a finished slot is freed as usual');
+});
+
+test('stage_free_prints_its_progress_lines_before_its_summary', async t => {
+  const { rig } = await seriesWith(2);
+  assert.equal((await verb(rig, ['stage-archive', '--series', rig.dir, '--to', backupFolder(t)])).exit, 0);
+  const freed = await verb(rig, ['stage-free', '--series', rig.dir]);
+  assert.equal(freed.exit, 0, freed.text);
+  assert.match(freed.text, /^verifying [0-9a-f]{6}: (\d+) of \1 file\(s\)$/m, 'a session\'s verifying ends at its total');
+  assert.match(freed.text, /^removing [0-9a-f]{6}: 4 of 4 file\(s\)$/m, 'and so does its removing');
+  assert.match(freed.text.split('\n').find(line => line.startsWith('freed ')), /^freed 16 file\(s\), 640 bytes, of 4 session\(s\)/, 'the summary is still said');
 });

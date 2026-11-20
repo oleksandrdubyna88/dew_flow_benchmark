@@ -233,8 +233,8 @@ const linkedRoots = ({ series, rid }) => rootsOf({ series, rid }).filter(r => r.
 const freedItem = (rid, e, hash) => ({ path: e.rel.slice(`s/${rid}/`.length), kind: e.kind, bytes: e.size, mode: e.mode, sha256: hash, ...(e.kind === 'link' ? { target: e.target } : {}) });
 
 /** What the archive proves among a session's cache files: `{ removable: [{ entry, hash }], kept: [{ path, why }] }`. */
-function judgeSession({ series, rid, archive }) {
-  const judged = cacheEntriesOf({ series, rid }).map(e => ({ e, why: e.kind === 'other' ? 'it is neither a file nor a link' : unproven({ series, rel: e.rel, archive }) }));
+function judgeSession({ series, rid, archive, report }) {
+  const judged = mapSaying({ items: cacheEntriesOf({ series, rid }), phase: `verifying ${rid}`, report, fn: e => ({ e, why: e.kind === 'other' ? 'it is neither a file nor a link' : unproven({ series, rel: e.rel, archive }) }) });
   return { removable: judged.filter(j => j.why === null).map(j => ({ entry: j.e, hash: archive.list.get(j.e.rel) })), kept: [...judged.filter(j => j.why !== null).map(j => ({ path: j.e.rel, why: j.why })), ...linkedRoots({ series, rid })] };
 }
 
@@ -254,18 +254,18 @@ function removeEmptyDirs(dir) {
   if (readdirSync(dir).length === 0) rmdirSync(dir);
 }
 
-function removeFiles({ series, rid, removable }) {
+function removeFiles({ series, rid, removable, report }) {
   const roots = plainRoots({ series, rid }).map(root => path.join(series, root));
   roots.forEach(makeWritable);
-  for (const { entry } of removable) rmSync(path.join(series, entry.rel), { force: true });
+  mapSaying({ items: removable, phase: `removing ${rid}`, report, fn: ({ entry }) => rmSync(path.join(series, entry.rel), { force: true }) });
   roots.filter(existsSync).forEach(removeEmptyDirs);
 }
 
-function freeSession({ series, rid, archive, now }) {
-  const { removable, kept } = judgeSession({ series, rid, archive });
+function freeSession({ series, rid, archive, now, report }) {
+  const { removable, kept } = judgeSession({ series, rid, archive, report });
   if (removable.length > 0) {
     writeFreed({ series, rid, archive, removable, now });
-    removeFiles({ series, rid, removable });
+    removeFiles({ series, rid, removable, report });
   }
   return { rid, removed: removable.map(r => r.entry.rel), bytes: removable.reduce((n, r) => n + r.entry.size, 0), kept };
 }
@@ -276,25 +276,26 @@ function readUnderLock(reading) {
   return !read.ok || Array.isArray(read.value?.unreadSlots) ? read : fail('stage-free: the reading did not say which read-back slots still wait (unreadSlots is not a list): nothing is freed');
 }
 
-function freeLocked({ series, reading, now }) {
+function freeLocked({ series, reading, now, report }) {
   const archive = verifiedArchive(series);
   const read = archive.ok ? readUnderLock(reading) : archive;
   if (!read.ok) return read;
   const eligible = eligibleRids(read.value);
   const held = new Set(freedRids(series));
-  const done = eligible.filter(rid => !held.has(rid)).map(rid => freeSession({ series, rid, archive: archive.value, now }));
+  const done = eligible.filter(rid => !held.has(rid)).map(rid => freeSession({ series, rid, archive: archive.value, now, report }));
   return ok({ sessions: done.filter(d => d.removed.length > 0).map(d => d.rid), removed: done.flatMap(d => d.removed), bytes: done.reduce((n, d) => n + d.bytes, 0), kept: done.flatMap(d => d.kept), alreadyFreed: eligible.filter(rid => held.has(rid)) });
 }
 
 /**
  * `stage-free`: remove the three cache folders (`FREEABLE`) of sessions that are final in a finished slot, each file only when the newest verified archive lists it with the same sha256 and its archived copy has it too. `reading` (REQUIRED, a function: a call without it is refused) is
  * called UNDER the series lock and gives `ok({ map, unreadSlots })`: the run-map as `stage-run` reads it (`mapAsRead`: a session a dated `refuted` line names is a void whose re-run is owed, so its slot is not finished) and the read-back slots whose dated
- * lines do not exist yet (`unreadReadbackSlots`); such a slot is no finished slot for this verb. A `fail` of the reading ends the free with its sentence. A session that already holds a `freed.json` is not freed again (its list names the one archive that holds its files): it is named in
+ * lines do not exist yet (`unreadReadbackSlots`); such a slot is no finished slot for this verb. A `fail` of the reading ends the free with its sentence. `progress(sentence)` (optional, with `progressEvery`) hears
+ * `verifying <rid>` and `removing <rid>` lines for each session it frees, while it hashes the caches here and in the backup and while it removes them. A session that already holds a `freed.json` is not freed again (its list names the one archive that holds its files): it is named in
  * `alreadyFreed`. A final session's caches do not change after it ends, so nothing is lost; `stage-restore` it first to free it again. -> `ok({ sessions, removed, bytes, kept, alreadyFreed })` (`kept` names every file left, with the reason) | `fail`.
  */
-export function freeSeries({ series, reading, now = systemClock }) {
+export function freeSeries({ series, reading, now = systemClock, progress, progressEvery }) {
   if (typeof reading !== 'function') return fail('stage-free needs a reading (a function that gives the run-map as `stage-run` reads it and the unreadSlots, the read-back slots whose dated lines do not exist yet): without it a slot that still awaits its judge could be freed');
-  return withSeriesLock(series, () => freeLocked({ series, reading, now }));
+  return withSeriesLock(series, () => freeLocked({ series, reading, now, report: { say: progress, every: progressEvery } }));
 }
 
 // ---- restore -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
