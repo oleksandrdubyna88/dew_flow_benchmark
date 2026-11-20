@@ -34,8 +34,8 @@ export function maskOf({ draw, pair, stack }) {
 /** The sessions of a pair, by stack, in attempt order. `kind` is the run-map kind they carry: `pilot` for the quick run's pairs, `data` for the slots of a Stage 1 series. */
 export const sessionsOf = (map, pair, stack, kind = 'pilot') => Object.values(map.sessions).filter(s => s.pair === pair && s.kind === kind && (stack === undefined || s.stack === stack)).sort((a, b) => a.attempt - b.attempt);
 
-/** A session that ended without data and as a void (a class starting `void`): the one it may be re-run. */
-export const isVoid = s => s.status === 'ran' && s.data === false && String(s.class).startsWith('void');
+/** A session that ended without data and as a void (a class starting `void`): the one it may be re-run. It stays `scored` when the scorer or a dated line voided it after its launch, so `scored` counts as ended here (v1's own rule: `ended && data === false`). */
+export const isVoid = s => ['ran', 'scored'].includes(s.status) && s.data === false && String(s.class).startsWith('void');
 const isStopped = s => s.status === 'ran' && s.data === false;
 
 /** A session a halt or a failure left open: planned, launching (a crash), or ended with data and not yet scored. */
@@ -48,8 +48,8 @@ const voidState = attempts => (attempts >= MAX_ATTEMPTS ? 'void-final' : 'void-r
 
 /** The state of a stack's LAST session in a pair (`attempts` sessions so far). */
 function stateOfLast(last, attempts) {
-  if (last.status === 'scored') return 'done';
   if (isVoid(last)) return voidState(attempts);
+  if (last.status === 'scored') return 'done';
   return isStopped(last) ? 'stopped' : 'open';
 }
 

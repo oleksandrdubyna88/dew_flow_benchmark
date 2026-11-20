@@ -131,6 +131,21 @@ test('A_dated_refuted_line_makes_the_session_a_void_harness_and_offers_its_re_ru
   assert.deepEqual(last.unit.ctx.handVerdictsFor(node).map(v => v.verdict), ['holds']);
 });
 
+test('A_dated_refuted_line_on_a_scored_session_of_a_plain_slot_voids_it_and_next_offers_its_re_run_before_any_later_slot', async () => {
+  const rig = await runRig({ lines: [...BASE, ...readbackHolds()] });
+  const plain = SLOTS.find(s => s.slot >= 7 && !s.readback);
+  for (let i = 0; i < plain.slot; i += 1) assert.equal((await next(rig)).exit, 0, `slot ${i + 1}`);
+  const [csharp, node] = [plain.rids.csharp[0], plain.rids.node[0]];
+  assert.equal(mapOf(rig.dir).sessions[csharp].status, 'scored', 'the control: the slot is scored and done');
+  writeFileSync(rig.files.amendmentsFile, `${[...BASE, ...readbackHolds()].join('\n')}\n2026-11-24 | G-4 | refuted | ${csharp} | ~/e.md | the judge\n`);
+  const r = await next(rig);
+  assert.equal(r.exit, 0, r.message);
+  const last = rig.log.at(-1);
+  assert.deepEqual([last.pair, last.stacks, last.attempts, last.planned], [plain.slot, ['csharp'], [2], [plain.rids.csharp[1]]], 'the re-run of that stack alone, attempt 2, not the next slot');
+  assert.equal(rig.log.length, plain.slot + 1);
+  assert.equal(last.rids.includes(node), false, 'the other stack is not run again');
+});
+
 test('The_pilot_steps_run_in_the_pilots_order_and_one_that_is_not_next_is_refused', async () => {
   const rig = await runRig({ lines: [GO_PILOT, GO_ALL, PILOT_GO_LINE], stage: { pilotRand: (() => { let n = 0; return () => `r${(n += 1)}`; })() } });
   const pilot = what => stageRun({ values: { series: rig.dir, what }, io: rig.io });

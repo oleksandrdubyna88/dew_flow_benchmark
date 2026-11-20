@@ -3,6 +3,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { reclassifyByHand } from '../../minigit-bench/lib/bare-reclass.mjs';
 import { appendLedger } from '../../minigit-bench/lib/ledger.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { systemClock } from './clock.mjs';
@@ -38,8 +39,14 @@ const nameChecked = ({ series, seriesDir, io }) => (isRehearsal(seriesDir) || ca
 /** The exit of a schedule refusal: a stopped series is a stop (2), everything else a refusal (4). */
 export const exitOfRefusal = sentence => (sentence.includes('is stopped') ? EXIT.stop : EXIT.config);
 
+/** The by-hand verdicts of the registered amendments about one session (every dated line, v1's reader), as the loop's `handVerdictsFor` takes them. */
+const handVerdictsOf = ({ series, read }) => rid => stageHandVerdictsFor(read.text, rid, series.state.seriesId);
+
+/** The run-map as the schedule reads it: a session a dated `refuted` line names is already a void (`reclassifyByHand`, v1's own rule, pure here), whichever slot it is in, so its re-run is the next step. The loop writes the same change when it starts. */
+const mapAsRead = ({ series, read }) => reclassifyByHand({ map: series.map, handVerdictsFor: handVerdictsOf({ series, read }) }).map;
+
 const unitOrRefusal = ({ series, read, what }) => {
-  const chosen = unitOf({ what, state: series.state, map: series.map, gates: read.gates });
+  const chosen = unitOf({ what, state: series.state, map: mapAsRead({ series, read }), gates: read.gates });
   if (!chosen.ok) return { refusal: { exit: exitOfRefusal(chosen.reason), message: chosen.reason } };
   return chosen.value === null ? { finished: true } : { series, read, unit: chosen.value };
 };
@@ -99,7 +106,7 @@ const planStep = ({ series, unit, io }) => { const made = planUnit({ map: series
 /** The `unit` argument of `runUnit`: the unit's kind, the policy files the series pinned, the guard, `onReady` (the owner-go event, written once the shared body has passed its last refusal check), the Stage 1 parts of the context and the records' finalizer. */
 const unitArgs = ({ series, unit, read, go, guard, explore, policyFiles, io }) => ({
   kind: unit.kind, policyFiles, guard, onReady: () => sayGo({ series, unit, go, io }),
-  ctx: { stepOf: stepOfUnit(unit), seed: unit.kind === DATA_KIND ? read.gates.seed : null, preregTag: series.state.preregTag, handVerdictsFor: rid => stageHandVerdictsFor(read.text, rid, series.state.seriesId) },
+  ctx: { stepOf: stepOfUnit(unit), seed: unit.kind === DATA_KIND ? read.gates.seed : null, preregTag: series.state.preregTag, handVerdictsFor: handVerdictsOf({ series, read }) },
   finalize: finalizerOf({ unit, go, alias: explore.cli.model }),
 });
 
