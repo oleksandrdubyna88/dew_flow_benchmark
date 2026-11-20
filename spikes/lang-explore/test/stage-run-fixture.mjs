@@ -35,7 +35,9 @@ export const fakeLoop = (log, { voids = () => false, hold = null } = {}) => asyn
   const mine = Object.values(planned.map.sessions).filter(s => s.kind === unit.kind && (unit.kind !== 'data' || s.pair === pair)).filter(needsRun);
   log.push({ pair, kind: unit.kind, task: mine[0]?.task, round: mine[0]?.round, rids: mine.map(s => s.rid), stacks: mine.map(s => s.stack), attempts: mine.map(s => s.attempt), planned: planned.planned.map(p => p.rid), resumed: planned.resumed ?? [], guard: unit.guard, unit });
   if (hold) await hold();
-  writeRunMap(runMapFileOf(series.dir), mine.reduce((map, s) => endSession(map, s, voids(s)), planned.map));
+  const ended = mine.reduce((map, s) => endSession(map, s, voids(s)), planned.map);
+  writeRunMap(runMapFileOf(series.dir), ended);
+  unit.finalize({ seriesDir: series.dir, map: ended, pair, pause: null, world: {} }); // as `loopAndFinalize` does after the loop: the pair record (a fake session has no directory, so no facts)
   return { exit: 0, message: 'done' };
 };
 

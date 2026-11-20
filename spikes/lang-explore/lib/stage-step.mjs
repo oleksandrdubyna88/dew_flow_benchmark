@@ -12,6 +12,7 @@ import { pinsMoved, runUnit } from './run.mjs';
 import { CANONICAL_SERIES, isRehearsal, ledgerFileOf, seriesInputs, seriesRootProblem } from './series.mjs';
 import { stageHandVerdictsFor } from './stage-amendments.mjs';
 import { finalizerOf } from './stage-final.mjs';
+import { finishOwedRecords } from './stage-owed.mjs';
 import { guardOf, ownerGoFor, readGates } from './stage-gates.mjs';
 import { rehearsalIo } from './stage-rehearsal.mjs';
 import { DATA_KIND } from './stage-schedule.mjs';
@@ -125,11 +126,23 @@ async function launch(s) {
   }
 }
 
+/** Before any unit is offered, the records an ended unit still owes (a process died between the last scoring and `finalizerOf`): `null` when nothing is owed or it is all written, else the result that ends the call. A series or its gates that cannot be read is `chooseUnit`'s refusal. */
+async function owedRecords({ dir, io }) {
+  const series = openStage({ seriesDir: dir, io });
+  const read = series.ok ? readGates({ series: series.value, io }) : series;
+  return read.ok ? finishOwedRecords({ series: series.value, read: read.value, io }) : null;
+}
+
 /**
  * Run the unit `what` names of the series in `dir`. -> `{ exit, message, pairFile?, problems?, unit?, finished? }`: `finished` when the schedule has nothing more to run; `unit` (the slot's number, round, task and whether it is a read-back
  * slot) when one ran.
  */
 export async function runStageUnit({ dir, what, io }) {
+  const owed = await owedRecords({ dir, io });
+  return owed ?? runChosenUnit({ dir, what, io });
+}
+
+async function runChosenUnit({ dir, what, io }) {
   const chosen = chooseUnit({ dir, what, io });
   if (chosen.refusal) return chosen.refusal;
   if (chosen.finished) return { exit: EXIT.done, message: 'nothing more to run: every unit the schedule holds is finished', finished: true };

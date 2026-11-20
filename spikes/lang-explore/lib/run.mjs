@@ -191,9 +191,12 @@ async function finishedIfInterrupted({ series, pair, rerun, io, task }) {
 
 const runLocked = async a => (await finishedIfInterrupted(a)) ?? runPlanned(a);
 
+/** The prerequisites of the task for a series, through the seam a test replaces (`io.runSeams.prerequisitesFn`). */
+export const prerequisitesOf = ({ series, io, task }) => (io.runSeams?.prerequisitesFn ?? prerequisites)({ home: io.home, series, task, worldFn: io.worldFn, tokenFn: io.tokenFn, heldout: io.heldoutArgs });
+
 /** What the pair needs, or the answer that ends it here: a missing prerequisite (exit 4) or a harness that moved (exit 3, see `harnessRefusal`). -> `{ need }` | `{ answer }`. */
 async function readyOrRefused({ series, pair, io, task }) {
-  const need = await (io.runSeams?.prerequisitesFn ?? prerequisites)({ home: io.home, series, task, worldFn: io.worldFn, tokenFn: io.tokenFn, heldout: io.heldoutArgs });
+  const need = await prerequisitesOf({ series, io, task });
   if (!need.ok) return { answer: { exit: 4, message: need.reason } };
   const moved = harnessRefusal({ series, pair, world: need.value.world, io, task });
   return moved ? { answer: moved } : { need: need.value };

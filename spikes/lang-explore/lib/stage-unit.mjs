@@ -32,6 +32,12 @@ const pilotUnit = ({ step, pilot }) => ({
   order: step.what === 'aa' ? ['a', 'b'] : [...STACK_ORDER], belongs: pilotBelongs({ what: step.what, pilot }),
 });
 
+/** The unit a session of the map belongs to, as the records of an ENDED unit need it (`belongs`, kind, pair, task, round, the slot's masks): a data slot by its pair, the A/A, or the pilot pair of its task. Nothing is left to run in it (`action: 'done'`). */
+export function unitOfSession({ session, state, gates }) {
+  if (session.kind === DATA_KIND) return slotUnit(slotsOf({ seed: gates.seed })[session.pair - 1]);
+  return pilotUnit({ step: { what: session.kind === 'aa' ? 'aa' : `pilot:${session.task}`, action: 'done', todo: [] }, pilot: state.pilot });
+}
+
 const unitOfSlot = next => (next.value ? ok(slotUnit(next.value)) : ok(null));
 
 /** The slot the schedule offers, as a unit: `ok(unit)` | `ok(null)` when the series is done | `fail(sentence)`. */

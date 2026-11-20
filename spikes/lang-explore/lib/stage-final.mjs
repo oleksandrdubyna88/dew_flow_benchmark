@@ -13,7 +13,7 @@ export function stageOf({ unit, go, alias }) {
 }
 
 /** A session that has ENDED: not `planned` and not `launching` (a halt in `launching` is reset to `planned` and launched again on resume, so its facts would keep the unknowns of the halted state). */
-const hasEnded = session => !['planned', 'launching'].includes(session.status);
+export const hasEnded = session => !['planned', 'launching'].includes(session.status);
 
 /** The facts every ended session of the unit stores for the readers after the tag (`stage-facts.mjs`), written once, with the final evidence, before the records. */
 function storeFacts({ args, unit }) {

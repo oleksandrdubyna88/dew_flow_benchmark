@@ -1,11 +1,12 @@
 // `stage-run` over several units (F3.S1 (a), PR 3): `--until round`, the read-back stop, a halted slot that is resumed, a rid that is already in the run-map, the dated `refuted` line, the pilot's own order. The fake loop of `stage-run-fixture.mjs`
 // stands for the box, the CLI and the scoring.
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
+import { readLedger } from '../../minigit-bench/lib/ledger.mjs';
 import { transition, writeRunMap } from '../../minigit-bench/lib/run-map.mjs';
-import { runMapFileOf } from '../lib/series.mjs';
+import { ledgerFileOf, runMapFileOf } from '../lib/series.mjs';
 import { stageRun } from '../lib/stage-run.mjs';
 import { GO_ALL, GO_PILOT, PILOT_GO_LINE, SEED, SLOTS, mapOf, readbackHolds, runRig } from './stage-run-fixture.mjs';
 import { readbackSlots } from '../lib/stage-schedule.mjs';
@@ -144,6 +145,38 @@ test('A_dated_refuted_line_on_a_scored_session_of_a_plain_slot_voids_it_and_next
   assert.deepEqual([last.pair, last.stacks, last.attempts, last.planned], [plain.slot, ['csharp'], [2], [plain.rids.csharp[1]]], 'the re-run of that stack alone, attempt 2, not the next slot');
   assert.equal(rig.log.length, plain.slot + 1);
   assert.equal(last.rids.includes(node), false, 'the other stack is not run again');
+});
+
+test('A_slot_stopped_between_its_last_scoring_and_its_records_gets_them_before_the_next_slot_is_offered', async () => {
+  const rig = await runRig();
+  assert.equal((await next(rig)).exit, 0);
+  const [first] = SLOTS;
+  const pairFile = path.join(rig.dir, 'pairs', 'p1.json');
+  const factsOf = stack => path.join(rig.dir, 's', first.rids[stack][0], 'stage-facts.json');
+  for (const stack of ['csharp', 'node']) mkdirSync(path.join(rig.dir, 's', first.rids[stack][0]), { recursive: true });
+  rmSync(pairFile);
+  assert.equal(existsSync(factsOf('csharp')), false, 'the control: the process died before the finalizer, nothing of the records is there');
+  assert.equal((await next(rig)).exit, 0);
+  assert.equal(rig.log.length, 2, 'and the next slot ran after');
+  assert.equal(rig.log[1].pair, 2);
+  assert.equal(existsSync(factsOf('csharp')) && existsSync(factsOf('node')), true, 'the facts of both sessions were written');
+  const pair = JSON.parse(readFileSync(pairFile, 'utf8'));
+  assert.deepEqual([pair.stage.slot, pair.stage.task, pair.stage.ownerGo.date], [1, first.task, '2026-11-21'], 'the pair record, by the same finalizer, with the go line the slot was launched under');
+  const events = readLedger(ledgerFileOf(rig.dir)).filter(l => l.event === 'finished after interruption');
+  assert.deepEqual(events.map(e => e.pair), [1], 'one event, no charge');
+  assert.equal((await next(rig)).exit, 0);
+  assert.equal(readLedger(ledgerFileOf(rig.dir)).filter(l => l.event === 'finished after interruption').length, 1, 'nothing is owed twice');
+});
+
+test('An_A_A_that_died_before_its_records_gets_its_facts_before_any_unit_is_offered', async () => {
+  const rig = await runRig({ stage: { pilotRand: (() => { let n = 0; return () => `r${(n += 1)}`; })() } });
+  assert.equal((await stageRun({ values: { series: rig.dir, what: 'aa' }, io: rig.io })).exit, 0);
+  const rids = Object.keys(mapOf(rig.dir).sessions);
+  for (const rid of rids) mkdirSync(path.join(rig.dir, 's', rid), { recursive: true });
+  assert.equal(rids.some(rid => existsSync(path.join(rig.dir, 's', rid, 'stage-facts.json'))), false, 'the control: no facts yet');
+  assert.equal((await next(rig)).exit, 0);
+  assert.equal(rids.every(rid => existsSync(path.join(rig.dir, 's', rid, 'stage-facts.json'))), true, 'the A/A has no pair record, but its sessions have their facts');
+  assert.equal(existsSync(path.join(rig.dir, 'pairs', 'p0.json')), false, 'and no pair record is made for it');
 });
 
 test('The_pilot_steps_run_in_the_pilots_order_and_one_that_is_not_next_is_refused', async () => {
