@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { layoutPaths } from '../../minigit-bench/lib/sandbox.mjs';
+import { stubClaude } from '../../minigit-bench/lib/stub-cli.mjs';
 import { chunksOf, sseAnswer, sseBody, stubUpstream } from '../../minigit-bench/lib/stub-upstream.mjs';
 import { TOKEN_FILE_PARTS } from '../../minigit-bench/capture/capture-env.mjs';
 import { readLedger } from '../../minigit-bench/lib/ledger.mjs';
@@ -27,7 +28,6 @@ import { removeArea } from '../lib/score.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
 import { resolveTask } from '../lib/tasks.mjs';
 import { loadWorld } from '../lib/world.mjs';
-import { stubClaudeForPins } from './stub-pinned.mjs';
 
 const TASK = resolveTask(loadExplore().value, '01').value;
 
@@ -91,7 +91,7 @@ async function pilotRig(t, { world, calibration }, { machine, worldFn = loadWorl
   const said = [];
   const rig = {
     dir, said, explore: world.explore, quiet: { hostCpus: 0.1, harnessCpus: 0.05, foreignCpus: 0, foreignAgents: [], memAvailablePct: 80, liveSessions: [], spinMs: 20 },
-    seams: { fill: referenceFill({ world, heldout: loadHeldout(realHome, TASK).value }), claudeBinary: stubClaudeForPins(stubDir, { explore: world.explore }), planOver: { upstream: stub.upstream, tickMs: 500, sampleMs: 500, settleMs: 500, graceMs: 2000 }, preflightHome: fakeHome(), stub: true },
+    seams: { fill: referenceFill({ world, heldout: loadHeldout(realHome, TASK).value }), claudeBinary: stubClaude(stubDir, undefined, { version: world.explore.cli.version }), planOver: { upstream: stub.upstream, tickMs: 500, sampleMs: 500, settleMs: 500, graceMs: 2000 }, preflightHome: fakeHome(), stub: true },
   };
   const machineOf = sample => machineFor({ thresholds: pilotQuiet().value, calibratedMs: 20, seriesDir: dir, samplerFn: async () => async () => sample, sleepFn: async () => {}, now: (() => { let n = 0; return () => (n += 7000); })() });
   rig.machineOf = machineOf;
