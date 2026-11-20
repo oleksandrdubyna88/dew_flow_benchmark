@@ -9,6 +9,9 @@
 //   node spikes/lang-explore/explore.mjs stage-init [--rehearsal] [--task-repo <checkout>]   FREE: the ONE series of Stage 1 (F3.S1): the A/A, the pilot and the 30 slots of the six tasks; a paid series needs the pre-registration's guard (PR 5), a rehearsal series (`r-`) needs none
 //   node spikes/lang-explore/explore.mjs stage-run --series <dir> --what aa|pilot:<NN>|next [--until round] [--dry-run] [--accept-noisy <why>]   SPENDS MONEY (a rehearsal series: stub CLI, $0): ONE unit chosen by the schedule; no flag names another data pair; needs the owner's go line for its scope
 //   node spikes/lang-explore/explore.mjs stage-status --series <dir>   FREE: the rounds, the slots, the pilot and the spend on five lines (pilot, A/A, data, void, re-run)
+//   node spikes/lang-explore/explore.mjs stage-archive --series <dir> --to <backup dir>   FREE: copy the whole series to the private backup, verify the copy file by file against the sha256 list, record it in archive.json; deletes nothing
+//   node spikes/lang-explore/explore.mjs stage-free --series <dir>   FREE: the ONLY verb that frees local disk: the three cache folders (box/nuget, box/npm, box/home/.dotnet) of final sessions in finished slots, each file only when the verified archive proves it
+//   node spikes/lang-explore/explore.mjs stage-restore --series <dir> [--rid <rid>]   FREE: copy the freed folders of one session (or every freed session) back from the archive, verified against freed.json
 //   node spikes/lang-explore/explore.mjs quiet [--accept-noisy <why>]  the machine-quiet check alone
 //   node spikes/lang-explore/explore.mjs run --task NN --pair k --series <dir> [--rerun csharp|node] [--accept-noisy <why>] [--allow-over <the owner's words and date>]     SPENDS MONEY: one pair
 //   node spikes/lang-explore/explore.mjs readback --task NN [--series <dir>]   what each session was launched with, against the registered prompt and environment
@@ -40,14 +43,14 @@ import { calibrateCommand } from './lib/calibrate.mjs';
 import { cmdHeldoutCheck, cmdHeldoutClose, cmdHeldoutOpen } from './lib/heldout-commands.mjs';
 import { EXIT, cmdInit, cmdLeakcheck, cmdNote, cmdPrune, cmdQuiet, cmdReadback, cmdRehearse, cmdRepartition, cmdReplay, cmdRescore, cmdRun, cmdStatus } from './lib/commands.mjs';
 import { cmdPackage, cmdRegisterMemory } from './lib/package-command.mjs';
-import { cmdStageInit, cmdStageRun, cmdStageStatus } from './lib/stage-commands.mjs';
+import { cmdStageArchive, cmdStageFree, cmdStageInit, cmdStageRestore, cmdStageRun, cmdStageStatus } from './lib/stage-commands.mjs';
 import { prepare } from './lib/prepare.mjs';
 import { cmdWorkspaces, cmdWorkspacesCopy } from './lib/workspaces-command.mjs';
 import { taskFromValues } from './lib/tasks.mjs';
 import { isQuick } from './lib/quick.mjs';
 import { loadWorld } from './lib/world.mjs';
 
-const OPTIONS = { task: { type: 'string' }, 'allow-over': { type: 'string' }, pair: { type: 'string' }, series: { type: 'string' }, rerun: { type: 'string' }, 'accept-noisy': { type: 'string' }, out: { type: 'string' }, range: { type: 'string' }, 'task-repo': { type: 'string' }, 'task-base': { type: 'string' }, 'candidate-repo': { type: 'string' }, candidate: { type: 'string' }, force: { type: 'boolean' }, rid: { type: 'string' }, wait: { type: 'string' }, case: { type: 'string' }, times: { type: 'string' }, tasks: { type: 'string' }, 'key-file': { type: 'string' }, 'key-backup': { type: 'string' }, 'share-mount': { type: 'string' }, only: { type: 'string' }, register: { type: 'boolean' }, seal: { type: 'boolean' }, tag: { type: 'string' }, from: { type: 'string' }, into: { type: 'string' }, check: { type: 'boolean' }, root: { type: 'string' }, rehearsal: { type: 'boolean' }, what: { type: 'string' }, until: { type: 'string' }, 'dry-run': { type: 'boolean' } };
+const OPTIONS = { task: { type: 'string' }, 'allow-over': { type: 'string' }, pair: { type: 'string' }, series: { type: 'string' }, rerun: { type: 'string' }, 'accept-noisy': { type: 'string' }, out: { type: 'string' }, range: { type: 'string' }, 'task-repo': { type: 'string' }, 'task-base': { type: 'string' }, 'candidate-repo': { type: 'string' }, candidate: { type: 'string' }, force: { type: 'boolean' }, rid: { type: 'string' }, wait: { type: 'string' }, case: { type: 'string' }, times: { type: 'string' }, tasks: { type: 'string' }, 'key-file': { type: 'string' }, 'key-backup': { type: 'string' }, 'share-mount': { type: 'string' }, only: { type: 'string' }, register: { type: 'boolean' }, seal: { type: 'boolean' }, tag: { type: 'string' }, from: { type: 'string' }, into: { type: 'string' }, check: { type: 'boolean' }, root: { type: 'string' }, rehearsal: { type: 'boolean' }, what: { type: 'string' }, until: { type: 'string' }, 'dry-run': { type: 'boolean' }, to: { type: 'string' } };
 /** The commands that run or score under the two scoring CPUs: every scoring of the quick run, the diagnostic, the re-score and a package validation included, so the numbers they compare are measured in the same conditions. */
 export const REEXEC = new Set(['run', 'rehearse', 'rescore', 'replay', 'package', 'stage-run']);
 
@@ -68,7 +71,7 @@ async function cmdCalibrate(values, io) {
   return EXIT.failed;
 }
 
-const COMMANDS = Object.freeze({ prepare: cmdPrepare, calibrate: cmdCalibrate, rehearse: cmdRehearse, init: cmdInit, quiet: cmdQuiet, run: cmdRun, status: cmdStatus, readback: cmdReadback, note: cmdNote, prune: cmdPrune, leakcheck: cmdLeakcheck, rescore: cmdRescore, replay: cmdReplay, repartition: cmdRepartition, 'heldout-open': cmdHeldoutOpen, 'heldout-close': cmdHeldoutClose, 'heldout-check': cmdHeldoutCheck, package: cmdPackage, 'register-memory': cmdRegisterMemory, workspaces: cmdWorkspaces, 'workspaces-copy': cmdWorkspacesCopy, 'stage-init': cmdStageInit, 'stage-run': cmdStageRun, 'stage-status': cmdStageStatus });
+const COMMANDS = Object.freeze({ prepare: cmdPrepare, calibrate: cmdCalibrate, rehearse: cmdRehearse, init: cmdInit, quiet: cmdQuiet, run: cmdRun, status: cmdStatus, readback: cmdReadback, note: cmdNote, prune: cmdPrune, leakcheck: cmdLeakcheck, rescore: cmdRescore, replay: cmdReplay, repartition: cmdRepartition, 'heldout-open': cmdHeldoutOpen, 'heldout-close': cmdHeldoutClose, 'heldout-check': cmdHeldoutCheck, package: cmdPackage, 'register-memory': cmdRegisterMemory, workspaces: cmdWorkspaces, 'workspaces-copy': cmdWorkspacesCopy, 'stage-init': cmdStageInit, 'stage-run': cmdStageRun, 'stage-status': cmdStageStatus, 'stage-archive': cmdStageArchive, 'stage-free': cmdStageFree, 'stage-restore': cmdStageRestore });
 
 /** SIGINT and SIGTERM abort the run: the reason and the exit code are recorded for the loop, then the controller aborts. */
 function armSignals(abort, ctl) {
