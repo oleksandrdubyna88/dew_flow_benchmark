@@ -4,7 +4,8 @@
 //   YYYY-MM-DD | owner-go | rounds:<a>-<b> | <the owner's words>    the owner's go for rounds a to b (O3)
 //   YYYY-MM-DD | caps | wallMs:<n> | stallMs:<n> | <reason, with G-18>   the one change of the wall and the stall
 //   YYYY-MM-DD | pilot | GO | verdicts:<12 hex of the sha256 of the GO table's file> | <who>   the pilot's GO
-// A line of these kinds that is not valid is REPORTED (`malformed`, with why), never counted. A date counts only when it is a real calendar date. Pure over the text; `readStageAmendments` is the one edge.
+// A line of these kinds that is not valid is REPORTED (`malformed`, with why), never counted: `stage-run` and `stage-status` print every one of the four kinds and every dated line with the home path written out (`reportLinesOf`), a report and never a refusal
+// by itself. A date counts only when it is a real calendar date. Pure over the text; `readStageAmendments` is the one edge. `capsOf` is not used by this PR's code: the guard of PR 4 and PR 5 reads the one `caps` line through it.
 import { existsSync, readFileSync } from 'node:fs';
 import { appliesToSeries, parseAmendments } from '../../minigit-bench/lib/amendments.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
@@ -146,6 +147,12 @@ export const stageHandVerdictsFor = (text, rid, seriesId = undefined) => parseSt
 export function homePathProblems(text, home) {
   const lines = String(text ?? '').split('\n').map(l => l.trim()).filter(l => /^\d{4}-\d{2}-\d{2} \|/.test(l));
   return lines.filter(l => l.includes(`${home}/`)).map(line => ({ line, why: `the line holds the home path ${home}: an evidence path is written with the home as ~` }));
+}
+
+/** The report lines of the registered text: each malformed line of our four kinds (never counted) and each dated line that holds the home path written out. -> `['amendments: ...']`; nothing is refused by them. */
+export function reportLinesOf({ text, home }) {
+  const malformed = parseStageAmendments(text).malformed.map(m => `amendments: malformed line, not counted (${m.why}): ${m.line}`);
+  return [...malformed, ...homePathProblems(text, home).map(p => `amendments: ${p.why}: ${p.line}`)];
 }
 
 /** The registered file's text: `ok('')` when it is absent (no line), `ok(text)`, or a `fail` when it cannot be read (never taken for an empty file). */

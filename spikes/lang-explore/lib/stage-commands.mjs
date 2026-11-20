@@ -8,6 +8,7 @@ import { ledgerFileOf } from './series.mjs';
 import { stageInit } from './stage-init.mjs';
 import { stageRun } from './stage-run.mjs';
 import { stageStatusLines } from './stage-status.mjs';
+import { amendmentsReport } from './stage-gates.mjs';
 import { openStage } from './stage-step.mjs';
 import { loadWorld } from './world.mjs';
 
@@ -38,5 +39,6 @@ export function cmdStageStatus(values, io) {
   const series = openStage({ seriesDir: path.resolve(values.series), io });
   if (!series.ok) return refused(io, series.reason);
   stageStatusLines({ state: series.value.state, map: series.value.map, ledger: readLedger(ledgerFileOf(series.value.dir)) }).forEach(l => io.say(l));
+  amendmentsReport(io).forEach(l => io.say(l));
   return 0;
 }

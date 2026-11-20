@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { INPUTS } from './paths.mjs';
-import { STAGE_AMENDMENTS_FILE, ownerGoLine, parseStageAmendments, pilotGoProblem, readStageAmendments, readbackLinesOf } from './stage-amendments.mjs';
+import { STAGE_AMENDMENTS_FILE, ownerGoLine, parseStageAmendments, pilotGoProblem, readStageAmendments, readbackLinesOf, reportLinesOf } from './stage-amendments.mjs';
 import { STACK_ORDER, isRehearsal } from './series.mjs';
 import { READBACK_ROW, slotsOf } from './stage-schedule.mjs';
 
@@ -37,6 +37,12 @@ const rehearsalLines = seed => slotsOf({ seed }).filter(s => s.readback).flatMap
 
 /** The gates of a rehearsal series: its own seed, no pilot GO to wait for, and read-back lines that say `holds`. */
 const rehearsalGates = series => ({ seed: series.state.rehearsalSeed, seedRevealed: true, pilotGo: true, readbackLines: rehearsalLines(series.state.rehearsalSeed) });
+
+/** The report lines of the registered amendments (malformed lines of the four kinds, home paths): `stage-run` and `stage-status` say them. A file that cannot be read has none here (`readGates` refuses it). */
+export function amendmentsReport(io) {
+  const read = readStageAmendments(seam(io, 'amendmentsFile', STAGE_AMENDMENTS_FILE));
+  return read.ok ? reportLinesOf({ text: read.value, home: io.home }) : [];
+}
 
 /** The gates of a paid series from the dated lines and the seed file. -> `ok(gates)` | `fail`. */
 function paidGates({ series, io, lines, text }) {

@@ -7,7 +7,7 @@ import { acquireSeriesLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { isRehearsal, pairComplete, seriesInputs } from './series.mjs';
 import { stageDryRun } from './stage-dryrun.mjs';
-import { readGates } from './stage-gates.mjs';
+import { amendmentsReport, readGates } from './stage-gates.mjs';
 import { DATA_KIND } from './stage-schedule.mjs';
 import { EXIT, exitOfRefusal, openStage, runStageUnit } from './stage-step.mjs';
 import { unitOf, whatOf } from './stage-unit.mjs';
@@ -100,5 +100,6 @@ export async function stageRun({ values, io }) {
   const args = stageRunArgs(values);
   const opened = args.ok ? openStage({ seriesDir: args.value.dir, io }) : args;
   if (!opened.ok) return refused(opened.reason);
+  amendmentsReport(io).forEach(line => io.say(line));
   return values['dry-run'] === true ? dryRun({ dir: args.value.dir, io }) : underLock({ args: args.value, io });
 }

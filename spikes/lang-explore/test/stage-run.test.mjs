@@ -8,6 +8,7 @@ import { fail } from '../../minigit-bench/lib/result.mjs';
 import { readLedger } from '../../minigit-bench/lib/ledger.mjs';
 import { REPO } from '../lib/paths.mjs';
 import { ledgerFileOf, runMapFileOf, seriesInputs } from '../lib/series.mjs';
+import { cmdStageStatus } from '../lib/stage-commands.mjs';
 import { stageRun } from '../lib/stage-run.mjs';
 import { GO_ALL, GO_PILOT, PILOT_GO_LINE, SEED, SLOTS, fakeLoop, mapOf, readbackHolds, runRig, sha256 } from './stage-run-fixture.mjs';
 
@@ -92,6 +93,33 @@ test('A_run_the_context_refuses_after_the_prerequisites_adds_no_go_event_either'
   assert.equal(refused.exit, 4, refused.message);
   assert.match(refused.message, /policy file is refused/);
   assert.equal(ledgerBytes(rig.dir), before, 'the context of the loop refused: no go event');
+});
+
+test('stage_run_and_stage_status_report_every_malformed_Stage_1_line_and_every_home_path_and_neither_is_a_refusal', async () => {
+  const rig = await runRig();
+  const bad = [
+    '2026-11-20 | owner-go | rounds:1-9 | the owner: too many rounds',
+    '2026-11-22 | caps | wallMs:soon | stallMs:3000000 | the wall, G-18',
+    '2026-11-22 | pilot | GO | verdicts:nothex | the team lead',
+    `2026-11-24 | G-1 | holds | zzz999 | ${rig.io.home}/rsd/e.md | the judge`,
+  ];
+  writeFileSync(rig.files.amendmentsFile, `${[GO_PILOT, GO_ALL, PILOT_GO_LINE, ...bad].join('\n')}\n`);
+  const said = [];
+  rig.io.say = line => said.push(line);
+  const run = await next(rig);
+  assert.equal(run.exit, 0, 'a report line is no refusal');
+  const report = said.filter(l => l.startsWith('amendments: '));
+  assert.equal(report.length, 4, report.join('\n'));
+  for (const line of bad.slice(0, 3)) assert.ok(report.some(r => /malformed line, not counted/.test(r) && r.endsWith(line)), `the malformed line is reported: ${line}`);
+  assert.ok(report.some(r => /holds the home path/.test(r) && r.endsWith(bad[3])), 'the line with the home path written out is reported');
+  const shown = [];
+  assert.equal(cmdStageStatus({ series: rig.dir }, { ...rig.io, say: l => shown.push(l) }), 0);
+  assert.deepEqual(shown.filter(l => l.startsWith('amendments: ')), report, 'stage-status prints the same report');
+  const clean = await runRig();
+  const quiet = [];
+  clean.io.say = l => quiet.push(l);
+  await next(clean);
+  assert.deepEqual(quiet.filter(l => l.startsWith('amendments: ')), [], 'the control: a clean file reports nothing');
 });
 
 test('An_owner_go_for_rounds_1_to_2_does_not_cover_round_3_and_one_for_the_pilot_covers_no_round_at_stage_run', async () => {
