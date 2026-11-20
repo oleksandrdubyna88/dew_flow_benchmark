@@ -24,7 +24,9 @@ import { quickInitExtra } from './init-quick.mjs';
 import { replay } from './replay.mjs';
 import { repartitionSeries } from './repartition.mjs';
 import { rescore } from './rescore.mjs';
-import { createSeries, latestSeries, loadSeries, seriesRootProblem, pairComplete, seriesInputs, seriesPrompts, stackState } from './series.mjs';
+import { createSeries, isStageState, latestSeries, loadSeries, seriesRootProblem, pairComplete, seriesInputs, seriesPrompts, stackState } from './series.mjs';
+import { paidStageSeriesDirs, unreadableSeriesDirs } from './stage-series.mjs';
+import { openReasonOf } from './stage-step.mjs';
 import { loadWorld } from './world.mjs';
 import { machineFor, pilotQuiet } from './machine.mjs';
 
@@ -78,8 +80,23 @@ async function createFor({ explore, task, calibration, io }) {
   return createSeries({ home: io.home, explore: isQuick(task) ? quickExplore(explore, io.home) : explore, calibration, task: task.id, inputsExtra: extra });
 }
 
+/**
+ * The sentence refusing `init` while a paid Stage 1 series is OPEN (not a rehearsal's, not stopped, not finished: `openReasonOf`): the six tasks of the freeze are run in that one series (`stage-init`, `stage-run`), never in a one-task series
+ * beside it. A rehearsal, a stopped series and a finished one do not hold `init` back; a series that cannot be read does (fail closed, the sentence says why).
+ */
+const stageOpenProblem = io => {
+  const open = paidStageSeriesDirs(io.home).map(dir => ({ dir, why: openReasonOf({ dir, io }) })).find(s => s.why !== null);
+  return open === undefined ? null : `a Stage 1 series exists and is open (${open.dir}; ${open.why}): the tasks of Stage 1 run in that one series, made by \`stage-init\` and run by \`stage-run\`; \`init\` makes a one-task series only while no paid Stage 1 series is open (a rehearsal, a stopped or a finished series does not count)`;
+};
+
+/** The sentence refusing `init` while a series directory under the explore root has a state that cannot be read (fail closed: an open paid Stage 1 series may hide behind it), or null. */
+const unreadableProblem = io => {
+  const [broken] = unreadableSeriesDirs(io.home);
+  return broken === undefined ? null : `the series directory ${broken.dir} has a state that cannot be read (${broken.reason}), so \`init\` cannot tell whether a paid Stage 1 series is open there: repair or move that directory first`;
+};
+
 /** `init --task NN`: create a series of that task (the mask draw is made and recorded here). Needs `prepare` and `calibrate --task NN` done. */
-async function initCommand(values, io) {
+async function makeSeriesCommand(values, io) {
   const need = initNeeds(values, io);
   if (!need.ok) return refused(io, need.reason);
   const made = await createFor({ ...need.value, io });
@@ -90,6 +107,8 @@ async function initCommand(values, io) {
   io.say(`task ${task.id} (${task.title}): run its pairs with \`run --task ${task.id} --series ${made.value.dir} --pair <k>\``);
   return EXIT.done;
 }
+
+const initCommand = async (values, io) => { const stage = unreadableProblem(io) ?? stageOpenProblem(io); return stage ? refused(io, stage) : makeSeriesCommand(values, io); };
 
 export const cmdInit = heldoutAware(initCommand);
 
@@ -293,6 +312,9 @@ export function cmdReadback(values, io) {
   return allPass(read) ? EXIT.done : EXIT.failed;
 }
 
+/** Is the directory a Stage 1 series? */
+const isStageDir = dir => { const series = loadSeries(path.resolve(dir)); return series.ok && isStageState(series.value.state); };
+
 const PRUNED = Object.freeze(['box/nuget', 'box/npm', 'box/home/.dotnet', 'score']);
 
 /** Remove one session's reproducible directories; -> the ones removed. */
@@ -303,8 +325,13 @@ function pruneSession(root, rid) {
 const sessionIds = root => (existsSync(root) ? readdirSync(root) : []);
 const prunedLine = removed => `pruned ${removed.length} director${removed.length === 1 ? 'y' : 'ies'}: ${removed.join(', ') || 'nothing to remove'}`;
 
+/** The sentence refusing `prune` of a Stage 1 series: nothing of Stage 1 is pruned (the parent's Growth), and `prune` would remove `score/`. */
+const PRUNE_STAGE = 'prune refuses a Stage 1 series: nothing of Stage 1 is pruned (it would remove score/ with its build record, attempts and events); the recovery path is `stage-archive`, `stage-free` and `stage-restore` (PR 4)';
+
 /** `prune --task NN`: remove the cache copies and scoring copies of every session of that task's series (reproducible); the records, streams, transcripts, ledger, calibration and the held-out folder stay. */
-export function cmdPrune(values, io) {
+export const cmdPrune = (values, io) => (values.series && isStageDir(values.series) ? refused(io, PRUNE_STAGE) : pruneCommand(values, io));
+
+function pruneCommand(values, io) {
   const given = taskFromValues(values, io.exploreFn);
   if (!given.ok) return refused(io, given.reason);
   const series = openSeriesOf(values, io, given.value.task);

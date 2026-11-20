@@ -52,7 +52,7 @@ function evidenceProblem({ seriesDir, scored }) {
 
 /** What a finish needs: the limits, the world, the token (the evidence scan looks for it), the frozen prompts, and the hash pins. -> `ok({ calibration, world, token, prompts })` | `fail`. */
 async function needs({ io, series, task, pinsFn }) {
-  const got = await allOk([() => calibrationFor({ home: io.home, seriesDir: series.dir, task }), () => io.worldFn({ home: io.home, work: path.join(series.dir, 'private'), task }), () => io.tokenFn(io.home), () => seriesPrompts(series.dir)]);
+  const got = await allOk([() => calibrationFor({ home: io.home, seriesDir: series.dir, task }), () => io.worldFn({ home: io.home, work: path.join(series.dir, 'private'), task }), () => io.tokenFn(io.home), () => seriesPrompts(series.dir, task.id)]);
   if (!got.ok) return got;
   const [calibration, world, token, prompts] = got.value;
   const pins = pinsFn({ explore: world.explore, task, home: io.home, snapshots: world.snapshots });

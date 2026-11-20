@@ -43,7 +43,7 @@ async function heldoutOf({ task, home, heldout }) {
 }
 
 /** The bytes the series is given, recorded: the `PACKAGES.md` of each stack and the two generated files. -> `ok({ packagesMdSha256, generatedSha256 })` | `fail`. */
-async function bytesOf({ explore, task, home, sourcesFn }) {
+export async function bytesOf({ explore, task, home, sourcesFn }) {
   const packages = packagesMdHashes({ kind: task.kind });
   if (!packages.ok) return fail(packages.reason);
   const generated = await generatedOf({ explore, task, home, sourcesFn });

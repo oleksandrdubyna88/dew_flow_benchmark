@@ -1,7 +1,8 @@
 // `explore.mjs run --pair k [--rerun <stack>]`: ONE pair, the operator reads it before paying for the next (plan D-X1). The pair's sessions are planned in the run-map (kind `pilot`) by `lib/series.mjs`,
 // then v1's `runLoop` does what it does for the bare runner (the gates, the same-tick start on the masks, the barrier, the scoring in v1's order, the classes, the charge), with the pilot's workspace fill,
 // plan, machine and judge. Afterwards each session's record gains its `explore` section and the pair's record is written.
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import * as nodeFs from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { reconcile, runLoop } from '../../minigit-bench/lib/bare-series.mjs';
 import { loadSessionDir } from '../../minigit-bench/lib/smoke-load.mjs';
@@ -16,6 +17,7 @@ import { finalizeSessionRecord, missingPaths, pairRecordOf } from './records.mjs
 import { frozenFill, realMachine, runContext, runDeps, scoreSessionDep } from './run-ctx.mjs';
 import { allOk } from './chain.mjs';
 import { calibrationFor, loadCalibration } from './limits.mjs';
+import { replaceJson } from './package-write.mjs';
 import { pinsOk } from './pins.mjs';
 import { STACK_ORDER, canonicalNameProblem, isRehearsal, ledgerFileOf, loadSeries, planPair, runMapFileOf, seriesInputs, seriesPrompts, seriesRootProblem } from './series.mjs';
 import { appendLedger } from '../../minigit-bench/lib/ledger.mjs';
@@ -42,27 +44,35 @@ const auditOf = dir => { const l = loadSessionDir(dir); return l.ok ? l.value.au
 
 const recordFile = (seriesDir, rid) => path.join(sessionDirOf(seriesDir, rid), 'record.json');
 
-/** One session's record gains its `explore` section; -> the problems found (an absent record, a missing metric). */
-function finalizeOne(seriesDir, e) {
+/** One session's record gains its `explore` section (and, in Stage 1, its arm, model, task, round and kind: `stage.of(entry)`); -> the problems found (an absent record, a missing metric). */
+function finalizeOne(seriesDir, e, stage) {
   const dir = sessionDirOf(seriesDir, e.rid);
   if (!existsSync(recordFile(seriesDir, e.rid))) return [`${e.rid}: no record.json (the session ended as ${e.status})`];
-  const record = finalizeSessionRecord({ sessionDir: dir, score: scoreOf(dir), audit: auditOf(dir) });
-  return missingPaths(record, e.status === 'scored').map(p => `${e.rid}: the record lacks ${p}`);
+  const record = finalizeSessionRecord({ sessionDir: dir, score: scoreOf(dir), audit: auditOf(dir), stage: stage ? stage.of(e) : null });
+  return missingPaths(record, e.status === 'scored', stage !== null).map(p => `${e.rid}: the record lacks ${p}`);
 }
 
 /** What the pair's record already holds of the owner's `--allow-over` texts (a resume rewrites the record and must not erase them). */
 const earlierOverrides = file => { try { return readJson(file).pauseOverrides ?? []; } catch { return []; } };
 
-/**
- * After the loop: each session of `pair` that has a record gains its `explore` section; the records are checked for completeness; the pair record is written, with the owner's `--allow-over` text when the pause
- * point was passed by it (`pause`, see lib/pause.mjs; earlier ones are kept). -> `{ problems, pairFile }`.
- */
-export function finalizePair({ seriesDir, map, pair, kinds = ['pilot'], pause = null }) {
-  const entries = Object.values(map.sessions).filter(s => s.pair === pair && kinds.includes(s.kind));
-  const problems = entries.flatMap(e => finalizeOne(seriesDir, e));
+/** The pair record: v1's `pairRecord` over the pair's sessions, the owner's `--allow-over` texts and, in Stage 1, what the slot adds (`stage.pairExtra`: its task, round, masks and the owner's go line). It is rewritten on purpose (a resume), so it replaces the old file whole (`replaceJson`: a temporary file, then a rename): a kill in the middle leaves the old record, never a cut one. */
+function pairRecordFile({ seriesDir, pair, entries, pause, stage, fs }) {
   const recordOf = rid => (existsSync(recordFile(seriesDir, rid)) ? readJson(recordFile(seriesDir, rid)) : null);
   const pairFile = path.join(seriesDir, 'pairs', `p${pair}.json`);
-  writeFileSync(pairFile, `${JSON.stringify(withOverrides(pairRecordOf({ pair, entries, recordOf }), [...earlierOverrides(pairFile), ...(pause ? [pause] : [])]), null, 2)}\n`);
+  const base = withOverrides(pairRecordOf({ pair, entries, recordOf }), [...earlierOverrides(pairFile), ...(pause ? [pause] : [])]);
+  replaceJson({ file: pairFile, value: { ...base, ...(stage?.pairExtra ?? {}) }, fs });
+  return pairFile;
+}
+
+/**
+ * After the loop: each session of `pair` that has a record gains its `explore` section; the records are checked for completeness; the pair record is written, with the owner's `--allow-over` text when the pause
+ * point was passed by it (`pause`, see lib/pause.mjs; earlier ones are kept). `only` narrows the sessions to a unit's own (the pilot's units share the pair number 0); `stage` is Stage 1's `{ of(entry), pairExtra }`, and `pairExtra: null`
+ * writes no pair record (a pilot unit has none). `fs` is the file system the pair record is written through (a seam for tests). -> `{ problems, pairFile }`.
+ */
+export function finalizePair({ seriesDir, map, pair, kinds = ['pilot'], pause = null, only = () => true, stage = null, fs = nodeFs }) {
+  const entries = Object.values(map.sessions).filter(s => s.pair === pair && kinds.includes(s.kind) && only(s));
+  const problems = entries.flatMap(e => finalizeOne(seriesDir, e, stage));
+  const pairFile = stage?.pairExtra === null ? null : pairRecordFile({ seriesDir, pair, entries, pause, stage, fs });
   return { problems, pairFile };
 }
 
@@ -118,7 +128,7 @@ const stoppedRefusal = map => (map.stopped ? { exit: 2, message: `the series is 
 
 /** A quick task's held-out set, checked before a paid pair: it is the set the series was made over, and the real runner reads every pair of it (a pair the runner refuses is a defect to fix, not a verdict). -> a sentence or null. */
 export async function quickHeldoutProblem({ seriesDir, heldout, task }) {
-  const inputs = seriesInputs(seriesDir);
+  const inputs = seriesInputs(seriesDir, task.id);
   const moved = inputs.ok ? heldoutMovedProblem({ inputs: inputs.value, heldout }) : inputs.reason;
   if (moved) return moved;
   const parsed = await parseProblem({ casesDir: heldout.casesDir, kind: task.kind, runner: path.join(BENCH_RUNNER, 'run_samples.py') });
@@ -127,7 +137,7 @@ export async function quickHeldoutProblem({ seriesDir, heldout, task }) {
 
 /** What a pair needs besides its plan: the task's calibration, its held-out side, the world, the token and the series' frozen prompts. -> `ok({ calibration, heldout, world, token, prompts })` | the first `fail`. */
 export async function prerequisites({ home, series, task, worldFn, tokenFn, heldout: context }) {
-  const got = await allOk([() => calibrationFor({ home, seriesDir: series.dir, task }), () => readerHeldout({ home, task, heldout: context }), () => worldFn({ home, work: path.join(series.dir, 'private'), task }), () => tokenFn(home), () => seriesPrompts(series.dir)]);
+  const got = await allOk([() => calibrationFor({ home, seriesDir: series.dir, task }), () => readerHeldout({ home, task, heldout: context }), () => worldFn({ home, work: path.join(series.dir, 'private'), task }), () => tokenFn(home), () => seriesPrompts(series.dir, task.id)]);
   if (!got.ok) return got;
   const [calibration, heldout, world, token, prompts] = got.value;
   const pins = pinsOk({ explore: world.explore, task, home, snapshots: world.snapshots });
@@ -136,17 +146,26 @@ export async function prerequisites({ home, series, task, worldFn, tokenFn, held
   return quick ? fail(quick) : ok({ calibration, heldout, world, token, prompts });
 }
 
+/** The `harness-moved` event line of a one-task `run`'s refusal (an event, never a charge). */
+const recordMoved = ({ series, pair, problem, io }) => appendLedger(ledgerFileOf(series.dir), { event: 'harness-moved', pair, reason: problem, t: (io.now ?? systemClock)().toISOString() });
+
 /**
  * A series is run on one harness (`harness-moved.mjs`): a quick pair is refused BEFORE it is planned or launched when the harness of today is not the one the series was made with (or the series recorded none), so no session starts and
- * nothing is spent. Exit 3, resumable; the reason is a `harness-moved` event line in the ledger (an event, never a charge). The scoring step keeps its own check as the second line of defence. -> a result, or null.
+ * nothing is spent. Exit 3, resumable; the reason is a `harness-moved` event line in the ledger (an event, never a charge). A Stage 1 unit (`unit` given) is refused with the sentence only: every refusal of Stage 1 leaves the
+ * run-map and the ledger as they were (coai code round 2, PR 3, finding 6). The scoring step keeps its own check as the second line of defence. -> a result, or null.
  */
-function harnessRefusal({ series, pair, world, io }) {
-  if (world.quick !== true) return null;
-  const inputs = seriesInputs(series.dir);
-  const problem = inputs.ok ? harnessMovedForStacks({ inputs: inputs.value, world, stacks: STACK_ORDER }) : `harness-moved: ${inputs.reason}`;
+function harnessRefusal({ series, pair, world, io, task, unit }) {
+  const problem = harnessProblem({ series, world, task });
   if (problem === null) return null;
-  appendLedger(ledgerFileOf(series.dir), { event: 'harness-moved', pair, reason: problem, t: (io.now ?? systemClock)().toISOString() });
+  if (!unit) recordMoved({ series, pair, problem, io });
   return { exit: 3, message: problem };
+}
+
+/** Why the harness of today is not the one the series was made with (a quick world only), or null. */
+function harnessProblem({ series, world, task }) {
+  if (world.quick !== true) return null;
+  const inputs = seriesInputs(series.dir, task.id);
+  return inputs.ok ? harnessMovedForStacks({ inputs: inputs.value, world, stacks: STACK_ORDER }) : `harness-moved: ${inputs.reason}`;
 }
 
 const quickProblem = ({ series, heldout, task }) => (isQuick(task) ? quickHeldoutProblem({ seriesDir: series.dir, heldout, task }) : null);
@@ -165,8 +184,8 @@ function planOnPins({ series, pair, rerun, task }) {
 }
 
 /** Why the series cannot start a pair on today's pins of the task (an amendment since `init`), or null. */
-function pinsMoved({ series, task }) {
-  const inputs = seriesInputs(series.dir);
+export function pinsMoved({ series, task }) {
+  const inputs = seriesInputs(series.dir, task.id);
   return inputs.ok ? frozenPinsProblem({ inputs: inputs.value, task, seriesId: series.state.seriesId }) : inputs.reason;
 }
 
@@ -183,11 +202,14 @@ async function finishedIfInterrupted({ series, pair, rerun, io, task }) {
 
 const runLocked = async a => (await finishedIfInterrupted(a)) ?? runPlanned(a);
 
+/** The prerequisites of the task for a series, through the seam a test replaces (`io.runSeams.prerequisitesFn`). */
+export const prerequisitesOf = ({ series, io, task }) => (io.runSeams?.prerequisitesFn ?? prerequisites)({ home: io.home, series, task, worldFn: io.worldFn, tokenFn: io.tokenFn, heldout: io.heldoutArgs });
+
 /** What the pair needs, or the answer that ends it here: a missing prerequisite (exit 4) or a harness that moved (exit 3, see `harnessRefusal`). -> `{ need }` | `{ answer }`. */
-async function readyOrRefused({ series, pair, io, task }) {
-  const need = await (io.runSeams?.prerequisitesFn ?? prerequisites)({ home: io.home, series, task, worldFn: io.worldFn, tokenFn: io.tokenFn, heldout: io.heldoutArgs });
+async function readyOrRefused({ series, pair, io, task, unit }) {
+  const need = await prerequisitesOf({ series, io, task });
   if (!need.ok) return { answer: { exit: 4, message: need.reason } };
-  const moved = harnessRefusal({ series, pair, world: need.value.world, io });
+  const moved = harnessRefusal({ series, pair, world: need.value.world, io, task, unit });
   return moved ? { answer: moved } : { need: need.value };
 }
 
@@ -197,9 +219,18 @@ async function runPlanned({ series, pair, rerun, io, explore, task }) {
   const pause = pauseOf({ io, explore, task });
   if (pause.stop) return { exit: 2, message: pause.message };
   await io.afterPauseCheck?.(); // a seam for tests: a run that has passed the check and holds the plan lock
-  const ready = await readyOrRefused({ series, pair, io, task });
+  return runUnit({ series, pair, planned: planned.value, io, task, pause: pause.record });
+}
+
+/**
+ * The part of a run after the plan, which `run` (a quick pair, kind `pilot`) and `stage-run` (a slot, the A/A or a pilot pair of Stage 1) both call: the prerequisites of the task (its held-out side, its prompts, its pins), the refusal of a moved
+ * harness, then the loop over what was planned and the records. `task` is the task of the unit and the series' inputs are read through it (a Stage 1 series' slice of that task). `unit`, given by `stage-run` only, is `{ kind, ctx, guard, finalize }`.
+ * -> `{ exit, message, pairFile?, problems? }`.
+ */
+export async function runUnit({ series, pair, planned, io, task, pause = null, unit = null }) {
+  const ready = await readyOrRefused({ series, pair, io, task, unit });
   if (ready.answer) return ready.answer;
-  return (io.runSeams?.loopFn ?? loopAndFinalize)({ series, pair, planned: planned.value, ...ready.need, io, abort: io.abort, pause: pause.record });
+  return (io.runSeams?.loopFn ?? loopAndFinalize)({ series, pair, planned, ...ready.need, io, abort: io.abort, pause, unit });
 }
 
 /** A resume first lets v1 settle what a crash left `launching` (charge from the broker ledger, class `void: harness`, or plan again a session that never paid); a fresh pair has nothing to settle. */
@@ -211,18 +242,26 @@ async function settleOpen({ ctx, deps, map, resumed, say }) {
  * The loop over the planned pair, then the records. `io.seams` (`{ claudeBinary, planOver, machine, preflightHome, stub }`) is for tests only: a stub CLI behind a loopback stub upstream, a scripted machine. A real run
  * passes none, so it launches the pinned CLI copy against the real API behind the real machine.
  */
-async function loopAndFinalize({ series, pair, planned, calibration, heldout, world, token, prompts, io, abort, pause }) {
+async function loopAndFinalize({ series, pair, planned, calibration, heldout, world, token, prompts, io, abort, pause, unit }) {
   const seams = io.seams ?? {};
-  const ctx = await runContext({
-    world, calibration, series: series.state, seriesDir: series.dir, kind: 'pilot', pair, token, claudeBinary: seams.claudeBinary ?? world.paths.claudeBinary, fill: seams.fill ?? frozenFill(world), planOver: seams.planOver ?? {}, abort, home: io.home, prompts,
-  });
+  const ctx = await runContext({ ...contextArgs({ series, pair, calibration, world, token, prompts, io, abort, seams, unit }) });
   if (!ctx.ok) return { exit: 4, message: ctx.reason };
+  unit?.onReady?.(); // Stage 1: the last refusal check is behind us, the owner-go event is written before the plan reaches the run-map
   const machine = seams.machine ?? realMachine({ ctx: ctx.value, acceptNoisy: io.acceptNoisy });
-  const deps = runDeps({ ctx: ctx.value, world, scoreDep: scoreSessionDep({ world, calibration, heldout, home: io.home, say: io.say, signal: io.signal, sameHarness: true }), machine, preflightHome: seams.preflightHome ?? io.home, stub: seams.stub === true });
+  const deps = runDeps({ ctx: ctx.value, world, scoreDep: scoreSessionDep({ world, calibration, heldout, home: io.home, say: io.say, signal: io.signal, sameHarness: true, ...(seams.scoreOver ?? {}) }), machine, preflightHome: seams.preflightHome ?? io.home, stub: seams.stub === true, ...unitDeps(unit) });
   commitPlan({ series, pair, planned, say: io.say });
   const settled = await settleOpen({ ctx: ctx.value, deps, map: planned.map, resumed: planned.resumed, say: io.say });
   if (!settled.ok) return { exit: settled.exit ?? 5, message: settled.reason };
   const result = await runLoop({ ctx: ctx.value, deps, map: settled.value, signal: io.signal, say: io.say });
-  const fin = finalizePair({ seriesDir: series.dir, map: result.map, pair, pause });
+  const fin = (unit?.finalize ?? finalizePair)({ seriesDir: series.dir, map: result.map, pair, pause, world });
   return { exit: result.exit, message: result.message, pairFile: fin.pairFile, problems: fin.problems };
 }
+
+/** The arguments of the run context: the one-task ones (kind `pilot`), or the unit's (its kind, the policy files the series pinned and the Stage 1 parts of the context). */
+const contextArgs = ({ series, pair, calibration, world, token, prompts, io, abort, seams, unit }) => ({
+  world, calibration, series: series.state, seriesDir: series.dir, kind: unit?.kind ?? 'pilot', pair, token, claudeBinary: seams.claudeBinary ?? world.paths.claudeBinary, fill: seams.fill ?? frozenFill(world), planOver: seams.planOver ?? {}, abort, home: io.home, prompts,
+  ...(unit ? { policyFiles: unit.policyFiles, stage: unit.ctx } : {}),
+});
+
+/** What a unit adds to the loop's edges: the Stage 1 guard (a Stage 1 series never runs with the guard that always passes). */
+const unitDeps = unit => (unit?.guard ? { guard: unit.guard } : {});

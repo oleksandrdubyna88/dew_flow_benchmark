@@ -8,7 +8,7 @@ import { isOwnCharge } from '../../minigit-bench/lib/ledger.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { systemClock } from './clock.mjs';
 import { listOf } from './idlist.mjs';
-import { exploreChildren, ledgerFileOf } from './series.mjs';
+import { exploreChildren, isStageState, ledgerFileOf } from './series.mjs';
 import { taskOfSeries } from './tasks.mjs';
 
 const usdText = n => `$${n.toFixed(4)}`;
@@ -20,8 +20,11 @@ const isObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
  * or `{ kind: 'bad', why }` (it holds a state file or a ledger but its state cannot be read or classified: the spend cannot be counted).
  */
 function classify(child, explore, plan) {
-  return isRehearsal(child) ? OTHER : classifyTask(taskNamed(child, explore), child, plan);
+  return isRehearsal(child) || isStageSeries(child) ? OTHER : classifyTask(taskNamed(child, explore), child, plan);
 }
+
+/** A Stage 1 series (its state says `stage`) is no series of the olympiad or quick plan: it is not summed, and it does not make this check fail closed (D7 and D53: Stage 1 has no pause point and no total). */
+const isStageSeries = child => child.state?.ok === true && isStageState(child.state.value);
 
 const OTHER = Object.freeze({ kind: 'other' });
 /** A rehearsal never spends (the owner's quick run: another worker's rehearsal of a new task must not stop a paid pair). */

@@ -3,17 +3,21 @@
 // comparison with `fixtures/explore-seams-baseline.json`, written from the unchanged code by `explore-seams-observe.mjs`), and its GIVEN value does the new thing.
 import './fake-home.mjs'; // first: the phase reads os.homedir()
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { launchPhase } from '../lib/bare-phase.mjs';
+import { firstStack, ridOf } from '../lib/bare-plan.mjs';
+import { EXIT, runLoop } from '../lib/bare-series.mjs';
+import { planSession } from '../lib/run-map.mjs';
 import { cellOf, sessionMeasure } from '../lib/bare-record.mjs';
 import { scoreBoxArgv, scoreEnv } from '../lib/bwrap.mjs';
 import { runBounded } from '../lib/run.mjs';
 import { launchSession } from '../lib/session-launch.mjs';
 import { AGENT_ENV_KEYS, agentEnv, dummyToken, layoutPaths, sessionLayout } from '../lib/sandbox.mjs';
 import { ok } from '../lib/result.mjs';
-import { context, items } from './bare-ctx.mjs';
+import { SEED, context, items } from './bare-ctx.mjs';
+import { harness } from './bare-loop-harness.mjs';
 import { sandboxGate, spikeDir, tmpDir } from './helpers.mjs';
 import { RESULT, fakeDeps, goodInit, planFor, say } from './launch-fakes.mjs';
 import { observeAll, observeCells } from './explore-seams-observe.mjs';
@@ -173,4 +177,39 @@ test('W4_sessionMeasure_is_exported_and_is_what_cellOf_sums', () => {
   const twice = cellOf(record, record);
   assert.equal(twice.wallMs.value, 1800, 'cellOf still sums two sessions through the same function');
   assert.equal(cells.completed.costUsd.known, true);
+});
+
+// ---- the step seam of the loop (F3.S1, PR 3) ---------------------------------------------------------------------------------------------
+
+/** A caller's step for one unit of sessions the caller planned itself: launch what is `planned` (in the order given), then score what ended with data, then done. */
+const unitStep = ({ rids, calls }) => map => {
+  calls.push('asked');
+  const mine = rids.map(rid => map.sessions[rid]).filter(Boolean);
+  const planned = mine.filter(s => s.status === 'planned');
+  const unscored = mine.filter(s => s.status === 'ran' && s.data === true);
+  const refs = list => list.map(s => ({ stack: s.stack, phase: s.phase, attempt: s.attempt, rid: s.rid }));
+  if (planned.length > 0) return { action: 'launch', phase: 'v1', sessions: refs(planned), label: 'paired' };
+  return unscored.length > 0 ? { action: 'score', sessions: refs(unscored) } : { action: 'done' };
+};
+
+test('The_loop_asks_the_callers_step_when_one_is_given_and_plans_v1s_own_pairs_as_before', async () => {
+  const given = harness();
+  const v1First = firstStack({ seed: SEED, pair: 3, phase: 'v1' });
+  const [lead, second] = v1First === 'csharp' ? ['node', 'csharp'] : ['csharp', 'node'];
+  const mine = [[lead, 'aaaaaa', '0-5'], [second, 'bbbbbb', '8-13']];
+  const planned = mine.reduce((map, [stack, rid, mask]) => planSession(map, { rid, pair: 3, stack, phase: 'v1', attempt: 1, kind: 'data', label: 'paired', mask }).value, given.map);
+  const calls = [];
+  const ctx = { ...given.ctx, pair: 3, stepOf: unitStep({ rids: mine.map(m => m[1]), calls }) };
+  const r = await runLoop({ ctx, deps: given.deps, map: planned });
+  assert.equal(r.exit, EXIT.done, `pair 3 runs with no earlier pair: the caller's barrier already answered (${r.message})`);
+  assert.deepEqual(Object.keys(r.map.sessions).sort(), ['aaaaaa', 'bbbbbb'], 'the sessions the caller planned are the ones launched; none is planned from the seed');
+  assert.deepEqual(given.events.filter(e => e.startsWith('score')), ['score aaaaaa', 'score bbbbbb'], `the scoring order is the step's (v1 would lead with ${v1First})`);
+  assert.ok(calls.length >= 3, 'the step is asked on every pass');
+  assert.equal(existsSync(path.join(ctx.seriesDir, 'pairs', 'p3.json')), false, 'v1 writes no pair record of its own for a caller that has its own');
+  assert.ok(Object.values(r.map.sessions).every(s => s.status === 'scored'));
+  const own = harness();
+  const control = await runLoop({ ctx: own.ctx, deps: own.deps, map: own.map });
+  assert.equal(control.exit, EXIT.done, control.message);
+  assert.ok(Object.keys(control.map.sessions).includes(ridOf({ seed: SEED, pair: 1, stack: 'csharp', phase: 'v1', attempt: 1 })), 'without a step the sessions are v1\'s own, by its seed');
+  assert.equal(existsSync(path.join(own.ctx.seriesDir, 'pairs', 'p1.json')), true, 'and v1 writes its pair record');
 });

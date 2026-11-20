@@ -19,8 +19,8 @@ export function resolveTask(explore, id) {
   return ok(Object.freeze({ id, ...explore.tasks[id] }));
 }
 
-/** The task a series was made for. */
-export const taskOfSeries = state => state?.task ?? LEGACY_TASK;
+/** The task a series was made for; a Stage 1 series (`state.stage`) holds six and is no one task's: `null`. */
+export const taskOfSeries = state => (state?.stage === undefined ? (state?.task ?? LEGACY_TASK) : null);
 
 /** Where a task's private material is under `home`: the held-out folder, the calibration file and the private test notes. */
 export const taskPaths = (task, home) => ({
@@ -28,7 +28,10 @@ export const taskPaths = (task, home) => ({
 });
 
 /** The sentence refusing a command whose task is not its series' task, or null. */
-export const seriesTaskProblem = ({ state, task }) => (taskOfSeries(state) === task.id ? null : `series ${state.seriesId} is a series of task ${taskOfSeries(state)}, not of task ${task.id}: a command works on one task's series`);
+export function seriesTaskProblem({ state, task }) {
+  if (state?.stage !== undefined) return `series ${state.seriesId} is a Stage ${state.stage} series over several tasks: the verbs of Stage 1 are stage-init, stage-run and stage-status; a command with --task works on a one-task series`;
+  return taskOfSeries(state) === task.id ? null : `series ${state.seriesId} is a series of task ${taskOfSeries(state)}, not of task ${task.id}: a command works on one task's series`;
+}
 
 /** The pins and the task a command was given: `values.task` (the parsed `--task`) resolved against `inputs/explore.json`. -> `ok({ explore, task })` | `fail`. */
 export function taskFromValues(values, exploreFn = loadExplore) {
