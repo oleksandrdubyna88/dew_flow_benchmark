@@ -94,7 +94,13 @@ function listOne({ root, rel, skip }) {
  * Every entry under `root`, by `lstat`, sorted by path with `/` separators: `[{ rel, kind: 'file' | 'link' | 'other', size, mode, target }]` (a folder is walked and not listed; a link is listed and never followed). Nothing is read
  * into memory. `skip(rel)` leaves an entry out, a folder with everything under it.
  */
-export const walkEntries = (root, { skip = () => false } = {}) => [...entriesUnder({ root, rel: '', skip })].sort((a, b) => (a.rel < b.rel ? -1 : Number(a.rel > b.rel)));
+export const walkEntries = (root, { skip = () => false } = {}) => [...streamEntries(root, { skip })].sort(byRel);
+
+/** The order of `walkEntries`: by path, code point order. */
+export const byRel = (a, b) => (a.rel < b.rel ? -1 : Number(a.rel > b.rel));
+
+/** The entries of `walkEntries` as the walk finds them (not sorted), one folder at a time: a generator, so a caller can count them while the walk goes on. */
+export const streamEntries = (root, { skip = () => false } = {}) => entriesUnder({ root, rel: '', skip });
 
 /** The entries under `root/rel` one folder at a time (a folder's own entries, then each sub folder): a generator, so no tree is held but the entries already yielded; the recursion is as deep as the tree. */
 function* entriesUnder({ root, rel, skip }) {

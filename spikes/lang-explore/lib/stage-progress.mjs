@@ -3,6 +3,20 @@
 export const PROGRESS_EVERY = 500;
 
 /**
+ * Every item of `items` (an iterable, walked lazily), yielded as it comes, with `<phase>: started` said before the first is asked for and `<phase>: <n> entries walked` after every `report.every`th. The one counter is a local number.
+ */
+export function* countedSaying({ items, phase, report = {} }) {
+  const { say = () => {}, every = PROGRESS_EVERY } = report;
+  say(`${phase}: started`);
+  let seen = 0;
+  for (const item of items) {
+    seen += 1;
+    if (seen % every === 0) say(`${phase}: ${seen} entries walked`);
+    yield item;
+  }
+}
+
+/**
  * `items.map(fn)` that says `<phase>: <done> of <total> file(s)` through `report.say` before the first item, after every `report.every`th item and after the last. `report` is `{ say, every }`; none is a silent run.
  */
 export function mapSaying({ items, phase, report = {}, fn }) {

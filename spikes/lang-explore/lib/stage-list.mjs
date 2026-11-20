@@ -5,8 +5,8 @@ import { createHash } from 'node:crypto';
 import { lstatSync, readlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
-import { mapSaying } from './stage-progress.mjs';
-import { sha256OfFile, walkEntries } from './workspaces-tree.mjs';
+import { countedSaying, mapSaying } from './stage-progress.mjs';
+import { byRel, sha256OfFile, streamEntries } from './workspaces-tree.mjs';
 
 export const LIST_SKIP = Object.freeze(['series.lock', 'archive.json']);
 const LINE = /^(link:[0-9a-f]{64}|[0-9a-f]{64}) {2}(.+)$/;
@@ -22,9 +22,9 @@ export function hashAt(file) {
   return st.isFile() ? sha256OfFile(file) : null;
 }
 
-/** `ok([{ rel, kind, size, mode, target, hash }])` of every file and link of the series folder (`report` = `{ say, every }` says the hashing's progress), or a `fail` naming an entry that is neither (an archive records neither a socket nor a device). */
+/** `ok([{ rel, kind, size, mode, target, hash }])` of every file and link of the series folder (`report` = `{ say, every }` says `listing: started` before the walk, a line every N entries while it walks, then the hashing's progress), or a `fail` naming an entry that is neither (an archive records neither a socket nor a device). */
 export function listSeries(series, report) {
-  const entries = walkEntries(series, { skip: rel => LIST_SKIP.includes(rel) });
+  const entries = [...countedSaying({ items: streamEntries(series, { skip: rel => LIST_SKIP.includes(rel) }), phase: 'listing', report })].sort(byRel);
   const odd = entries.find(e => e.kind === 'other');
   if (odd !== undefined) return fail(`${odd.rel} is neither a regular file nor a link: the archive records neither`);
   return ok(mapSaying({ items: entries, phase: 'listing', report, fn: e => ({ ...e, hash: e.kind === 'link' ? hashOfLink(e.target) : sha256OfFile(path.join(series, e.rel)) }) }));

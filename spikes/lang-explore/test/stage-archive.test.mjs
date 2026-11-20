@@ -321,7 +321,7 @@ test('A_free_that_is_not_given_a_reading_with_the_unread_slots_is_refused_with_a
 
 // ---- coai code round 1 (PR 4), C2: a long operation says its progress ----------------------------------------------------------------------------------------------------------------------------------------------------
 
-const phaseLines = (lines, phase) => lines.filter(line => line.startsWith(`${phase}: `));
+const phaseLines = (lines, phase) => lines.filter(line => line.startsWith(`${phase}: `) && line.endsWith('file(s)'));
 const indexOfPhase = (lines, phase) => lines.findIndex(line => line.startsWith(`${phase}: `));
 
 test('Stage_archive_says_its_progress_in_the_listing_the_copying_and_the_verifying_phase_in_that_order_and_stage_restore_says_its_own', t => {
@@ -466,4 +466,17 @@ test('Stage_free_says_its_progress_per_session_while_it_verifies_the_caches_and_
     assert.ok(own.findIndex(line => line.startsWith('verifying')) < own.findIndex(line => line.startsWith('removing')), `${rid}: verify first, then remove`);
   }
   assert.equal(freeSeries({ series, reading: readingOf(series) }).ok, true, 'without a callback the free says nothing and does the same work');
+});
+
+// ---- coai code round 2 (PR 4), R7: the listing says it started and counts the entries while it walks ------------------------------------------------------------------------------------------------------------------
+
+test('The_archive_listing_says_it_started_before_the_walk_and_a_line_every_N_entries_while_it_walks_before_the_hashing_lines', t => {
+  const series = seriesFolder(t, MAP, { cacheBytes: 50 });
+  const total = Object.keys(snapshotOf(series, { skip: SKIP })).length;
+  const lines = [];
+  assert.equal(archiveSeries({ series, to: backupFolder(t), now: NOW, progress: line => lines.push(line), progressEvery: 10 }).ok, true);
+  assert.equal(lines[0], 'listing: started', 'the first line is said before the walk');
+  const walked = lines.map((line, i) => [line, i]).filter(([line]) => /^listing: \d+ entries walked$/.test(line));
+  assert.deepEqual(walked.map(([line]) => line), Array.from({ length: Math.floor(total / 10) }, (_, i) => `listing: ${(i + 1) * 10} entries walked`), 'a line every 10 entries');
+  assert.ok(walked.every(([, i]) => i < lines.indexOf(`listing: 0 of ${total} file(s)`)), 'all of them before the first hashing line');
 });
