@@ -3,6 +3,7 @@
   "conditionFive": "The adjudication's code is written after the data collection ends; its complete rules were registered before the first paid session, and they are the rules of this file.",
   "masks": {
     "order": "v1's rules first, in v1's order, then the added rules below, in this order; the tool adds no mask of its own",
+    "note": "The default HTTP error bodies of Fastify ({\"statusCode\":..,\"error\":..,\"message\":..}) and of ASP.NET (ProblemDetails) are not masked, because they are the response the case judged and masking them would hide case content; a judge may therefore infer the stack from such a body, and the report states that as a known limit of the blinding.",
     "v1": {
       "file": "spikes/minigit-bench/lib/adjudicate-mask.mjs",
       "export": "maskRules",

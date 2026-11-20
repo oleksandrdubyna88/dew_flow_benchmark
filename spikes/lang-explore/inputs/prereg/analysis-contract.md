@@ -435,7 +435,10 @@ rules were registered before the first paid session, and they are the rules belo
   `adjudication-rules.json` names), then the added rules that file lists, in its order: the two frameworks' log shapes,
   the runtimes' own error messages, the runtimes' and frameworks' names, the heap keys, the abort shapes, the compiler
   error codes (TypeScript's of four and five digits, C#'s of four, anywhere in the text) and the file suffixes and stack
-  file names. The tool adds no mask of its own.
+  file names. The tool adds no mask of its own. The default HTTP error bodies of Fastify
+  (`{"statusCode":..,"error":..,"message":..}`) and of ASP.NET (ProblemDetails) are not masked, because they are the
+  response the case judged and masking them would hide case content; a judge may therefore infer the stack from such a
+  body, and the report states that as a known limit of the blinding.
 
 <!-- adjudication-rule: memory-cause -->
 - **A memory cause.** Before the reveal a `memory limit` packet shows its cause as `kernel kill` or `runtime abort`, with the
