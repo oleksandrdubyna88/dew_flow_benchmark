@@ -3,7 +3,7 @@
 // (`quick-freeze-fixture.mjs`) and temporary folders only: no real record, held-out folder, key or series is read here.
 import '../../minigit-bench/test/fake-home.mjs';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { ok } from '../../minigit-bench/lib/result.mjs';
@@ -39,6 +39,18 @@ test('The_guard_refuses_a_series_while_the_frozen_record_lacks_a_field_and_names
   put(path.join(w.repo, RECORD_PATHS.specStates), '{ not json');
   const unreadable = await stageGuard(w.args);
   assert.ok(unreadable.problems.some(p => p.includes(RECORD_PATHS.specStates) && /cannot be read/.test(p)), `a record that cannot be read is named: ${unreadable.problems.join(' | ')}`);
+});
+
+// ---- Opus review (PR 4), O9: a missing hash list is a problem the guard names, not a throw -----------------------------------------------------------------------------------------------------------------------------
+
+test('A_missing_hash_list_is_named_as_one_problem_among_the_others_and_the_guard_does_not_throw', async t => {
+  const w = await world(t);
+  rmSync(path.join(w.repo, 'spikes/lang-bench/inputs/hashes-lang.txt'));
+  mutate(w.repo, 'memoryLimit', json => { delete json.bytes; });
+  const refused = await stageGuard(w.args);
+  assert.equal(refused.ok, false, 'the guard refuses with its problems and does not reject');
+  assert.ok(refused.problems.some(p => /hashes-lang\.txt/.test(p) && /cannot be read/.test(p)), `the missing list is named: ${refused.problems.join(' | ')}`);
+  assert.ok(refused.problems.some(p => /memoryLimit/.test(p)), `and the other problems are still there: ${refused.problems.join(' | ')}`);
 });
 
 test('The_guard_refuses_while_the_memory_value_is_not_registered', async t => {

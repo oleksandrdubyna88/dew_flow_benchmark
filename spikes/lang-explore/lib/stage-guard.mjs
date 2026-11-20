@@ -66,9 +66,19 @@ async function specProblem({ taskRepo, id, states }) {
 
 const pinProblem = ({ pinned, freeze }) => (pinned === freeze.workspaceCommit ? [] : [`PINNED_TASK_SHA (spikes/lang-bench/lib/task-repo.mjs) is ${short(pinned)}, the record's workspace commit W is ${short(freeze.workspaceCommit)}: the bare harness fetches at W`]);
 
+/** The sha256 of the hash list in the repository, or `{ problem }` when it cannot be read (a missing list is a problem the guard names, never a throw). */
+function hashesRead(repo) {
+  try {
+    return { have: sha256(readFileSync(path.join(repo, HASHES_PATH))) };
+  } catch (e) {
+    return { problem: `${HASHES_PATH} cannot be read (${e.code ?? e.message}): the hash list the record pins is not there` };
+  }
+}
+
 const hashesProblem = ({ repo, freeze }) => {
-  const have = sha256(readFileSync(path.join(repo, HASHES_PATH)));
-  return have === freeze.hashesLangSha256 ? [] : [`${HASHES_PATH} has sha256 ${short(have)}, the record's freeze.hashesLangSha256 is ${short(freeze.hashesLangSha256)}`];
+  const read = hashesRead(repo);
+  if (read.problem !== undefined) return [read.problem];
+  return read.have === freeze.hashesLangSha256 ? [] : [`${HASHES_PATH} has sha256 ${short(read.have)}, the record's freeze.hashesLangSha256 is ${short(freeze.hashesLangSha256)}`];
 };
 
 async function headProblem({ taskRepo, freeze }) {
