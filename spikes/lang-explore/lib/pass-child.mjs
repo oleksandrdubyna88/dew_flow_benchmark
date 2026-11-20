@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { affinityProblem, allowedListOf } from './affinity.mjs';
+import { scoringBoxFacts } from './box-facts.mjs';
 import { OWNED_TOKEN, runPass } from './score-quick.mjs';
 
 /** The default pass: the layer over the committed tree and the case folder, from what the driver wrote into the arguments file. */
@@ -17,9 +18,9 @@ export function layerPass({ spec, context }) {
 const atomicWrite = (file, text) => { mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(`${file}.part`, text); renameSync(`${file}.part`, file); };
 
 /** The body of a pass the layer judged (every case) or could not: what the child writes and an in-process pass returns. */
-export function passBody({ ran, observedCpus }) {
+export function passBody({ ran, observedCpus, box = null }) {
   if (!ran.ok) return { kind: 'environment', reason: ran.reason, observedCpus };
-  return { kind: 'completed', record: ran.value.record, runner: ran.value.record.runner, memoryCertified: ran.value.ran.memoryCertified === true, observedCpus };
+  return { kind: 'completed', record: ran.value.record, runner: ran.value.record.runner, memoryCertified: ran.value.ran.memoryCertified === true, observedCpus, ...(box === null ? {} : { box }) };
 }
 
 /** Run the child with its seams: `argv` (the arguments file), `readStatus` (its own `/proc/self/status`), `runPassFn({ spec, context })`, `write(file, text)`. -> the exit code. */
@@ -28,7 +29,7 @@ export async function childMain({ argv, readStatus = () => readFileSync('/proc/s
   const { spec, context, out } = JSON.parse(readFileSync(argv[0], 'utf8'));
   const observedCpus = allowedListOf(readStatus());
   const problem = affinityProblem({ wanted: spec.cpus, observed: observedCpus });
-  const body = problem ? { kind: 'environment', reason: problem, observedCpus } : passBody({ ran: await runPassFn({ spec, context }), observedCpus });
+  const body = problem ? { kind: 'environment', reason: problem, observedCpus } : passBody({ ran: await runPassFn({ spec, context }), observedCpus, box: scoringBoxFacts({ stack: context.stack, dirs: context.dirs, memoryBytes: spec.limits.memoryBytes }) });
   write(out, `${JSON.stringify(body)}\n`);
   return body.kind === 'completed' ? 0 : 3;
 }

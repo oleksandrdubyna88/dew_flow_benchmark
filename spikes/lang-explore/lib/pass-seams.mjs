@@ -9,6 +9,7 @@ import { readRunMap } from '../../minigit-bench/lib/run-map.mjs';
 import { boxBuild } from './build-quick.mjs';
 import { probeMask } from './affinity.mjs';
 import { loadGrowth } from './growth.mjs';
+import { scoringBoxFacts } from './box-facts.mjs';
 import { passBody } from './pass-child.mjs';
 import { runPassChild } from './pass-run.mjs';
 import { layerDirs } from './quick.mjs';
@@ -30,7 +31,7 @@ function buildSeam({ a, profile, seams, owned, dirs }) {
 function passSeam({ a, profile, seams, owned, dirs }) {
   if (seams.runFn === undefined) return spec => runPassChild({ spec, context: { stack: a.stack, kind: profile.kind, dirs } });
   const inProcess = { stack: a.stack, profile: { kind: profile.kind }, runFn: seams.runFn };
-  return async spec => passBody({ ran: await runPass({ a: { ...inProcess, limits: spec.limits }, copy: spec.tree, cases: { dir: spec.samplesDir, ids: spec.caseIds }, owned, dirs }), observedCpus: spec.cpus });
+  return async spec => passBody({ ran: await runPass({ a: { ...inProcess, limits: spec.limits }, copy: spec.tree, cases: { dir: spec.samplesDir, ids: spec.caseIds }, owned, dirs }), observedCpus: spec.cpus, box: scoringBoxFacts({ stack: a.stack, dirs, memoryBytes: spec.limits.memoryBytes }) });
 }
 
 /** The sessions of the series that are launching right now, from the run-map beside the session's folder (`<series>/run-map.json`). */

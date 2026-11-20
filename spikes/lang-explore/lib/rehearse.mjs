@@ -34,7 +34,7 @@ export const referenceFill = ({ world, heldout }) => ({ item, layout }) => {
 };
 
 /** A throw-away home holding a fake token file (mode 600 in a 700 directory): the preflight looks that a token file exists; the pilot never touches the real one. */
-function fakeTokenHome() {
+export function fakeTokenHome() {
   const home = mkdtempSync(path.join(os.tmpdir(), 'testsToDelete-lex-rehearse-'));
   const file = path.join(home, ...TOKEN_FILE_PARTS);
   mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });

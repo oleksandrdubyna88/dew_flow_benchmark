@@ -590,6 +590,47 @@ through the code a quick-run pair runs through today; what is new is which task 
 CLI (recorded with its walls in `research/module_tests.md`); v1's suite is green and its baseline fixture unchanged; §8's row
 for PR 3.
 
+**What the code settled (PR 3 built, 2026-11-20; the brief above is unchanged).** (1) *The contracts PR 4 and PR 5 fill in.*
+`stage-init` takes the pre-registration's answer from `io.stage.initGuardFn({ rehearsal })` → `ok({ preregTag, preregCommit,
+seedSha256, manifestSha256, pilot, harnessIdentity?, policy? })`; `stage-run` takes its guard from `io.stage.guardFn({ paid,
+requireSeed })` → `ok(null)` | `fail(reason)`. Both defaults refuse everything but a rehearsal series, so no paid series can be made
+or run before they exist. The dated lines are read from `spikes/lang-explore/inputs/prereg/amendments.md` and the revealed seed from
+`inputs/prereg/seed.txt` (it must hash to the series' `seedSha256`); both absent is no line and no seed. (2) *The A/A and the
+pilot's sessions carry `pair: 0`* (v1's own number for a fixed list), and tell their units apart by `kind`, `task`, `stack`, `twin`;
+they have no pair record (the schedule never read `pair` for them). A slot's `pair` is its number, as the schedule says. (3) *The
+order of the checks of `stage-run`*: series, lock, dated lines and seed, unit, owner's go, guard, task pins, pinned price file and
+policy, plan; each refusal leaves the run-map as it was. A rehearsal series needs no go line and no GO, has a seed of its own, and
+its read-back lines say `holds`. (4) *"`init` refuses a Stage 1 series"* is read as: `init` refuses only while an open paid Stage 1 series exists
+under the explore root (not a rehearsal, not finished, not stopped), naming `stage-init` and `stage-run`; `run` and `prune` refuse a Stage 1 series by its `stage` field (coai plan round, PR 3, finding 5).
+(5) *What a session stores*: the agent box's culture is read from `plan.json` (the locale `agentEnv` is built from) with both keys
+confirmed in `argv.json`'s environment keys, and the scoring box's environment per pass comes from the layer's own `boxEnv` with
+the same inputs; both say their source. `STORED_FIELDS` (12 fields) is the list the later tools read. (6) *`stage-run` on a data
+rid that collides with a pilot rid* is refused for good (the data rid comes from the seed); a pilot rid collision is retried by
+running the command again. (7) *The code rounds of PR 3*: the facts of a session are written only once it has ended, not
+while it is `launching` (coai code round 1, PR 3); the owner-go event is written only when the unit goes ahead past every refusal check (the `onReady`
+seam of the shared body; coai code round 1, PR 3); `init` fails closed on a series directory whose state cannot be read, naming it (coai code round 1,
+PR 3); the read-back stop and the schedule's gate name the full command `node research/lang-v2/tools/readback.mjs --series <dir> --pair <k>` (coai code
+round 1, PR 3); a failed schedule after a slot ends `--until round` with its reason and exit, not "round finished" (coai code round 1, PR 3);
+the amendments test uses the owned `tmpDir` and `spendLines` builds its totals without mutation (coai code round 1, PR 3); a session with `data === false`
+is a void for the schedule whatever slot a dated `refuted` line names, so its re-run is the next step (Opus review, PR 3); `stage-run` finishes the records an
+ended unit still owes before it offers a unit (Opus review, PR 3); `--until round` does not stop a rehearsal at a read-back slot (Opus review, PR 3);
+`stage-status` puts the data charges of a session the run-map holds as a void on the `void` line (Opus review, PR 3); a package list never recorded and an
+affinity read-back that never ran are stored as unknown (Opus review, PR 3); `stage-run` and `stage-status` print every malformed Stage 1 line and every
+home path as a report line, never a refusal (Opus review, PR 3); a missing pinned price or policy file refuses `stage-init` and `stage-run` with its path
+instead of throwing (Opus review, PR 3).
+(8) *(coai code round 2, PR 3)*: a unit owes its records when ANY of its ended sessions lacks its `stage-facts.json` OR its `record.json` lacks a Stage 1
+field of its `explore` section (`STAGE_PATHS`, found with `records.mjs` `lacksPaths`, the check `missingPaths(record, scored, true)` uses), or a data slot lacks
+its pair record, because the finalizer writes the facts BEFORE the explore section; the finalizer is safe to run twice (the facts file is published once, the
+rest is rebuilt to the same bytes), and `next` finishes the records before it offers a unit; `stage-status` reads the run-map through `stage-step.mjs`
+`mapAsRead`, the function `stage-run` reads it through, so a dated `refuted` line shows the stack as void with its re-run owed and its charge on the `void`
+line; a moved harness refuses a Stage 1 unit (exit 3) without a `harness-moved` ledger event, so every refusal of Stage 1 leaves the run-map and the ledger as
+they were, and the one-task `run` keeps its event; `slicesOf` builds its slices without mutation.
+(9) *(coai code round 3, PR 3)*: the pair record `pairs/p<N>.json` is written whole or not at all (`run.mjs` `pairRecordFile` through `replaceJson`, a temporary file
+beside it and a rename; the file is rewritten on purpose, so `publishOnce` does not fit), and a data slot whose pair record cannot be read or parsed owes its records
+(`stage-owed.mjs` `lacksPair`), so `next` rewrites it before it offers a unit; the owner-go event is idempotent for one launch of a unit (`stage-step.mjs` `sayGo`
+looks in the ledger for an event of the same pair, `what` and `rids` and appends none when it is there), so a process that died between the event and the run-map
+leaves one event for the unit after its retry; the event gains a `rids` field, and a halted slot that is resumed (the same rids) adds no second event.
+
 ### (a) the guards before a paid pair — PR 4
 
 **Brief (Sonnet coder).** Branch `feat/lang-v2-f3s1-guards`. Four new modules; each check is a sentence per problem, and a

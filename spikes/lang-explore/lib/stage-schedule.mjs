@@ -132,7 +132,7 @@ function gateProblem({ map, pilotGo, seedRevealed, slots }) {
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** A real calendar date `yyyy-mm-dd`: it survives a round trip through a UTC date (so `2026-02-30` and `2026-99-99` are no dates). */
-const isCalendarDate = text => DATE.test(text) && utcDateText(text) === text;
+export const isCalendarDate = text => DATE.test(text) && utcDateText(text) === text;
 
 /** The text a `yyyy-mm-dd` comes back as through a UTC date, or null when the date does not exist at all (`2026-99-99`). */
 function utcDateText(text) {
@@ -188,7 +188,7 @@ function roundThreeProblem({ map, slots, target, lines }) {
 /** The read-back gate: no slot after a read-back slot is offered until each of its sessions that counts has its dated line. */
 function readbackGateProblem({ map, slots, target, lines }) {
   const waiting = awaitingOf({ map, slots, lines, within: s => s.slot < target.slot });
-  return waiting === undefined ? null : `${describe(waiting[0])} is a read-back slot: no later slot is offered until each of its two sessions that counts has its dated read-back line (${READBACK_ROW}, holds or refuted); still unread: ${waiting[1].join(', ')}; the print is \`readback.mjs --series <dir> --pair ${waiting[0].slot}\``;
+  return waiting === undefined ? null : `${describe(waiting[0])} is a read-back slot: no later slot is offered until each of its two sessions that counts has its dated read-back line (${READBACK_ROW}, holds or refuted); still unread: ${waiting[1].join(', ')}; the print is \`node research/lang-v2/tools/readback.mjs --series <dir> --pair ${waiting[0].slot}\``;
 }
 
 const linesProblem = args => roundThreeProblem(args) ?? readbackGateProblem(args);
