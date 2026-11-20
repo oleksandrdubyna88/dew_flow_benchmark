@@ -4,11 +4,14 @@
 //                        the flag `memory bound not certified`. The certification at scoring (the layer opens a data run) stays the second line.
 //   agentEnvVerdict      D15's environment (T-L14's half): the agent box's environment is the registered base (the .NET server GC off, an empty `NODE_OPTIONS`, the declared culture) and holds neither per-case heap key of D55
 //                        (`DOTNET_GCHeapHardLimit`, Node's old-space flag); a clash or a planted heap key refuses the launch. The answer lists the keys of both boxes, for the record.
+import { cleanupScope, ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { HALT, certifyMemory } from '../../lang-bench/lib/exec-layer/certify.mjs';
 import { cleanup } from '../../lang-bench/lib/exec-layer/cleanup.mjs';
 import { BASE_ENV, STACK_KEYS, allowFor } from '../../lang-bench/lib/exec-layer/env.mjs';
-import { openRun } from '../../lang-bench/lib/exec-layer/run.mjs';
+import { openRun, stableRunsParent } from '../../lang-bench/lib/exec-layer/run.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { layerDirs, quickCalibration, quickExplore, quickPaths } from './quick.mjs';
+import { OWNED_TOKEN } from './score-quick.mjs';
 
 export const HALT_EXIT = 3;
 export const CONFIG_EXIT = 4;
@@ -33,9 +36,33 @@ export async function certifyOnHost({ options, open = openRun, release = cleanup
   }
 }
 
+const PROBE_CASE_WALL_MS = 20_000;
+const PROBE_CEILING_MS = 120_000;
+
+/** The options of the certification probe on THIS host: an empty tree and no case (the probe launches an empty program only), the pinned toolchain folders and the registered memory value, in owned temporary folders of `scope`. */
+function probeOptions({ explore, home, owned, scope }) {
+  const quick = quickExplore(explore, home);
+  return { owned, parent: stableRunsParent(), tree: owned.ownedDir(scope, 'probe-tree'), samplesDir: owned.ownedDir(scope, 'probe-samples'), caseIds: [], dirs: layerDirs(quickPaths(quick, home)), memoryMaxBytes: quickCalibration(quick).limits.memoryBytes, caseWallMs: PROBE_CASE_WALL_MS, runCeilingMs: PROBE_CEILING_MS };
+}
+
+/**
+ * The real probe of `stage-run` on this host (`certifyOnHost` over the layer, the pinned toolchain folders and the registered memory value): `{ launched, certified, peakBytes?, reason? }`, never a throw (what cannot be set up is `launched: false` with its sentence).
+ * `explore` is the pins (`inputs/explore.json`), `home` the operator's home.
+ */
+export async function hostProbe({ explore, home }) {
+  const scope = cleanupScope();
+  try {
+    return await certifyOnHost({ options: probeOptions({ explore, home, owned: ownedFor({ token: OWNED_TOKEN }), scope }) });
+  } catch (e) {
+    return { launched: false, certified: false, reason: `the certification probe could not be set up: ${e.message}` };
+  } finally {
+    await scope.close();
+  }
+}
+
 /** The verdict of one launch kind over the probe's answer (`probe()` -> `certifyMemory`'s `{ launched, certified, peakBytes?, reason? }`). */
 function verdictOf({ kind, result }) {
-  if (!result.launched) return halted('layer-launch-failed', `the layer could not run its empty program on this host: ${result.reason}; nothing is planned`);
+  if (!result.launched) return halted('layer-launch-failed', `layer-launch-failed: the layer could not run its empty program on this host: ${result.reason}; nothing is planned`);
   if (result.certified) return ok({ flags: [], peakBytes: result.peakBytes });
   if (!PAID_KINDS.includes(kind)) return ok({ flags: [NOT_CERTIFIED_FLAG] });
   return halted(HALT, `${HALT}: ${result.reason}; this host cannot certify the memory bound, so no ${LAUNCH_NAMES[kind]} is planned (resumable on a host that certifies)`);

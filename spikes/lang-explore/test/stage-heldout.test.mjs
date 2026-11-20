@@ -59,6 +59,7 @@ test('The_clear_folder_of_a_slots_task_is_made_for_the_slot_and_removed_after_it
   const unclosable = await withSlotHeldout({ task: w.task, tasks, heldout: { ...heldoutOf(w), warn: line => warnings.push(line) }, fn: async () => { rmSync(w.backupFile); return 'ran'; } });
   assert.equal(unclosable.ok, false, 'a slot whose folder could not be removed after it (the backup vanished in the slot) is not a clean end');
   assert.match(unclosable.reason, /left open after the slot.*heldout-close/s, `it says what to do: ${unclosable.reason}`);
+  assert.equal(unclosable.result, 'ran', 'and what the slot returned is not lost: the slot did run and may have spent');
   assert.equal(warnings.length, 1, 'the lifecycle said so too');
 });
 

@@ -24,12 +24,17 @@ export const sliceOfTask = task => ({
 });
 
 export const fakeSlice = async ({ task }) => ok(sliceOfTask(task));
+
+/** The seams of the launch checks of PR 4, all passing: a host that certifies its memory, a session floor and free space that leave the disk gate open, and a held-out folder that is simply the slot's own run. A test of one check replaces its seam. */
+export const LAUNCH_FAKES = Object.freeze({
+  probeFn: async () => ({ launched: true, certified: true, peakBytes: 1_500_000 }), floorBytes: 1_400_000_000, freeBytesFn: () => 10 ** 13, slotHeldoutFn: async ({ fn }) => ok(await fn()),
+});
 export const PRE = Object.freeze({ preregTag: 'prereg/lang-v2-20261120', preregCommit: COMMIT, seedSha256: sha('seed'), manifestSha256: sha('manifest'), pilot: REHEARSAL_PILOT });
 
 /** The `io` of a stage-init over a fresh home: every seam a fake. `over` replaces seams (`stage.*`) or fields. */
 export function initIo(over = {}) {
   const { stage = {}, ...rest } = over;
-  return { home: tmpDir('stage-home'), say: () => {}, now: () => NOW, env: {}, stage: { initGuardFn: async () => ok(PRE), workspacesFn: async () => ok({ commit: COMMIT, findings: [] }), sliceFn: fakeSlice, rand: () => 'ab12', ...stage }, ...rest };
+  return { home: tmpDir('stage-home'), say: () => {}, now: () => NOW, env: {}, stage: { initGuardFn: async () => ok(PRE), recordFn: () => ({ specStates: { freeze: { workspaceCommit: COMMIT } } }), workspacesFn: async () => ok({ commit: COMMIT, findings: [] }), sliceFn: fakeSlice, rand: () => 'ab12', ...LAUNCH_FAKES, ...stage }, ...rest };
 }
 
 /** A paid-named Stage 1 series made through `stage-init` with the fakes: `{ io, dir, made }`. */

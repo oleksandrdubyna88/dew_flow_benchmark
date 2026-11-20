@@ -51,12 +51,12 @@ async function launchRefusal({ task, tasks, heldout }) {
 
 /**
  * Run `fn({ casesDir, opened })` over the clear held-out folder of `task`, made for this slot and removed after it (a throw is rethrown after the removal). `tasks` are the tasks of the series; `heldout` is the held-out context
- * (`heldout-context.mjs`: `home`, `frozenFile`, `keyFile`, `backupFile`, `shareMount` and the seams). -> `ok(what fn returns)`, or `fail(sentence)` when the slot was refused before it began (`fn` did not run) or the folder could not be removed after it.
+ * (`heldout-context.mjs`: `home`, `frozenFile`, `keyFile`, `backupFile`, `shareMount` and the seams). -> `ok(what fn returns)`, or `fail(sentence)` when the slot was refused before it began (`fn` did not run) or, with `result` (what `fn` returned), when the folder could not be removed after it.
  */
 export async function withSlotHeldout({ task, tasks, heldout, fn }) {
   const refused = await launchRefusal({ task, tasks, heldout });
   if (refused !== null) return fail(refused);
   const ran = await withOpenedHeldout({ ...heldout, task, fn: async arg => ok(await fn(arg)) });
   if (!ran.ok) return ran;
-  return existsSync(casesDirOf({ task, home: heldout.home })) ? fail(`the clear folder of task ${task.id} was left open after the slot (its key's backup could not be verified, or the removal failed): run explore.mjs heldout-close --task ${task.id} before the next slot`) : ran;
+  return existsSync(casesDirOf({ task, home: heldout.home })) ? fail(`the clear folder of task ${task.id} was left open after the slot (its key's backup could not be verified, or the removal failed): run explore.mjs heldout-close --task ${task.id} before the next slot`, { result: ran.value }) : ran;
 }

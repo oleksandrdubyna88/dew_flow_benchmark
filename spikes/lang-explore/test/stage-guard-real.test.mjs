@@ -3,6 +3,7 @@
 // task-repository half reads the public record and git objects only.
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
+import os from 'node:os';
 import { test } from 'node:test';
 import { certifyMemory } from '../../lang-bench/lib/exec-layer/certify.mjs';
 import { cleanup } from '../../lang-bench/lib/exec-layer/cleanup.mjs';
@@ -12,7 +13,8 @@ import { layerOptions, MIB } from '../../lang-bench/test/support/exec-tree.mjs';
 import { ownedFor } from '../../../.agents/conventions/tools/lib/owned.mjs';
 import { PINNED_TASK_SHA } from '../../lang-bench/lib/task-repo.mjs';
 import { REPO } from '../lib/paths.mjs';
-import { certifyOnHost, memoryCertification } from '../lib/stage-certify.mjs';
+import { certifyOnHost, hostProbe, memoryCertification } from '../lib/stage-certify.mjs';
+import { loadExplore } from '../lib/inputs.mjs';
 import { readRecord } from '../lib/stage-record.mjs';
 import { taskRepoProblems } from '../lib/stage-guard.mjs';
 
@@ -42,4 +44,16 @@ test('The_real_frozen_record_and_the_real_task_repository_at_W_pass_the_task_rep
   const atW = ownedFor({ token: 'bench' }).ownedWorktree(t, taskRepo, 'realw', { ref: PINNED_TASK_SHA }).path;
   const found = await taskRepoProblems({ repo: REPO, taskRepo: atW, record });
   assert.deepEqual(found, [], `the six spec blobs at the tag, W, the checkout at W, the pinned commit and the hash list are the record's: ${found.join(' | ')}`);
+});
+
+test('The_probe_stage_run_runs_by_default_certifies_this_host_with_the_pinned_toolchains_and_the_registered_memory_value', async t => {
+  if (!needs(t)) return;
+  const probed = await hostProbe({ explore: loadExplore().value, home: os.homedir() });
+  assert.equal(probed.launched, true, probed.reason);
+  assert.equal(probed.certified, true, probed.reason);
+  assert.ok(Number.isSafeInteger(probed.peakBytes) && probed.peakBytes > 0 && probed.peakBytes < 256 * MIB, `the peak of an empty program is read (${probed.peakBytes} bytes)`);
+  const verdict = await memoryCertification({ kind: 'data', probe: () => hostProbe({ explore: loadExplore().value, home: os.homedir() }) });
+  assert.equal(verdict.ok, true, verdict.reason);
+  const unreachable = await hostProbe({ explore: loadExplore().value, home: '/nonexistent-home' });
+  assert.equal(typeof unreachable.launched, 'boolean', 'a probe that cannot be set up answers a value and never throws');
 });

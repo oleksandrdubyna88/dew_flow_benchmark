@@ -1,13 +1,14 @@
 // What `stage-run` reads before it chooses a unit (F3.S1 (a), PR 3): the registered amendments (the dated lines of `stage-amendments.mjs`), the revealed seed and the guard. A rehearsal series is free and has its own seed in its state; a paid series needs a
-// dated `pilot | GO` line for its data slots, the revealed seed (`inputs/prereg/seed.txt`, which must hash to the series' `seedSha256`) and the owner's go line for what it launches. The guard of a paid launch is PR 4's and PR 5's: THE DEFAULT REFUSES,
-// so a Stage 1 series never runs with a guard that always passes.
+// dated `pilot | GO` line for its data slots, the revealed seed (`inputs/prereg/seed.txt`, which must hash to the series' `seedSha256`) and the owner's go line for what it launches. The guard of a paid launch is PR 4's `stageGuard` (the frozen record, the task
+// repository at it, every identity against the manifest) and, through `deps.preregGuard`, PR 5's: with none handed in, a paid launch is refused, so a Stage 1 series never runs with a guard that always passes. A rehearsal's guard passes by itself.
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
-import { INPUTS } from './paths.mjs';
+import { INPUTS, REPO } from './paths.mjs';
 import { STAGE_AMENDMENTS_FILE, ownerGoLine, parseStageAmendments, pilotGoProblem, readStageAmendments, readbackLinesOf, reportLinesOf } from './stage-amendments.mjs';
-import { STACK_ORDER, isRehearsal } from './series.mjs';
+import { STACK_ORDER, isRehearsal, seriesInputs } from './series.mjs';
+import { stageGuard } from './stage-guard.mjs';
 import { READBACK_ROW, slotsOf } from './stage-schedule.mjs';
 
 /** The revealed seed: `seed.txt` of the registered `prereg` folder, written by `seed-reveal` (PR 5) after the pilot. */
@@ -16,13 +17,17 @@ export const STAGE_SEED_FILE = path.join(INPUTS, 'prereg', 'seed.txt');
 const sha256 = text => createHash('sha256').update(text).digest('hex');
 const seam = (io, name, fallback) => io.stage?.[name] ?? fallback;
 
-const GUARD_REFUSAL = 'stage-run: the Stage 1 guard (the frozen record, the identities, memory certification, the disk reserve and rule, the clear held-out folder, the tag and the registered blobs) is not merged yet: until it is, only a rehearsal series runs';
+/** The task repository the series was made over (`stage-init` recorded its checkout in `inputs.json`), or `undefined` when the inputs do not say (the guard then asks for `LANG_V2_TASK_REPO`). */
+const recordedTaskRepo = dir => { const inputs = seriesInputs(dir); return inputs.ok ? inputs.value.taskRepo?.root : undefined; };
 
-/** The guard a paid launch needs (PR 4 and PR 5 hand in the real one as `io.stage.guardFn`): the default refuses. `deps.guard` shape: `({ paid, requireSeed }) -> ok(null) | fail(reason)`. */
-export const refusingGuard = async () => fail(GUARD_REFUSAL);
+/**
+ * The guard of a paid launch (`stageGuard`, PR 4) over this checkout and the series' own task repository: `({ paid, requireSeed }) -> ok(null) | fail(reason, { problems })`. `io.stage.guardArgs` replaces `repo`, `taskRepo` and `deps` (the seams of
+ * the tests and of PR 5: `preregGuard`, `readers.harness`, `harnessAccepted`, `manifest`, `live`, `pinnedTaskSha`, `env`).
+ */
+export const stageGuardOf = ({ series, io }) => ({ paid, requireSeed }) => stageGuard({ repo: REPO, series: series.dir, taskRepo: recordedTaskRepo(series.dir), deps: {}, ...io.stage?.guardArgs, paid, requireSeed });
 
-/** The guard of a series: a rehearsal's (free) passes; a paid series' is the one handed in, else the refusing one. */
-export const guardOf = ({ series, io }) => (isRehearsal(series.dir) ? async () => ok(null) : seam(io, 'guardFn', refusingGuard));
+/** The guard of a series: a rehearsal's (free) passes; a paid series' is the one handed in (`io.stage.guardFn`), else PR 4's `stageGuard`. */
+export const guardOf = ({ series, io }) => (isRehearsal(series.dir) ? async () => ok(null) : seam(io, 'guardFn', stageGuardOf({ series, io })));
 
 /** The revealed seed: `ok(seed)`, `ok(null)` when it is not revealed yet, or a `fail` when the file is not the committed seed (it must hash to the series' `seedSha256`). */
 function revealedSeed({ series, io }) {

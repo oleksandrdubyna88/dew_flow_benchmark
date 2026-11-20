@@ -14,6 +14,8 @@ import { loadExplore } from './inputs.mjs';
 import { TASK_REPO_ENV } from './leak-repos-setup.mjs';
 import { REPO } from './paths.mjs';
 import { STAGE_AMENDMENTS_FILE, parseStageAmendments, readStageAmendments } from './stage-amendments.mjs';
+import { checkedWorkspaces } from './stage-guard.mjs';
+import { RECORD_PATHS, readRecord } from './stage-record.mjs';
 import { seedProblem } from './stage-schedule.mjs';
 import { createStageSeries } from './stage-series.mjs';
 import { realSlice, rehearsalSlice, slicesOf } from './stage-slices.mjs';
@@ -67,18 +69,33 @@ const taskRepoStep = ({ values, io }) => {
   return root ? ok({ root }) : fail(`stage-init needs the task repository: --task-repo <checkout> or ${TASK_REPO_ENV} (its twelve workspaces are compared with what a session is given)`);
 };
 
-const findingsProblem = ({ findings }) => (findings.length > 0 ? `the workspaces the task repository publishes are not what a session is given (${findings.slice(0, 3).join('; ')}): stage-init makes no series` : null);
+const findingsProblem = problems => (problems.length > 0 ? `the workspaces the task repository publishes are not what a session is given (${problems.slice(0, 3).join('; ')}): stage-init makes no series` : null);
 
-const checkedProblem = checked => (checked.ok ? findingsProblem(checked.value) : `the task repository's workspaces cannot be checked: ${checked.reason}`);
+const checkedProblem = checked => (checked.ok ? findingsProblem(checked.value.problems) : `the task repository's workspaces cannot be checked: ${checked.reason}`);
+
+/** The record's workspace commit W, which a paid series' task repository must be at (`stage-record.mjs`); a rehearsal holds no record to compare with. -> `ok(W | null)` | `fail`. */
+function recordedCommit({ io, rehearsal }) {
+  if (rehearsal) return ok(null);
+  const commit = seam(io, 'recordFn', () => readRecord(REPO).record)()?.specStates?.freeze?.workspaceCommit;
+  return typeof commit === 'string' ? ok(commit) : fail(`the frozen record (${RECORD_PATHS.specStates}) names no workspace commit W: a paid series is made over the task repository at W`);
+}
+
+/** The check of the twelve workspaces (`checkedWorkspaces`, the one `stageGuard`'s init half shares) over the checkout, at the record's W for a paid series. -> `ok(checked)` | `fail(sentence)`. */
+async function checkOf({ root, ctx, io, rehearsal }) {
+  const commit = recordedCommit({ io, rehearsal });
+  if (!commit.ok) return commit;
+  const checked = await checkedWorkspaces({ taskRepo: root, ctx, workspaceCommit: commit.value, check: seam(io, 'workspacesFn', checkWorkspaces) });
+  const problem = checkedProblem(checked);
+  return problem ? fail(problem) : checked;
+}
 
 /** The checkout of the task repository, whose twelve published workspaces are the ones a session is given: `ok({ taskRepo: { root, commit } })` | `fail`. */
-async function workspacesStep({ values, io, base }) {
+async function workspacesStep({ values, io, base, rehearsal }) {
   const root = taskRepoStep({ values, io });
   const ctx = root.ok ? freezeContext({ home: io.home, exploreFn: () => ok(base) }) : root;
   if (!ctx.ok) return ctx;
-  const checked = await seam(io, 'workspacesFn', checkWorkspaces)({ root: root.value.root, ctx: ctx.value });
-  const problem = checkedProblem(checked);
-  return problem ? fail(problem) : ok({ taskRepo: { root: root.value.root, commit: checked.value.commit } });
+  const checked = await checkOf({ root: root.value.root, ctx: ctx.value, io, rehearsal });
+  return checked.ok ? ok({ taskRepo: { root: root.value.root, commit: checked.value.commit } }) : checked;
 }
 
 const makeSlices = ({ io, base, rehearsal }) => slicesOf({ io, base, make: seam(io, 'sliceFn', rehearsal ? rehearsalSlice : realSlice) });

@@ -88,14 +88,23 @@ export async function taskRepoProblems({ repo, taskRepo, record, pinnedTaskSha =
 }
 
 /**
+ * The twelve workspaces built again from the checkout's HEAD against the committed ones, the one check `stage-init` and `workspacesProblems` share: `ok({ commit, problems })` (`problems` is empty when the workspaces are what the task repository publishes,
+ * a changed byte is named by its file; `workspaceCommit`, when given, is the record's W and the checkout must be at it) | `fail(reason)` when the twelve cannot be checked. `check` is a seam for the tests (`checkWorkspaces`'s shape).
+ */
+export async function checkedWorkspaces({ taskRepo, ctx, workspaceCommit = null, check = checkWorkspaces }) {
+  const checked = await check({ root: taskRepo, ctx });
+  if (!checked.ok) return checked;
+  const atW = workspaceCommit === null || checked.value.commit === workspaceCommit ? [] : [`the task repository checkout is at ${short(checked.value.commit)}, not the record's workspace commit ${short(workspaceCommit)}`];
+  return ok({ commit: checked.value.commit, problems: [...atW, ...checked.value.findings] });
+}
+
+/**
  * `stage-init`'s check (T-L67's init half): the twelve workspaces built again from the checkout's HEAD equal the committed ones by tree hash, a changed byte is named by its file, and the checkout is at the record's W. `ctx` is `freezeContext`'s value.
  * -> `[sentence]` (empty when the workspaces are what the task repository publishes).
  */
-export async function workspacesProblems({ taskRepo, ctx, workspaceCommit }) {
-  const checked = await checkWorkspaces({ root: taskRepo, ctx });
-  if (!checked.ok) return [`the twelve workspaces cannot be checked: ${checked.reason}`];
-  const atW = checked.value.commit === workspaceCommit ? [] : [`the task repository checkout is at ${short(checked.value.commit)}, not the record's workspace commit ${short(workspaceCommit)}`];
-  return [...atW, ...checked.value.findings];
+export async function workspacesProblems(args) {
+  const checked = await checkedWorkspaces(args);
+  return checked.ok ? checked.value.problems : [`the twelve workspaces cannot be checked: ${checked.reason}`];
 }
 
 // ---- 3. the identities, 4. the paid checks --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
