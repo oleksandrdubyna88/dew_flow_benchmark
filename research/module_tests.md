@@ -899,6 +899,258 @@ Counts after code round 3 (each file alone, `taskset -c 0-5`, through `low-prior
 
 **What this does not prove.** The loop-level scenarios run over v1's rig and the fake loop, so a real stage-run of a ten-pass scoring under the real guard is not exercised here (the guards are PR 4's and PR 5's; until they merge a paid series cannot be made or run). The A/A and pilot units run in the loop tests and the fake-loop tests, not in a rehearsal. The scoring order inside a unit follows the plan's order (the mutation that removed the sort was not caught: the leading stack is already first).
 
+## F3.S1 (a), bench PR 4: the guards before a paid pair, the recovery path and the wiring into `stage-run` (`spikes/lang-explore/`)
+
+Branch `feat/lang-v2-f3s1-guards`, cut from `5f8a8e6e` (PR 2's merge) and merged with `origin/main` after PR 3 (#237, `6aa0f7ae`) by a merge commit (no conflict: `isCalendarDate` exported and the read-back sentence of `stage-schedule.mjs` changed on `main`, `unreadReadbackSlots` was added here, the two edits are in different places). Nothing here launches a paid session or calls a real model: fakes, invented task repositories (`quick-freeze-fixture.mjs`), temporary folders under the owner token, invented keys and cases; the real halves (59) run an empty program through the real layer and read public files only. No held-out case, trap name or case id is in any test, file or message (D41).
+
+```bash
+node .agents/conventions/tools/low-priority.mjs taskset -c 0-5 node --test --test-concurrency=1 spikes/lang-explore/test/stage-guard.test.mjs   # and each file of the table, one at a time
+```
+
+| Scenarios (stories document numbers) | Test | What it proves |
+|---|---|---|
+| 42, 43, 44, 45, 46, 47, 48, 49, 50 | `stage-guard.test.mjs` (19; fixture `stage-guard-fixture.mjs`) | the guard names every problem of the frozen record, the twelve references, the six spec blobs at the tag (a change outside a spec is the permitted one), W, the pinned commit, the hash list, the twelve workspaces by tree hash, all 41 identities against the manifest (the list written out so it cannot shrink), memory certification and the agent box's environment; two more tests read the live identities from the places that own them and ask the paid checks for a paid launch only |
+| 51, 51a, 51b, 51c, 52, 53, 54h | `stage-disk.test.mjs` (12) | the reserve before every launch over what is still to run, a pilot repeat's two sessions, what the ended sessions really hold, the rule's halt with its ledger line, a missing or zero size refused, the session size live and written nowhere |
+| 54, 54a to 54g | `stage-archive.test.mjs` (29) | a copy that differs in one byte is no archive; `stage-free` removes only the three cache folders of final sessions of finished slots; nothing that the verified archive does not prove; a missing or changed archive refuses; `stage-restore` back to the listed bytes; the halted-archived-freed-resumed series ends with the records of one that never halted; the last archive refuses a freed session; a read-back slot waits |
+| 55, 56, 57, 58 | `stage-heldout.test.mjs` (7) | the slot's folder made and removed, whether the slot ends or throws, and a folder that cannot be closed keeps the slot's `result`; a stale folder removed first; the slot refused when the key's backup cannot be verified; only the slot's own task in clear |
+| 59 (real) | `stage-guard-real.test.mjs` (3; 2 pass and 1 skips without `LANG_V2_TASK_REPO`) | the probe passes on this host and reads the peak of an empty program; the probe `stage-run` runs by default (`hostProbe`) does the same over the pinned toolchains and the registered memory value; the real record and the task repository at W pass the task-repository half |
+| wiring: the default guard, the environment, memory, disk, the held-out folder, the order, `stage-init` at W | `stage-wiring.test.mjs` (10) | through `stage-run` and `stage-init` with PR 3's fakes: each refusal leaves the run-map and the ledger byte for byte as they were (the disk halt adds its one event line), a rehearsal still runs its round with the stub rig |
+| the three verbs on the command line | `stage-recovery-commands.test.mjs` (9) | through `main`: the table, the options, what each verb says and exits with, the read-back slot that waits for its lines, the last archive that refuses a freed session, each verb taking the series lock |
+
+**Observed red, green, red** (2026-11-19 and 2026-11-20; "red first" = the test against missing code, or the code of `HEAD` put back; "red again" = one mutation of the fix at a time, the file put back from a copy; scenarios 42 to 58 are from the logs of the first session, `[S..: what was broken]`):
+
+```
+## 42 to 50 the guard (stage-guard.test.mjs)
+RED (before the module): [guard-red] tests 10 pass 0 fail 10 (The_guard_refuses_a_series_while_the_frozen_record_lacks_a_field...: the guard refuses | true !== false)
+GREEN: 12/12
+RED again, one mutation each:
+ [S42: record fields not asked] The_guard_refuses_a_series_while_the_frozen_record_lacks_a_field...: the guard refuses | true !== false; The_guard_refuses_while_the_memory_value_is_not_registered: true !== false
+ [S43/44: references not compared] A_reference_identity_that_is_not_one_of_the_twelve...: the reference that is not the registered one is named with both short hashes
+ [S45: spec blobs not checked] A_spec_blob_that_differs_from_the_tags...: the spec whose pinned hash is not the tag's blob is named with its path and both hashes
+ [S46: W rule not asked] the spec changed after the tag is refused by the workspace commit rule; [S46: checkout not at W] the checkout is at another commit than the record's W; [S46: pinned commit not compared] a pinned commit that is not the record's W is named; [S46: hash list not compared] the hash list that is not the record's is named
+ [S47: workspace findings dropped] The_workspaces_a_session_is_given...: the workspace whose tree hash differs is named
+ [S48: differing identity passes] Each_live_identity...: harness: exactly one problem, got | 0 !== 1; Only_the_harness_identity...: without a line the harness identity differs | 0 !== 1
+ [S48: any identity acceptable] no other identity is ever accepted, whatever the line names | 0 !== 1; [S48: manifest extras ignored] an identity of the manifest that the guard does not know is named
+ [S49: paid launch goes on uncertified] data: refused | true !== false
+ [S50: heap keys ignored] a .NET heap key: refused | true !== false; [S50: base clash ignored] a base key with another value than the registered one is a clash | true !== false
+GAP FOUND AND CLOSED (this session, the first session's note: a mutation removing the identity step failed no test): the wiring test of `stageGuard` (`The_guard_names_an_identity_that_differs_from_the_manifest_and_asks_the_paid_checks_only_for_a_paid_launch`) was written and not run; run now it is green (12/12), and the gap was real in a second place: a guard that asks the paid checks for a FREE launch failed nothing. Fixed by one assertion (the free launch is handed a `preregGuard` that returns a problem and must still pass). Mutations of `stageGuard`, one each, all on that test:
+ identity step removed (`const identities = []`): AssertionError: a live identity that differs from the manifest refuses the guard
+ identities left out of the problems (`...task, ...spends`): AssertionError: a live identity that differs from the manifest refuses the guard
+ paid step removed (`const spends = []`): AssertionError: a paid launch with no pre-registration guard handed in is refused
+ paid step always asked (`true ? await paidStep`): AssertionError: a free launch asks none of the paid checks
+ (the same test red before the assertion: tests 12 pass 12 under `true ? await paidStep`)
+LIVE IDENTITY READERS (The_live_identities_are_read_from_the_places_that_own_them...), green in the first session with no mutation red; four mutations of `stage-identity-readers.mjs`, each now red:
+ POLICY_FREE_FIELDS = ['t3'] only: AssertionError: the policy's free fields (t3, t5) are no part of its identity (84cc7b10... !== b452aaf7...)
+ `capUsd:` -> `cap:`: AssertionError: the cap in dollars; the wall and the stall are amendable and no identity ('cap:50' !== 'capUsd:50')
+ `'suite.enc'` -> `'suite.bin'`: AssertionError: the archive on disk with the registry's tree, trap table and counts (undefined !== 'd99c8e4c...')
+ a price file picked when two exist: AssertionError: two price files are no registered price
+## 51 to 54h the disk (stage-disk.test.mjs)
+RED (before the module): [disk-red] tests 7 pass 0 fail 7 (The_reserve_refuses_the_first_launch...: before the A/A: the 66 sessions of the series, each with its one void re-run)
+GREEN: 7/7
+RED again: [S51: need counts one session] 4 fail (true !== false); [S51a: voids not subtracted] a void awaiting its one re-run holds one session; the scored stack none | 106 !== 105; [S51a: final cells counted] the pilot is done: 60 data sessions with a re-run each | 128 !== 120; [S51b: repeat adds nothing] a repeat pair adds its two sessions, each with its re-run | 4 !== 8; [S51c: the floor always wins] what the ended session really holds replaces the smaller registered floor; [S52: no event line] one event line | 0 !== 1; [S52: rule not doubled] true !== false; [S53: floor never refused] floorBytes 0: reserveGate refuses | true !== false; [S53: free bytes never refused] freeBytes 0: it says the free disk could not be read, not that the space is short; [S54h: freed.json not counted] a freed session counts at the size its freed.json lists (4194387) for the files that left the disk
+## 54 to 54g the archive (stage-archive.test.mjs)
+RED (before the module): [archive-red] tests 8 pass 0 fail 8 (stub | false !== true)
+GREEN: 8/8
+RED again: [S54: copy not verified] a copy that differs in one byte is not an archive | true !== false; [S54a: FREEABLE widened to work/] the closed list; [S54a: unfinished slot freed] every other file of the series has its bytes ...; [S54b: unlisted file removed] a file the archive does not list is kept | false !== true; [S54b: changed file removed] a file whose hash is not the listed one is kept; [S54b: archived copy not read] a file whose archived copy no longer has the listed hash is kept; [S54c: list hash not checked] the list is no longer the recorded one: refused | true !== false; [S54c: copy presence not checked] the copy is gone: refused; [S54d: restore trusts the copy] a copy that differs is never placed; [S54d: freed.json kept after restore] freed.json is removed once everything is back; [S54f: final archive ignores freed] the last archive refuses a series that holds a freed session | true !== false; [S54g: unread slot freed] no file of the read-back slot is touched: the judge's reading comes first
+## 55 to 58 the clear folder (stage-heldout.test.mjs)
+RED (before the module): [heldout-red] tests 4 pass 0 fail 4 (ENOENT: no such file or directory, scandir '')
+GREEN: 4/4
+RED again: [S55: folder not removed after the slot (kept open)] a slot whose folder could not be removed after it (the backup vanished in the slot) is not a clean end | true !== false; [S56: no stale sweep of the own task] the input did not match /held by the operator.*heldout-close/; [S57: backup not checked before launch] nothing of the slot ran | true !== false; [S58: other tasks not swept] another task's stale clear folder is removed before the slot; [S58: a held other task tolerated] another task held open by the operator refuses the slot | true !== false
+ (the first mutation runs of 55 and 56 left 4/4 green: the gap was closed by the test of commit 0b4e6235, a slot whose folder cannot be closed and a folder the operator holds)
+THIS SESSION, `result` of a slot that could not be closed (stage-heldout.test.mjs, one assertion added): RED (stage-heldout.mjs from HEAD): AssertionError: and what the slot returned is not lost: the slot did run and may have spent (undefined !== 'ran'); GREEN 4/4; RED again (`{ result: ran.value }` removed): the same message
+## 59 the real probes (stage-guard-real.test.mjs; `needs`: a host without the layer's tools skips, BENCH_REQUIRE_SANDBOX=1 fails instead)
+GREEN: The_certification_probe_passes_on_this_host_and_reads_the_peak_of_an_empty_program (the peak is read and is under 256 MiB) and The_probe_stage_run_runs_by_default_certifies_this_host_with_the_pinned_toolchains_and_the_registered_memory_value (`{ launched: true, certified: true, peakBytes: 1413120 }`)
+RED first (stage-certify.mjs from HEAD, no `hostProbe`): the file does not load (SyntaxError: the requested module does not provide an export named 'hostProbe'); RED again (`tree: '/nonexistent-tree'`): AssertionError: the certification run could not be opened: the built tree /nonexistent-tree is not a directory: the box mounts it read-only as the workspace
+## wiring (stage-wiring.test.mjs, 7 tests; RED = stage-step.mjs, stage-gates.mjs and stage-init.mjs from HEAD, the new modules unused)
+RED: tests 7 pass 0 fail 7:
+ The_default_guard_of_stage_run_is_PR_4s_guard...: AssertionError: the control: a record, a task repository, identities and a pre-registration guard that all hold: the unit runs (4 !== 0)
+ A_heap_key_in_the_agent_boxs_environment_refuses_a_unit...: AssertionError: next: the run-map and the ledger are byte for byte as they were (the ledger held an owner-go line and the run-map two scored sessions)
+ A_host_that_cannot_certify_memory_refuses_every_paid_unit...: AssertionError: next: the run-map and the ledger are byte for byte as they were
+ The_disk_gate_halts_a_paid_unit_before_it_is_planned...: AssertionError: a disk halt is exit 3, resumable once the space is there (0 !== 3)
+ A_paid_unit_runs_inside_the_clear_folder_of_its_own_task...: AssertionError: each unit is wrapped for its own task: the data slot's, the A/A's (actual [], expected ['08', '05'])
+ The_launch_checks_run_after_the_guard_and_before_the_plan...: AssertionError: next: the run-map and the ledger are byte for byte as they were
+ stage_init_checks_the_task_repository_at_the_records_W...: AssertionError: Expected values to be strictly equal: 0 !== 4
+GREEN: 7/7 (stage-run.test.mjs 19/19 with `A_stage_series_never_runs_with_the_guard_that_always_passes` now asking for `/^\d+ problem\(s\) before a paid launch: .*the pre-registration guard \(PR 5: .* is not wired into this guard/`)
+RED again, one mutation each (the file put back from a copy):
+ default guard passes (`seam(io, 'guardFn', async () => ok(null))`): The_default_guard...: AssertionError: next: the run-map and the ledger are byte for byte as they were
+ environment step removed from the list: A_heap_key...: AssertionError: next: the run-map and the ledger are byte for byte as they were
+ certification step removed: 6 of 7 fail (the state has no `flags`: TypeError); the memory test and the order test among them
+ disk step removed: The_disk_gate...: AssertionError: a disk halt is exit 3, resumable once the space is there; The_launch_checks...: AssertionError: The input did not match the regular expression /^disk-reserve/
+ held-out wrapper removed (`return fn()`): A_paid_unit_runs_inside_the_clear_folder...: AssertionError: each unit is wrapped for its own task: the data slot's, the A/A's; The_launch_checks...: AssertionError: the order of a launch that goes ahead: memory, disk, the held-out folder
+ a rehearsal wrapped as well: A_paid_unit_runs_inside_the_clear_folder...: Error: a rehearsal is never wrapped
+ a late close that loses the halt (`exit: result.exit`): AssertionError: a unit that ran and could not close its folder halts the series
+ disk before memory: The_launch_checks...: AssertionError: next: the run-map and the ledger are byte for byte as they were
+ a rehearsal held to the disk gate: The_disk_gate...: AssertionError: a rehearsal is free: no reserve is held for it
+ a rehearsal asked as a data launch: A_host_that_cannot_certify_memory...: AssertionError: memory-not-certifiable: prog/memory.peak cannot be read after the exit of an empty program; this host cannot certify the memory bound, so no data slot is planned
+ stage-init ignores W (`workspaceCommit: null`): stage_init_checks...: AssertionError: Expected values to be strictly equal (0 !== 4)
+ a rehearsal reads the record: stage_init_checks...: Error: a rehearsal reads no record
+## the three verbs (stage-recovery-commands.test.mjs, 5 tests; RED = explore.mjs and stage-commands.mjs from HEAD)
+RED: tests 5 pass 0 fail 5: The_three_recovery_verbs...: AssertionError: stage-archive (the command is not in the table: actual '' for /^stage-archive needs --series <dir>/); stage_archive_copies...: no archive text; stage_free_through...: 4 !== 0; stage_restore_through...: 4 !== 0; Each_recovery_verb_takes_the_series_lock...: stage-archive names the holder (actual '' for /pid N/)
+GREEN: 5/5
+RED again, one mutation each:
+ stage-free ignores the unread read-back slots: AssertionError: the four sessions of slots 1 and 2 (four files each, 40 bytes each) (the read-back slot was freed too)
+ stage-archive never takes the last-archive path: AssertionError: the series ended: this archive is the last one, and a freed session is not in the tree
+ `--to` not an option of `explore.mjs`: 4 of 5 fail (usage error, exit 4 for 0)
+ stage-restore without the lock: AssertionError: stage-restore is refused while another process holds the series; stage-free without the lock: AssertionError: stage-free names the holder; stage-archive without the lock: AssertionError: stage-archive is refused while another process holds the series
+ `--rid` ignored by stage-restore: AssertionError: Expected values to be strictly equal (the restore did not stop at the one session named)
+```
+
+### PR 4 coai code round 1 (2026-11-20, branch `feat/lang-v2-f3s1-guards` from `1859bace`)
+
+Seven findings accepted by coai, each with RED-GREEN-RED: the test first against the code of `HEAD` (red), the fix (green), then the old code put back as one mutation (red again), the fix restored from a copy. A, B, C1, C2, C3 have a test of their own; C4 (`FREED_FILE` imported from `stage-archive.mjs`, `DATA_SLOTS` exported once from `stage-schedule.mjs`) and C5 (`walkEntries` as a recursive generator, `readRecord` building new values) change no behaviour and are covered by the existing tests, which stay green (the importers of `workspaces-tree.mjs` and `stage-record.mjs` were run alone: `quick-freeze-workspaces` 15, `quick-freeze-record` 1, `quick-freeze-consumers` 4, `quick-workspace` 9 (8 pass, 1 skipped), `stage-guard` and `stage-guard-real`, lang-bench `spec-freeze-record` 27). Test names are sentences. A red run of A left two empty `*.sha256list` files beside the series in the temp folder; they were removed by hand, and the green run leaves none.
+
+```
+## A. the archive's place is never the series (stage-archive.test.mjs, 4 tests; commit 253c8f23)
+RED (HEAD code): tests 12 pass 8 fail 4
+ An_archive_whose_backup_folder_is_the_parent_of_the_series...: AssertionError: the parent folder: the archive is refused (true !== false)
+ ..._is_a_link_to_the_parent_of_the_series_is_refused: AssertionError: a link to the parent: the archive is refused
+ ..._is_inside_the_series_or_a_link_into_it...: AssertionError: a link into the series: the archive is refused (the inside folder was already refused by the old lexical check; the link into it was not)
+ Two_paths_overlap_when_they_are_equal_or_one_is_inside_the_other...: TypeError: stageArchive.pathsOverlap is not a function
+GREEN: 12/12
+RED again (`locationProblem` back to the lexical check of `to` against the series): tests 12 pass 9 fail 3: the same three messages (parent, link to the parent, link into the series)
+## B. a session freed once is not freed again (stage-archive.test.mjs, stage-recovery-commands.test.mjs; commit 1e5e476b)
+RED (HEAD code): A_session_that_is_already_freed_is_named_and_left_alone_by_the_next_free_and_stage_restore_still_brings_it_back_from_its_own_archive: AssertionError: the second free removes nothing in a session that is already freed (false !== true)
+ stage_free_through_the_command_layer_names_the_sessions_that_are_already_freed_and_leaves_them_alone: AssertionError: Expected values to be strictly equal: 'freed 0 file(s), 0 bytes, of 0 session(s)' (the line "already freed, left alone (stage-restore first to free again): ..." is missing)
+GREEN: stage-archive 13/13, stage-recovery-commands 6/6
+RED again (the `held` filter of `freeLocked` removed): the same assertion, "the second free removes nothing in a session that is already freed (false !== true)"; the command test stays green under this mutation (it is red only against the code before the fix)
+## C1. a free without the unread slots is refused (stage-archive.test.mjs; commit 2e456518; the argument became `reading` for the Opus review O3, below)
+RED (HEAD code): A_free_that_is_not_given_the_unread_slots_is_refused_with_a_sentence_and_removes_nothing: AssertionError: undefined: refused (true !== false)
+GREEN: 14/14 (every existing call now says its unread slots)
+RED again (`unreadSlots = []` back and the guard off): the same assertion
+## C2. progress of the long operations (stage-archive.test.mjs, stage-recovery-commands.test.mjs; commit ef81830e)
+RED (HEAD code): Stage_archive_says_its_progress_in_the_listing_the_copying_and_the_verifying_phase...: AssertionError: listing starts at 0 (undefined !== 'listing: 0 of 52 file(s)')
+ stage_archive_and_stage_restore_print_one_progress_line_per_phase_before_their_last_line: AssertionError: listing ends at its total
+GREEN: stage-archive 16/16, stage-recovery-commands 7/7 (the summary line is the last line of each verb; two older assertions now read the last line)
+RED again (`mapSaying` says nothing): the same two messages
+## C3. one gate call walks each ended session once (stage-disk.test.mjs; commit 1ac50082; the `bytesOf` seam was added first, with no change of behaviour)
+RED (HEAD code plus the seam): One_disk_gate_call_walks_each_ended_session_folder_once...: AssertionError: every ended session folder is sized once per gate call (20 !== 10)
+GREEN: 8/8
+RED again (the facts not handed to the gates): 30 !== 10
+```
+
+### PR 4 Opus review (2026-11-20, nine findings, same branch)
+
+An independent Opus review of PR 4 at `1859bace`; the team lead accepted nine findings. Each has RED-GREEN-RED as above. The first red of every finding is its test against the code before the fix.
+
+```
+## O1. a paid unit is refused by its own held-out lock (stage-heldout.test.mjs with the REAL withSlotHeldout and the REAL readerHeldout over an invented sealed task; stage-wiring.test.mjs; commit 680772e8)
+RED: The_units_prerequisites_read_the_folder_the_slot_opened...: AssertionError: the reader given the slot's folder reads it: the clear held-out folder of task 04 is in use by pid <self> (started ...): another reader holds .../heldout-04/.clear.lock; wait for it to end (false !== true)
+ The_prerequisites_of_a_paid_unit_are_handed_the_folder_its_slot_opened: AssertionError: the reader of the unit is told which folder is open, so it does not take the lock the slot holds (actual [undefined])
+GREEN: stage-heldout 5/5 (then 7 with O8), stage-wiring 8/8
+RED again (`isSlotsOwn` ignored and `withSlotFolder` removed): the same two messages
+Kept in the same test as controls: a reader that is not handed the folder still asks for the lock and is refused ("in use by pid"); a folder of another task does not skip the lock; another process (another pid) is refused while the slot holds the lock.
+## O2. stage-free follows a symlinked cache folder (stage-archive.test.mjs, three layouts: `box/home/.dotnet`, `box/home`, `box` each a link out of the series; commit 8ff4803e)
+RED: Error: ENOTDIR: not a directory, rmdir '.../s/<rid>/box/home/.dotnet' (at removeEmptyDirs; by then the old code had followed the link, chmodded the outside tree and removed a file outside)
+GREEN: 17/17 (nothing outside changed: its modes, its empty folder and its files stay; the root is named as kept with "is a link"; the free does not throw)
+RED again (`linkOnWay` finds no link): the same ENOTDIR
+## O3. stage-free frees a read-back slot that is not finished (stage-recovery-commands.test.mjs; commit c41f0ee5)
+RED: stage_free_keeps_every_session_of_a_read_back_slot_whose_one_session_is_refuted_and_owes_its_re_run: AssertionError: a refuted session is a void whose re-run is owed: the slot is not finished, so neither of its sessions is freed ([0, 0] !== [4, 4])
+GREEN: stage-recovery-commands 8/8, stage-archive 17/17 (`freeSeries` takes `reading`, a function the command gives; it runs under the series lock and gives the run-map as `stage-run` reads it (`mapAsRead`) with the unread slots)
+RED again (the free reads the raw run-map again): the same assertion
+## O4. a missing value passes the identity check (stage-guard.test.mjs, 5 tests; commit 95d23ba9)
+RED: The_runner_manifest_identity...: runnerManifest gave the text "undefined"; The_caps_identity...: caps gave the text "capUsd:undefined"; The_memory_value_identity...: memoryValue gave the text "6c3b66cf..."; The_series_defaults_identity...: seriesDefaults gave the text "b6489654..."; A_reader_that_answers_undefined_or_null...: host gave the text "undefined" (all: a missing value is never hashed or compared)
+GREEN: 17/17 at that commit
+RED again (both identity modules from the commit before): the same five
+## O5. the D15 environment check tests a rebuilt environment (stage-wiring.test.mjs; commit 7d07dd28)
+RED: The_environment_check_judges_the_quick_profile_the_agent_box_is_built_from...: AssertionError: the environment is built from the quick profile (`quickExplore`), as the agent box is (actual undefined)
+GREEN: 9/9
+RED again (`quickExplore` taken out of `envOf`): the same message
+Honest limit: `quickExplore` adds only `DOTNET_ROOT` today, so the "heap key that only the quick profile adds" is simulated by a seam that adds it when it sees `quickProfile`; the default builder is proven by `DOTNET_ROOT` being among the keys it judges.
+## O6. a missing size is a refusal, not a resumable halt (stage-disk.test.mjs, stage-wiring.test.mjs; commit fcde68dd)
+RED: A_size_that_cannot_be_read_is_a_refusal_with_exit_4...: AssertionError: freeBytes 0: exit 4, a refusal the same command cannot cure by waiting; A_missing_or_zero_size...: freeBytes 0: a refusal, not a resumable halt; The_disk_gate_halts_a_paid_unit...: AssertionError: next: the run-map and the ledger are byte for byte as they were
+GREEN: stage-disk 9/9, stage-wiring 9/9 (a size that cannot be read: exit 4, "the disk check cannot be made: ...", no ledger line; a real shortage: exit 3 and its event, both asserted)
+RED again (the two modules from the commit before): the same three
+## O7. a freed.json with a missing or damaged size is counted as 0 (stage-disk.test.mjs; commit b9544da5)
+RED: A_freed_json_with_a_missing_or_damaged_size_is_named...: AssertionError: a size missing: refused (true !== false)
+GREEN: 10/10 (four damaged forms: a size missing, a size that is text, a negative size, no list; each refused with exit 4 naming the file)
+RED again (`hasSize` always true, the old `: 0`): the same message
+## O8. the "left open" check ran only after a normal return (stage-heldout.test.mjs; commit 80533e95)
+RED: A_slot_that_throws_with_its_folder_still_open_says_so_in_the_error_it_throws: AssertionError: and the folder is named: the slot broke
+ An_open_that_fails_after_the_folder_was_placed_says_the_folder_is_left_open_and_the_slot_did_not_run: AssertionError: and the folder is named: .../heldout-04/.open already exists, held by the operator: ...
+GREEN: stage-heldout 7/7
+RED again (`stage-heldout.mjs` from the commit before): the same two messages
+Choice: a throw still propagates (the series must not go on); the error is a new one with the slot's message, the sentence ("left open after the slot ... heldout-close --task NN") and the original as `cause`.
+## O9. a missing hashes-lang.txt makes stageGuard reject (stage-guard.test.mjs; commits e09f3ebc, e1e10227)
+RED: Error: ENOENT: no such file or directory, open '.../spikes/lang-bench/inputs/hashes-lang.txt'
+GREEN: 18/18 (the file is named as one problem and the record's missing field is still named beside it; a first version of the test asked for another problem and was corrected in e1e10227 after one red run of the green code)
+RED again (`stage-guard.mjs` from the commit before): the same ENOENT
+```
+
+### PR 4 coai code round 2 (2026-11-20, seven findings, head `87e5b132`)
+
+Same method: the test against the code of `HEAD` (red), the fix (green), the old code put back (red again), the fix restored from a copy. R3 is a convention fix with no change of behaviour and no red test (`restoreAll` is recursive and keeps the early return on a failed restore; `stage-archive` and `stage-recovery-commands` stay green). R1, R2, R3 and R4 are in one commit because they share `stage-archive.mjs`.
+
+```
+## R1. no copy through a link in an existing backup (stage-archive.test.mjs, 2 tests; commit 536d2eb9)
+RED (HEAD code): A_backup_that_already_holds_a_link_on_the_way_to_a_listed_file_refuses_the_whole_archive...: AssertionError: s: the archive is refused (the link was at `s`; the same test also covers `s/<rid>/box` and `s/<rid>/box/nuget`; the old code wrote a file outside the backup)
+ A_target_that_is_itself_a_link_or_a_planted_temporary_link_is_replaced_and_never_written_through: AssertionError: the copy differs from the source (1 file(s)): pairs/p1.json: missing from the copy, or it differs from the source (a link planted at `<target>.<pid>.tmp` was written through and then renamed into the target)
+GREEN: stage-archive 21/21 at that commit (the archive is refused whole, the link named, nothing outside changed, nothing recorded; a link at a target or at its temporary name is replaced, the temporary name is removed first and copied with COPYFILE_EXCL)
+RED again (`stage-archive.mjs` from `HEAD`): the same two messages
+## R2. the final archive looks for freed sessions under the lock (stage-archive.test.mjs; commit 536d2eb9)
+RED: The_final_archive_refuses_a_session_that_a_free_made_between_its_first_look_and_its_lock: AssertionError: the final archive sees the freed sessions under the lock (a free run from `hooks.beforeLock` was not seen)
+GREEN: passes (the refusal is `lockedRefusal` in `archiveLocked`, before the listing)
+RED again: the same message
+## R4. an archive.json with no list of archives (stage-archive.test.mjs, `{}`, `{"archives": null}`, `{"archives": "none"}`; commit 536d2eb9)
+RED: An_archive_json_without_a_list_of_archives_is_refused...: TypeError: Cannot read properties of undefined (reading 'at')
+GREEN: both the free and the archive refuse with "archive.json ... holds no list of archives"; the archive copies nothing first
+RED again: the same TypeError
+## R5 and R6. the free says its progress (stage-archive.test.mjs, stage-recovery-commands.test.mjs; commit fae64e3f)
+RED: Stage_free_says_its_progress_per_session_while_it_verifies...: AssertionError: 5ef225: verifying says a line every 3 files
+ stage_free_prints_its_progress_lines_before_its_summary: AssertionError: a session's verifying ends at its total
+GREEN: stage-archive 22/22, stage-recovery-commands 9/9 (lines `verifying <rid>: n of N file(s)` and `removing <rid>: n of N file(s)`, a line every `progressEvery` files; the command wires `io.say`; the older command test now reads the summary line by its text)
+RED again (the callback not handed to `freeLocked`): the same two messages
+## R7. the listing says it started and counts while it walks (stage-archive.test.mjs; commit b98d83f3)
+RED: The_archive_listing_says_it_started_before_the_walk_and_a_line_every_N_entries...: AssertionError: the first line is said before the walk (actual 'listing: 0 of 52 file(s)', expected 'listing: started')
+GREEN: stage-archive 23/23 (`listing: started`, then `listing: N entries walked` every N entries, then the hashing lines; `streamEntries` is the lazy walk `walkEntries` sorts)
+RED again (the "started" line removed): AssertionError: the first line is said before the walk (actual 'listing: 10 entries walked')
+```
+
+### PR 4 coai code round 3 (2026-11-20, four findings and a link audit, head `8c63acb9`)
+
+The symlink class came back a third time, so this round starts with an audit of every site of `stage-archive.mjs`, `stage-list.mjs`, `stage-progress.mjs`, `stage-disk.mjs` and `stage-heldout.mjs` (and the helpers they call to write) that creates, writes, renames, chmods or removes a file or folder. The fix is ONE helper, `lib/safe-place.mjs`: `linkOnWay` (an `lstat` of every folder on the way from a root; the root only when asked), `placeFile` and `placeLink` (refuse a link on the way before any folder is made; write an exclusive temporary file, a link at that name removed first, `wx` or `COPYFILE_EXCL`; `rename` over the target, so a link at the target is replaced, never followed). Round 2's `linkInCopyRoot` now calls `linkOnWay`; nothing is repeated.
+
+| Site | What it does | Can a planted link make it act outside? | Now |
+|---|---|---|---|
+| `archive` `copyEntry` (the copy under `<to>/<series>`) | mkdir, remove target, symlink, temporary copy, chmod, rename | a link at a parent: yes (round 2 pre-pass only); at the temporary name: yes (fixed in round 2); at the target: no (replaced) | `placeFile` / `placeLink` with the root checked; the whole-archive pre-pass `linkInCopyRoot` stays (it uses `linkOnWay`). Tests: round 2's two R1 tests |
+| `recordArchive` the hash list `<dest>.<12 hex>.sha256list` in the backup | `writeFileSync` | YES: a link at the predictable name was followed and the file behind it truncated | `placeFile` (exclusive temporary file, rename). Test: `The_hash_list_is_written_through_an_exclusive_temporary_file...` |
+| `recordArchive` `archive.json` (`writeJson`) in the series | temporary file `archive.json.<pid>.tmp`, rename | YES at the temporary name (`writeFileSync` followed it) | `placeFile`. Test: `archive_json_and_freed_json_are_written_through...` |
+| `writeFreed` `freed.json` in `s/<rid>/` | the same `writeJson` | YES at the temporary name; YES when `s` or `s/<rid>` is a link (the file lands outside) | `placeFile` with root = the series (looks at `s` and `s/<rid>`); a refusal keeps the session whole and names it (`keptWhole`). Tests: the same test; `A_session_folder_that_is_a_link_is_never_freed_into...` |
+| `removeFiles` (chmod of the roots, `rmSync` of listed files, `rmdirSync` of empty folders) | chmod / remove under the three cache roots of a session | a link at a root or on the way: was YES (round Opus O2) | already fixed: `plainRoots` keeps and names a root that is, or lies under, a link; inside a root `chmodTree` skips links, `rmSync` removes a link and not what it points at, `subFolders` lists real folders only. Unchanged; test: O2 |
+| `restore` `placeItem` | mkdir, remove, symlink, `copyFileSync`, chmod, rename into the session | YES: a link at a parent (such as `box/npm`) and at the temporary name were followed | `placeFile` / `placeLink` with root = the series, and `restoreLinkProblem` looks at `s/<rid>` and every folder before ANYTHING is placed. Tests: `A_restore_refuses_a_link_planted...`, `A_restore_replaces_a_link_planted_at_a_temporary_name_or_at_a_target...` |
+| `restoreSession` removal of `freed.json` | `rmSync` | YES when `s/<rid>` is a link (it removed a file behind the link) | `restoreLinkProblem` runs first. Test: `A_freed_session_folder_that_became_a_link_is_not_restored_into...` |
+| `diskGate` the halt's event line (`appendLedger`) | `appendFileSync` on `ledger.ndjson` | YES for a link at the ledger (append follows it). `appendLedger` is shared with every spend line and part of the frozen harness, so it is not changed; this site looks first | `recordHalt`: a ledger that is a link is a refusal (exit 4) and no line is written. Limit: every other verb still appends through `appendLedger`. Test: `A_halt_does_not_append_its_event_line_through_a_link...` |
+| `withSeriesLock` / `acquireSeriesLock` (the lock file in the series) | `openSync(file, 'wx')`, `rmSync` of its own lock | no: `wx` never follows a link and refuses an existing name | none |
+| `stage-heldout` (no write of its own) through `withOpenedHeldout` | an owned temporary folder inside the private `heldout-NN/`, a rename of `cases/` after an `lstat` of its absence, the stamp with `wx`, a removal by rename and a delete of an owned folder | no: random owned names with an exclusive claim, an `lstat` before the rename, `wx` for the stamp; the folder is the operator's private 700 area, hardened in PR 4a rounds 1 and 2 (a link in `cases/` or in the backup's place is refused) | none |
+| `stage-list`, `stage-progress` | read only (`lstat`, `readdir`, hashing) and a callback | no write | none |
+| reads of the archived copy (`copyOf`, `hashAt`, `unproven`) | read and hash | a link in the backup could point at other bytes, but every byte is checked against the listed sha256 before it is placed or trusted | none |
+
+```
+## link audit, the sites with a test (stage-archive.test.mjs 5 tests + 1, stage-disk.test.mjs 1; commit 09756d24)
+RED (HEAD code): A_restore_refuses_a_link_planted_in_a_folder_on_the_way_to_a_freed_file...: AssertionError: the restore is refused (a file outside the series was overwritten)
+ A_restore_replaces_a_link_planted_at_a_temporary_name_or_at_a_target...: AssertionError: session 5ef225: box/nuget/pkg-a/a.nupkg do not match the listed bytes after the copy
+ The_hash_list_is_written_through_an_exclusive_temporary_file...: AssertionError: the file the link pointed at was not truncated
+ archive_json_and_freed_json_are_written_through_an_exclusive_temporary_file...: AssertionError: archive.json: nothing written through the link
+ A_halt_does_not_append_its_event_line_through_a_link_at_the_ledger_and_is_refused_instead: AssertionError: a refusal: the ledger is a link
+ (A_session_folder_that_is_a_link_is_never_freed_into... was already green: round Opus O2 covers it; it is kept as the proof for `writeFreed`)
+GREEN: stage-archive 28/28, stage-disk 11/11 at that commit (a later test, `A_freed_session_folder_that_became_a_link_is_not_restored_into...`, is red with the code before the audit: AssertionError: the restore is refused)
+RED again (stage-archive.mjs from before the audit): 5 of 29 red, the four messages above and the restore into a session folder that became a link; (stage-disk.mjs from HEAD): the ledger message
+## finding 3. the identity readers give values (stage-guard.test.mjs; commit 458a3740)
+RED: A_reader_with_a_missing_field_gives_a_value_that_says_so_and_does_not_throw: AssertionError: Got unwanted rejection: caps: the reader does not throw (Error: explore.json holds no caps.capUsd)
+GREEN: stage-guard 19/19 (the five O4 tests unchanged and green; `READERS` give `ok(text)` or `fail(why)`; `liveIdentities` has no `try` and no `catch`; the one boundary for a system exception is `guarded`, and a reader override that throws is no longer caught)
+RED again (both identity modules from HEAD): the same message
+## finding 4. the disk check says what it sizes (stage-disk.test.mjs, stage-wiring.test.mjs; commit 5a95cc3e)
+RED: The_disk_gate_says_how_many_ended_sessions_it_sizes...: AssertionError: the first line says how many (actual undefined)
+ The_disk_check_of_a_paid_unit_says_through_io_say...: AssertionError: the first unit has no ended session
+GREEN: stage-disk 12/12, stage-wiring 10/10 (`disk check: sizing N ended session(s)`, then `disk check: n of N session(s)` every N sessions and at the end; `io.say` is wired in `gateArgs`)
+RED again (stage-disk.mjs and stage-launch.mjs from HEAD): the same two
+```
+
+**Files run alone after the last commit (coai code round 3)** (`taskset -c 0-5 node --test --test-concurrency=1`, 2026-11-20; pass, 0 fail each): `stage-amendments` 9, `stage-archive` 29, `stage-commands` 12, `stage-disk` 12, `stage-facts` 3, `stage-guard-real` 3 (2 pass, 1 skipped), `stage-guard` 19, `stage-heldout` 7, `stage-loop` 8, `stage-recovery-commands` 9, `stage-rounds` 16, `stage-run` 19, `stage-schedule` 53, `stage-series` 8, `stage-wiring` 10, `commands` 15, `code-shape` 157, `quick-freeze-workspaces` 15, `quick-freeze-record` 1, `quick-freeze-consumers` 4, `quick-workspace` 9 (8 pass, 1 skipped), `quick-heldout-sealed-readers` 8, `quick-heldout-entry-points` 14, `quick-run-harness-gate` 3, `workspace` 8; lang-bench `spec-freeze-record` 27.
+
+**What this does not prove.** The wiring tests run the fake loop (`io.runSeams.loopFn`), so no real held-out folder is made, no real probe runs inside `stage-run`, and the disk gate reads a fake free-bytes function and a fake floor; each real half is tested alone (`stage-heldout.test.mjs` with invented keys, 59 with the layer). The default `io.stage.floorBytes` is read from the pre-registration's manifest, which is PR 6's file and does not exist yet: until then a paid launch is refused by the guard first and by the missing size second. A rehearsal now runs the probe once per unit; with `--until round` that is one empty program per slot.
+
+**Files run alone** (each file on its own, `taskset -c 0-5 node --test --test-concurrency=1`, 2026-11-20, at the head of this PR; the whole suites are the team lead's): `stage-amendments` 9, `stage-archive` 8, `stage-commands` 12, `stage-disk` 7, `stage-facts` 3, `stage-guard-real` 3 (2 pass, 1 skipped: no `LANG_V2_TASK_REPO`), `stage-guard` 12, `stage-heldout` 4, `stage-loop` 8, `stage-recovery-commands` 5, `stage-rounds` 16, `stage-run` 19, `stage-schedule` 53, `stage-series` 8, `stage-wiring` 7, `commands` 15, `code-shape` 155 (the new `stage-launch.mjs` is in it; `stage-step.mjs`'s `runChosenUnit` was cut after the first run went over complexity 4) pass, 0 fail; and every file that imports `explore.mjs`: `note` 10, `quick-package-seal` 3, `prepare` 8, `quick-heldout-round1` 17, `quick-heldout-round2` 6, `quick-package-command` 18, `quick-package-registry` 20, `quick-leak-candidate-baseline` 7, `network` 2, `olympiad-rehearse` 2 (136 s), `olympiad-note` 8, `e2e` 5 (132 s), `quick-freeze-workspaces` 15, `quick-heldout-entry-points` 14, `quick-leak-no-text` 4, `olympiad-tasks` 18, `quick-heldout-verbs` 7, `plan` 6, `quick-note-verdicts` 2, `quick-memory-value` 8, `quick-package-real` 5 (204 s), `quick-repartition` 9 pass, 0 fail; lang-bench (`blobAtTag` is exported): `spec-freeze` 38, `spec-freeze-record` 27, `spec-freeze-order` 1, `spec-freeze-pins` 5 (4 pass, 1 skipped), `code-shape-freeze` 15 pass, 0 fail. `stage-guard-real` with `BENCH_REQUIRE_SANDBOX=1` and no task repository fails its one case that needs one, as it must.
+
 ## F2.S2 (b): the task repository's rulesets (`spikes/lang-bench/`)
 
 The two files `test/github-lang.test.mjs` (the library: the data, the pure compare, the reads, the apply, `scrub`, the prerequisites) and `test/github-rulesets.test.mjs` (the command: usage, `--check`, `--apply`, the real process) run over a **fake GitHub**

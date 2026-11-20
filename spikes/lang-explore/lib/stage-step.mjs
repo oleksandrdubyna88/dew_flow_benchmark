@@ -1,5 +1,6 @@
 // ONE unit of Stage 1, from the choice to the records (F3.S1 (a), PR 3). In order, and each refusal leaves the run-map as it was: the series and the dated lines, the unit the schedule offers, the owner's go line for its scope, the guard, the task and
-// its pins, the series' pinned price file and policy, the plan. Then the one body both verbs share, `run.mjs`'s `runUnit`. No pause point is asked (D7, D53).
+// its pins, the series' pinned price file and policy, the agent box's environment, memory certification, the disk reserve and rule (`stage-launch.mjs`, PR 4), the plan. Then the one body both verbs share, `run.mjs`'s `runUnit`, inside the unit's
+// clear held-out folder for a paid unit. No pause point is asked (D7, D53).
 import path from 'node:path';
 import { reclassifyByHand } from '../../minigit-bench/lib/bare-reclass.mjs';
 import { appendLedger, readLedger } from '../../minigit-bench/lib/ledger.mjs';
@@ -13,6 +14,7 @@ import { stageHandVerdictsFor } from './stage-amendments.mjs';
 import { finalizerOf } from './stage-final.mjs';
 import { finishOwedRecords } from './stage-owed.mjs';
 import { guardOf, ownerGoFor, readGates } from './stage-gates.mjs';
+import { certifyStep, diskStep, envStep, underHeldout } from './stage-launch.mjs';
 import { rehearsalIo } from './stage-rehearsal.mjs';
 import { DATA_KIND } from './stage-schedule.mjs';
 import { loadStageSeries } from './stage-series.mjs';
@@ -107,6 +109,7 @@ function policyStep({ series }) {
 }
 
 const pinsStep = ({ series, task }) => { const moved = pinsMoved({ series, task }); return moved ? fail(moved) : ok({}); };
+const diskCheck = s => diskStep({ ...s, map: mapAsRead(s) });
 const planStep = ({ series, unit, io }) => { const made = planUnit({ map: series.map, unit, ...(io.stage?.pilotRand ? { rand: io.stage.pilotRand } : {}) }); return made.ok ? ok({ plan: made.value }) : made; };
 
 /** The `unit` argument of `runUnit`: the unit's kind, the policy files the series pinned, the guard, `onReady` (the owner-go event, written once the shared body has passed its last refusal check), the Stage 1 parts of the context and the records' finalizer. */
@@ -129,11 +132,17 @@ function sayGo({ series, unit, go, plan, io }) {
   if (go && !goSaid({ file, unit, rids })) appendLedger(file, { event: 'owner-go', pair: unit.pair, what: unit.what, rids, date: go.date, scope: go.scope, words: go.words, t: (io.now ?? systemClock)().toISOString() });
 }
 
-/** The run: the series with the plan, the io of the unit (a rehearsal's stub rig) and the one body `runUnit`. The go event is `onReady`'s: a refused run adds no ledger line. */
+/** The run of the unit: the one body `runUnit` over the series with the plan. */
+const runBody = s => runUnit({ series: { ...s.series, map: s.plan.map }, pair: s.unit.pair, planned: s.plan, io: s.rig.io, task: s.task, unit: unitArgs(s) });
+
+/** `rig` whose io tells the unit's prerequisites which clear folder its slot opened (`heldoutArgs.slotFolder`): the slot holds that task's lock for the whole unit, so the unit's reader reads the folder and does not take the lock again. */
+const withSlotFolder = (rig, folder) => ({ ...rig, io: { ...rig.io, heldoutArgs: { ...rig.io.heldoutArgs, slotFolder: folder } } });
+
+/** The run: the io of the unit (a rehearsal's stub rig) and the one body, a paid unit's inside the clear folder of its own task. The go event is `onReady`'s: a refused run adds no ledger line. */
 async function launch(s) {
   const rig = await (isRehearsal(s.series.dir) ? rehearsalIo(s) : { io: s.io, close: async () => {} });
   try {
-    return await runUnit({ series: { ...s.series, map: s.plan.map }, pair: s.unit.pair, planned: s.plan, io: rig.io, task: s.task, unit: unitArgs(s) });
+    return await underHeldout({ series: s.series, task: s.task, explore: s.explore, io: s.io, fn: folder => runBody({ ...s, rig: withSlotFolder(rig, folder) }) });
   } finally {
     await rig.close();
   }
@@ -155,13 +164,22 @@ export async function runStageUnit({ dir, what, io }) {
   return owed ?? runChosenUnit({ dir, what, io });
 }
 
+const CHECKS = [goStep, guardStep, taskStep, policyStep, pinsStep, envStep, certifyStep, diskCheck, planStep];
+
+/** The refusal a failed step ends the call with: its own exit when it names one (a halt of PR 4's checks is 3), else a refusal (4). */
+const refusalOf = failed => ({ exit: failed.exit ?? EXIT.config, message: failed.reason });
+
+const flagsOf = flags => (flags.length > 0 ? { flags } : {});
+
+/** What the result tells about the unit that ran: its number, round, task and whether it is a read-back slot. */
+const unitFacts = unit => ({ what: unit.what, pair: unit.pair, round: unit.round, task: unit.task, readback: unit.slot?.readback === true });
+
 async function runChosenUnit({ dir, what, io }) {
   const chosen = chooseUnit({ dir, what, io });
   if (chosen.refusal) return chosen.refusal;
   if (chosen.finished) return { exit: EXIT.done, message: 'nothing more to run: every unit the schedule holds is finished', finished: true };
-  const state = { ...chosen, io };
-  const prepared = await runSteps([goStep, guardStep, taskStep, policyStep, pinsStep, planStep], state);
-  if (!prepared.ok) return refused(prepared.reason);
+  const prepared = await runSteps(CHECKS, { ...chosen, io });
+  if (!prepared.ok) return refusalOf(prepared);
   const result = await launch(prepared.value);
-  return { ...result, unit: { what: chosen.unit.what, pair: chosen.unit.pair, round: chosen.unit.round, task: chosen.unit.task, readback: chosen.unit.slot?.readback === true } };
+  return { ...result, ...flagsOf(prepared.value.flags), unit: unitFacts(chosen.unit) };
 }

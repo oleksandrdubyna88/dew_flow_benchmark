@@ -1,7 +1,7 @@
 // The tree of a workspace folder, as bytes and as one hash (F2.S2 (d), the freeze tools): a folder read into the file map `{ relPath: { bytes, mode } }` that `quickWorkspaceFiles` gives a session, the sha256 over such a map,
 // and the byte-for-byte comparison that names the file when two maps differ. A map read from a folder and the map built in memory hash alike, because the hash sees only what git keeps: the path, the execute bit and the bytes.
 import { createHash } from 'node:crypto';
-import { lstatSync, readFileSync, readdirSync } from 'node:fs';
+import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, readlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 
@@ -69,4 +69,59 @@ function differenceOf(rel, want, have) {
 export function compareFiles(expected, found) {
   const paths = [...new Set([...Object.keys(expected), ...Object.keys(found)])].sort();
   return paths.map(rel => differenceOf(rel, expected[rel], found[rel])).filter(line => line !== null);
+}
+
+// ---- a streaming walk for trees that are too large to read into memory (F3.S1 PR 4: the series archive, the free verb, the disk rule) ------------------------------------------------------------------------------------------
+
+const CHUNK_BYTES = 1024 * 1024;
+const kindOf = st => (st.isFile() ? 'file' : st.isSymbolicLink() ? 'link' : 'other');
+
+/** One entry by `lstat` (a link is never followed and no file is read): `{ rel, kind, size, mode, target }`; `target` is the link's text, else null. */
+function entryByLstat({ root, rel }) {
+  const full = path.join(root, rel);
+  const st = lstatSync(full);
+  return { rel: rel.split(path.sep).join('/'), kind: kindOf(st), directory: st.isDirectory(), size: st.size, mode: st.mode & 0o777, target: st.isSymbolicLink() ? readlinkSync(full) : null };
+}
+
+/** The entries directly under `rel`: `{ files, dirs }` (a folder is queued, not listed). */
+function listOne({ root, rel, skip }) {
+  const names = readdirSync(path.join(root, rel)).sort().map(name => path.join(rel, name)).filter(child => !skip(child.split(path.sep).join('/')));
+  const entries = names.map(child => entryByLstat({ root, rel: child }));
+  return { files: entries.filter(e => !e.directory).map(({ directory: _d, ...entry }) => entry), dirs: names.filter((_, i) => entries[i].directory) };
+}
+
+/**
+ * Every entry under `root`, by `lstat`, sorted by path with `/` separators: `[{ rel, kind: 'file' | 'link' | 'other', size, mode, target }]` (a folder is walked and not listed; a link is listed and never followed). Nothing is read
+ * into memory. `skip(rel)` leaves an entry out, a folder with everything under it.
+ */
+export const walkEntries = (root, { skip = () => false } = {}) => [...streamEntries(root, { skip })].sort(byRel);
+
+/** The order of `walkEntries`: by path, code point order. */
+export const byRel = (a, b) => (a.rel < b.rel ? -1 : Number(a.rel > b.rel));
+
+/** The entries of `walkEntries` as the walk finds them (not sorted), one folder at a time: a generator, so a caller can count them while the walk goes on. */
+export const streamEntries = (root, { skip = () => false } = {}) => entriesUnder({ root, rel: '', skip });
+
+/** The entries under `root/rel` one folder at a time (a folder's own entries, then each sub folder): a generator, so no tree is held but the entries already yielded; the recursion is as deep as the tree. */
+function* entriesUnder({ root, rel, skip }) {
+  const { files, dirs } = listOne({ root, rel, skip });
+  yield* files;
+  for (const dir of dirs) yield* entriesUnder({ root, rel: dir, skip });
+}
+
+/** The sha256 of a file, streamed in 1 MiB chunks (a cache file may be large). */
+export function sha256OfFile(file) {
+  const h = createHash('sha256');
+  const fd = openSync(file, 'r');
+  try {
+    const buffer = Buffer.alloc(CHUNK_BYTES);
+    let n = readSync(fd, buffer, 0, CHUNK_BYTES, null);
+    while (n > 0) {
+      h.update(buffer.subarray(0, n));
+      n = readSync(fd, buffer, 0, CHUNK_BYTES, null);
+    }
+  } finally {
+    closeSync(fd);
+  }
+  return h.digest('hex');
 }

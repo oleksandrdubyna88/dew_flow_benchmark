@@ -1,15 +1,19 @@
-// The three verbs of Stage 1 on the command line (F3.S1 (a), PR 3): `stage-init` (FREE), `stage-run` (SPENDS MONEY unless a rehearsal series or `--dry-run`), `stage-status` (FREE, read only). Each takes the parsed flags and an `io` and returns an exit code:
-// 0 done | 2 a stop | 3 a resumable halt | 4 usage, configuration or a refusal | 5 failed.
+// The verbs of Stage 1 on the command line: `stage-init` (FREE), `stage-run` (SPENDS MONEY unless a rehearsal series or `--dry-run`), `stage-status` (FREE, read only) (F3.S1 (a), PR 3), and the recovery path `stage-archive`, `stage-free` and `stage-restore`
+// (all FREE, each under the series lock, PR 4). Each takes the parsed flags and an `io` and returns an exit code: 0 done | 2 a stop | 3 a resumable halt | 4 usage, configuration or a refusal | 5 failed.
 import path from 'node:path';
 import { readLedger } from '../../minigit-bench/lib/ledger.mjs';
+import { fail, ok } from '../../minigit-bench/lib/result.mjs';
+import { systemClock } from './clock.mjs';
 import { heldoutAware } from './heldout-commands.mjs';
 import { readToken } from './run.mjs';
 import { ledgerFileOf } from './series.mjs';
+import { archiveSeries, freeSeries, restoreSeries } from './stage-archive.mjs';
 import { stageInit } from './stage-init.mjs';
 import { stageRun } from './stage-run.mjs';
 import { stageStatusLines } from './stage-status.mjs';
-import { amendmentsReport, amendmentsText } from './stage-gates.mjs';
-import { mapAsRead, openStage } from './stage-step.mjs';
+import { amendmentsReport, amendmentsText, readGates } from './stage-gates.mjs';
+import { unreadReadbackSlots, slotsOf } from './stage-schedule.mjs';
+import { mapAsRead, openReasonOf, openStage } from './stage-step.mjs';
 import { loadWorld } from './world.mjs';
 
 const refused = (io, reason) => { io.say(reason); return 4; };
@@ -44,4 +48,62 @@ export function cmdStageStatus(values, io) {
   statusLines({ series: series.value, text: text.value }).forEach(l => io.say(l));
   amendmentsReport(io).forEach(l => io.say(l));
   return 0;
+}
+
+// ---- the recovery path: stage-archive, stage-free, stage-restore (PR 4) ----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/** The Stage 1 series `--series` names, opened as `stage-run` opens it. -> `ok(series)` | `fail`. */
+const seriesOfValues = ({ values, io, verb }) => (values.series ? openStage({ seriesDir: path.resolve(values.series), io }) : fail(`${verb} needs --series <dir>`));
+
+/** The exit of a verb of the recovery path over its result: the lines of a success, the reason of a refusal (4). */
+function finish({ io, result, lines }) {
+  if (!result.ok) return refused(io, result.reason);
+  lines(result.value).forEach(l => io.say(l));
+  return 0;
+}
+
+const archiveLines = e => [`archived ${e.files} file(s), ${e.bytes} bytes, to ${e.copy}; the list ${e.listSha256.slice(0, 12)} is ${e.listFile}; slots finished: ${e.slotsFinished.join(', ') || 'none'}`];
+
+/** `stage-archive --series <dir> --to <backup folder>`: copy the whole series to the private backup, verify the copy against the sha256 list and record it in `archive.json`. Deletes nothing. A series that has ended (stopped or finished) is archived as the LAST archive, which refuses a freed session. */
+export function cmdStageArchive(values, io) {
+  const series = seriesOfValues({ values, io, verb: 'stage-archive' });
+  if (!series.ok) return refused(io, series.reason);
+  if (!values.to) return refused(io, 'stage-archive needs --to <backup folder>: the private backup the copy goes to');
+  const dir = series.value.dir;
+  return finish({ io, result: archiveSeries({ series: dir, to: path.resolve(values.to), now: io.now ?? systemClock, final: openReasonOf({ dir, io }) === null, progress: io.say }), lines: archiveLines });
+}
+
+/** `ok({ map, unreadSlots })` of a series and its gates as read now: the run-map as `stage-run` reads it (`mapAsRead`, a dated `refuted` line applied) and the read-back slots whose dated lines are not there yet. */
+function readingFrom({ series, read }) {
+  const { seed, seedRevealed, readbackLines } = read.gates;
+  const map = mapAsRead({ series, read });
+  return ok({ map, unreadSlots: unreadReadbackSlots({ map, slots: seedRevealed ? slotsOf({ seed }) : [], readbackLines }).map(row => row.slot) });
+}
+
+/** The reading `stage-free` takes under the series lock: the series and its gates are opened again there, so what may be freed is judged from the files as they are when the lock is held. -> `() => ok({ map, unreadSlots }) | fail` */
+const readingOf = ({ dir, io }) => () => {
+  const series = openStage({ seriesDir: dir, io });
+  const read = series.ok ? readGates({ series: series.value, io }) : series;
+  return read.ok ? readingFrom({ series: series.value, read: read.value }) : read;
+};
+
+const alreadyLine = r => (r.alreadyFreed.length === 0 ? [] : [`already freed, left alone (stage-restore first to free again): ${r.alreadyFreed.join(', ')}`]);
+
+const freeLines = r => [`freed ${r.removed.length} file(s), ${r.bytes} bytes, of ${r.sessions.length} session(s)`, ...alreadyLine(r), ...r.kept.map(k => `kept ${k.path}: ${k.why}`)];
+
+/** `stage-free --series <dir>`: remove the three cache folders of final sessions in finished slots, each file only when the verified archive proves it; a read-back slot waits for its dated lines. */
+export function cmdStageFree(values, io) {
+  const series = seriesOfValues({ values, io, verb: 'stage-free' });
+  if (!series.ok) return refused(io, series.reason);
+  const dir = series.value.dir;
+  return finish({ io, result: freeSeries({ series: dir, reading: readingOf({ dir, io }), now: io.now ?? systemClock, progress: io.say }), lines: freeLines });
+}
+
+const restoreLines = r => [`restored ${r.restored.length} session(s): ${r.restored.join(', ') || 'none'}`];
+
+/** `stage-restore --series <dir> [--rid <rid>]`: copy the freed folders of one session, or of every freed session, back from the archive, verified against `freed.json`'s list. */
+export function cmdStageRestore(values, io) {
+  const series = seriesOfValues({ values, io, verb: 'stage-restore' });
+  if (!series.ok) return refused(io, series.reason);
+  return finish({ io, result: restoreSeries({ series: series.value.dir, rid: values.rid, progress: io.say }), lines: restoreLines });
 }

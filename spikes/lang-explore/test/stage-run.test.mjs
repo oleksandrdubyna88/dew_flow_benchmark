@@ -185,7 +185,7 @@ test('A_stage_series_never_runs_with_the_guard_that_always_passes', async () => 
   const before = snapshot(rig.dir);
   const r = await next(rig);
   assert.equal(r.exit, 4);
-  assert.match(r.message, /^stage-run: the Stage 1 guard .* is not merged yet: until it is, only a rehearsal series runs/);
+  assert.match(r.message, /^\d+ problem\(s\) before a paid launch: .*the pre-registration guard \(PR 5: .* is not wired into this guard: a paid launch is refused without it/, 'the default is PR 4\'s guard, and with no pre-registration guard handed in it refuses a paid launch by name');
   assert.equal(snapshot(rig.dir), before, 'refused before anything is planned');
   assert.deepEqual(rig.log, []);
   const pilot = await stageRun({ values: { series: rig.dir, what: 'aa' }, io: rig.io });

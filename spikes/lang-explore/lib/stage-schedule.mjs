@@ -13,6 +13,8 @@ export const TASK_KINDS = Object.freeze({ '04': 'web', '05': 'daemon', '06': 'we
 export const READBACK_ROW = 'G-1';
 
 export const STAGE_ROUNDS = 5;
+/** The data slots of Stage 1: every task once in every round. */
+export const DATA_SLOTS = STAGE_ROUNDS * FREEZE_TASKS.length;
 /** The run-map kind of a data session: the slot's number is its `pair`. */
 export const DATA_KIND = 'data';
 const ATTEMPTS = Array.from({ length: MAX_ATTEMPTS }, (_, i) => i + 1);
@@ -466,4 +468,14 @@ function firstStep(steps) {
     if (!result.ok || result.value !== null) return result;
   }
   return ok(null);
+}
+
+/**
+ * The read-back slots whose sessions that count still have no dated line: `[{ slot, rids }]` (empty when every one is read). A slot of this list is no finished slot for `stage-free` (F3.S1 PR 4): the judge's reading comes first. A `refuted` line
+ * is applied as `nextSlot` applies it, so a refuted session is a void and its slot is not finished either. `slots` are `slotsOf`'s, `readbackLines` the parsed dated lines (anything else is no lines).
+ */
+export function unreadReadbackSlots({ map, slots, readbackLines }) {
+  const lines = verdictLines(readbackLines);
+  const seen = withRefuted({ map, slots, lines });
+  return slots.filter(s => s.readback).map(slot => ({ slot: slot.slot, rids: unreadRids({ map: seen, slot, lines }) })).filter(row => row.rids.length > 0);
 }
