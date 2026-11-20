@@ -106,19 +106,44 @@ test('The_disk_rule_halts_a_slot_below_twice_its_worst_case_resumably_and_record
   assert.equal(readLedger(ledgerFile).length, 1, 'and records nothing');
 });
 
+/** The sizes a gate cannot be given or cannot read, each as a name and the arguments it replaces. */
+const UNREADABLE = [['freeBytes 0', { freeBytes: 0 }], ['freeBytes missing', { freeBytes: undefined }], ['freeBytes not a number', { freeBytes: Number.NaN }], ['floorBytes 0', { floorBytes: 0 }], ['floorBytes missing', { floorBytes: undefined }], ['growth missing', { growth: undefined }], ['growth without its pair figure', { growth: { ...growth, pairWorstCaseBytes: 0 } }]];
+
 test('A_missing_or_zero_size_is_a_refusal_and_never_a_rule_that_passes', t => {
   const map = withPilot(mapWith(finished(29)));
   const args = { ...gateArgs(t, map), freeBytes: 10 ** 13 };
   assert.equal(diskGate({ ...args, slot: 30 }).go, true, 'the control: with every size given the gate goes on');
-  for (const [name, over] of [['freeBytes 0', { freeBytes: 0 }], ['freeBytes missing', { freeBytes: undefined }], ['freeBytes not a number', { freeBytes: Number.NaN }], ['floorBytes 0', { floorBytes: 0 }], ['floorBytes missing', { floorBytes: undefined }], ['growth missing', { growth: undefined }], ['growth without its pair figure', { growth: { ...growth, pairWorstCaseBytes: 0 } }]]) {
+  for (const [name, over] of UNREADABLE) {
     for (const gate of [reserveGate, ruleGate, diskGate]) {
       const verdict = gate({ ...args, ...over, slot: 30 });
       assert.equal(verdict.go, false, `${name}: ${gate.name} refuses`);
-      assert.equal(verdict.exit, HALT_EXIT, `${name}: resumable`);
+      assert.equal(verdict.exit, 4, `${name}: a refusal, not a resumable halt`);
       assert.ok(typeof verdict.reason === 'string' && verdict.reason.length > 0, `${name}: it says why`);
       if (name.startsWith('freeBytes')) assert.match(verdict.reason, /cannot be read/, `${name}: it says the free disk could not be read, not that the space is short`);
     }
   }
+});
+
+// ---- Opus review (PR 4), O6: a size that cannot be read is a refusal; only a real shortage halts ---------------------------------------------------------------------------------------------------------------------
+
+test('A_size_that_cannot_be_read_is_a_refusal_with_exit_4_and_no_ledger_line_and_only_a_real_shortage_halts_with_exit_3_and_its_event', t => {
+  const map = withPilot(mapWith(finished(29)));
+  const ledgerFile = path.join(seriesFolder(t, map, { cacheBytes: 100 }), 'ledger.ndjson');
+  const args = { series: path.dirname(ledgerFile), map, pilot: PILOT, growth, floorBytes: FLOOR, ledgerFile, now: () => new Date('2026-11-25T10:00:00.000Z'), freeBytes: 10 ** 13, slot: 30 };
+  for (const [name, over] of UNREADABLE) {
+    const refused = diskGate({ ...args, ...over });
+    assert.equal(refused.go, false, `${name}: refused`);
+    assert.equal(refused.exit, 4, `${name}: exit 4, a refusal the same command cannot cure by waiting`);
+    assert.equal(refused.halt, undefined, `${name}: it is no halt`);
+    assert.doesNotMatch(refused.reason, /once the space is there/, `${name}: it does not promise that space helps`);
+    assert.match(refused.reason, /^the disk check cannot be made: /, `${name}: its own sentence`);
+  }
+  assert.deepEqual(readLedger(ledgerFile), [], 'no refusal wrote a ledger line');
+  const short = diskGate({ ...args, freeBytes: 1_000_000_000 });
+  assert.equal(short.go, false);
+  assert.equal(short.exit, 3, 'a real shortage is a resumable halt');
+  assert.equal(short.halt, 'disk-reserve');
+  assert.deepEqual(readLedger(ledgerFile).map(l => l.event), ['disk-reserve'], 'and writes its event line');
 });
 
 test('The_session_size_the_disk_rule_reads_is_the_larger_of_the_registered_floor_and_this_series_own_largest_and_no_file_is_written', t => {

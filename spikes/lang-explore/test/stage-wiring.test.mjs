@@ -125,11 +125,13 @@ test('The_disk_gate_halts_a_paid_unit_before_it_is_planned_with_its_one_event_li
   assert.equal(ledgerBefore, '', 'the ledger was empty');
   assert.deepEqual(events.map(e => [e.event, e.slot, e.freeBytes, 'usd' in e, 'rid' in e]), [['disk-reserve', 1, 1_000_000_000, false, false]], 'one event line, never a charge, naming the slot');
   const noSize = await runRig({ stage: { floorBytes: undefined } });
-  const refused = await haltedWith(noSize);
-  assert.equal(refused.exit, 3);
-  assert.match(refused.message, /^disk-reserve: the disk check cannot be made: floorBytes .* must be a positive whole number/, 'a missing size is a refusal, never a gate that passes');
+  const refused = await refusedWith(noSize);
+  assert.equal(refused.exit, 4, 'a missing size is a refusal (exit 4), not a resumable halt');
+  assert.match(refused.message, /^the disk check cannot be made: floorBytes .* must be a positive whole number/, 'and never a gate that passes');
   const unread = await runRig({ stage: { freeBytesFn: () => { throw new Error('statfs failed'); } } });
-  assert.match((await haltedWith(unread)).message, /^disk-reserve: .*the free disk cannot be read/, 'free disk that cannot be read is a refusal too');
+  const unreadRefused = await refusedWith(unread);
+  assert.equal(unreadRefused.exit, 4);
+  assert.match(unreadRefused.message, /^the disk check cannot be made: the free disk cannot be read/, 'free disk that cannot be read is a refusal too, with no ledger line');
   rig.io.stage.freeBytesFn = () => 10 ** 13;
   assert.equal((await next(rig)).exit, 0, 'the control: with the space the same call runs');
   const { io, dir } = await makeSeries({ stage: { initGuardFn: undefined, freeBytesFn: () => 1 } }, { rehearsal: true, 'task-repo': '/fake/task-repo' });

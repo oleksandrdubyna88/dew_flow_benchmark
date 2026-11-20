@@ -90,13 +90,18 @@ const gateArgs = ({ series, map, unit, growth, io }) => ({
   series: series.dir, map, pilot: series.state.pilot, growth, floorBytes: floorOf({ io }), freeBytes: freeOf({ series, io }), slot: slotOf(unit), extraCells: unit.extraCells ?? 0, ledgerFile: ledgerFileOf(series.dir), now: io.now ?? systemClock,
 });
 
+/** The result of a gate's verdict: a go; a halt (exit 3, resumable once the space is there, its event line is in the ledger); or a refusal (exit 4: a size that cannot be read, no ledger line). */
+const verdictResult = verdict => {
+  if (verdict.go) return ok({});
+  return verdict.halt === undefined ? fail(verdict.reason, { exit: verdict.exit }) : fail(`${verdict.halt}: ${verdict.reason}`, { halt: verdict.halt, exit: verdict.exit });
+};
+
 /** The step (PAID launches only): the reserve over everything still to run and the rule over this pair. `map` is the run-map as the schedule reads it. A halt is exit 3 with its event line in the ledger. */
 export function diskStep({ series, map, unit, io }) {
   if (isRehearsal(series.dir)) return ok({});
   const growth = seam(io, 'growthFn', loadGrowth)();
-  if (!growth.ok) return fail(`the disk check cannot be made: ${growth.reason}`, { exit: HALT_EXIT });
-  const verdict = diskGate(gateArgs({ series, map, unit, growth: growth.value, io }));
-  return verdict.go ? ok({}) : fail(`${verdict.halt}: ${verdict.reason}`, { halt: verdict.halt, exit: verdict.exit });
+  if (!growth.ok) return fail(`the disk check cannot be made: ${growth.reason}`, { exit: CONFIG_EXIT });
+  return verdictResult(diskGate(gateArgs({ series, map, unit, growth: growth.value, io })));
 }
 
 // ---- the clear held-out folder -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
