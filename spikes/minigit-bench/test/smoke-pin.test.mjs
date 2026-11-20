@@ -1,27 +1,19 @@
 // The smoke on a CLI other than v1's own pin (the seam `smokeInputs({ claude, cliPin })`): a version and a binary given to it reach the preflight, the plan and meta.json; given nothing, v1 is what it was.
 // A stub `claude` and a stub upstream stand in for the CLI and the API: nothing here is paid, and no real token, network or CLI is used.
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { loadStacks } from '../lib/host-checks.mjs';
 import { runSmoke, smokeInputs } from '../lib/smoke-run.mjs';
 import { main } from '../smoke-session.mjs';
-import { fakeToken, prices, sseAnswer, sseBody, chunksOf, stubUpstream } from './broker-stub.mjs';
-import { DOTNET_PIN, TS_DIR } from './box-helpers.mjs';
+import { fakeToken } from './broker-stub.mjs';
 import { sandboxGate, spikeDir, tmpDir } from './helpers.mjs';
-import { homeWithToken, smokeStub } from './smoke-stub.mjs';
+import { binaryNamed, homeWithToken, stubSmokeSession } from './smoke-stub.mjs';
 
 const PINNED = '2.1.329';
 const FIXTURE = path.join(spikeDir, 'test', 'fixtures', 'real', 'claude-2.1.310-bare-smoke');
 const V1_PIN = JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'stacks.json'), 'utf8')).pins.claude;
-
-/** An executable file in a folder of its own: the stub's source, or an empty script when the test never runs it. */
-function binaryNamed(name, source = '#!/bin/sh\n') {
-  const file = path.join(tmpDir('pin-bin'), name);
-  writeFileSync(file, source, { mode: 0o755 });
-  return file;
-}
 
 test('A_CLI_pin_and_a_binary_given_to_the_smoke_inputs_are_the_pin_and_the_binary_the_preflight_receives', async () => {
   const home = homeWithToken(fakeToken());
@@ -60,18 +52,8 @@ test('A_binary_alone_does_not_move_the_pin_and_a_pin_alone_does_not_move_the_bin
 
 test('A_smoke_session_on_the_given_CLI_records_that_version_in_its_plan_and_in_meta_json', async t => {
   if (!sandboxGate(t)) return;
-  const token = fakeToken();
-  const home = homeWithToken(token);
-  const binary = binaryNamed(`claude-${PINNED}`, smokeStub(PINNED));
-  const upstream = await stubUpstream(sseAnswer(chunksOf(sseBody(), 3), 10));
-  t.after(() => upstream.close());
-  const made = smokeInputs({ home, env: { PATH: '' }, claude: binary, cliPin: PINNED });
+  const { made, r } = await stubSmokeSession({ version: PINNED });
   assert.equal(made.ok, true, made.reason);
-  const inputs = { ...made.value, prices: prices(), tsDir: TS_DIR, stacks: { ...made.value.stacks, pins: { ...made.value.stacks.pins, dotnetSdk: DOTNET_PIN } } };
-  const r = await runSmoke({
-    out: path.join(tmpDir('pin-run'), 'r1'), inputs, home, preflightFn: async () => ({ ok: true, value: {} }), deps: {},
-    over: { upstream: upstream.upstream, settleMs: 200, tickMs: 200, sampleMs: 50, toolchains: [] },
-  });
   assert.equal(r.ok, true, r.reason);
   const { layout, plan, result } = r.value;
   assert.equal(result.ok, true, result.reason);

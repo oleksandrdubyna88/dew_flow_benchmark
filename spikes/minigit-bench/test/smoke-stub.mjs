@@ -3,6 +3,9 @@
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { TOKEN_FILE_PARTS } from '../capture/capture-env.mjs';
+import { runSmoke, smokeInputs } from '../lib/smoke-run.mjs';
+import { fakeToken, prices, sseAnswer, sseBody, chunksOf, stubUpstream } from './broker-stub.mjs';
+import { DOTNET_PIN, TS_DIR } from './box-helpers.mjs';
 import { tmpDir } from './helpers.mjs';
 
 export const smokeStub = (version = '2.1.310') => `#!/usr/bin/env node
@@ -29,4 +32,33 @@ export function homeWithToken(token, prefix = 'smoke-home') {
   chmodSync(path.dirname(file), 0o700);
   writeFileSync(file, `${token}\n`, { mode: 0o600 });
   return home;
+}
+
+/** An executable file named `name` in a folder of its own: the stub's source, or an empty script when the test never runs it. */
+export function binaryNamed(name, source = '#!/bin/sh\n') {
+  const file = path.join(tmpDir('smoke-bin'), name);
+  writeFileSync(file, source, { mode: 0o755 });
+  return file;
+}
+
+/**
+ * One whole stub smoke session in the real box (the caller has passed `sandboxGate`): a stub `claude` that reports `version`, a stub upstream behind the real broker, `smokeInputs` given that binary and that version, `runSmoke` with a preflight that
+ * accepts. -> `{ made, r, home, token, binary }`: `r.value.layout.dir` is the raw capture, the folder the sanitise reads. The upstream is closed before it returns.
+ */
+export async function stubSmokeSession({ version }) {
+  const token = fakeToken();
+  const home = homeWithToken(token);
+  const binary = binaryNamed(`claude-${version}`, smokeStub(version));
+  const upstream = await stubUpstream(sseAnswer(chunksOf(sseBody(), 3), 10));
+  try {
+    const made = smokeInputs({ home, env: { PATH: '' }, claude: binary, cliPin: version });
+    const inputs = { ...made.value, prices: prices(), tsDir: TS_DIR, stacks: { ...made.value.stacks, pins: { ...made.value.stacks.pins, dotnetSdk: DOTNET_PIN } } };
+    const r = await runSmoke({
+      out: path.join(tmpDir('smoke-run'), 'r1'), inputs, home, preflightFn: async () => ({ ok: true, value: {} }), deps: {},
+      over: { upstream: upstream.upstream, settleMs: 200, tickMs: 200, sampleMs: 50, toolchains: [] },
+    });
+    return { made, r, home, token, binary };
+  } finally {
+    upstream.close();
+  }
 }
