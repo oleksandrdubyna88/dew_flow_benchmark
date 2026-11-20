@@ -1,0 +1,206 @@
+{
+  "source": "the pre-registration's writer, as data (F3.S1 (b), PR 6); the same rules in words are section 7 and section 8 of analysis-contract.md, and the row ids equal the contract's go-row markers",
+  "pilot": {
+    "sessions": "six: the A/A (two identical bare sessions of task 05 on Node, the twins) and two pilot pairs, task 10 (daemon) and task 04 (web), each in both stacks; all void spend, never data (D16)",
+    "attempts": "a pilot session that ends as a void is re-run once under the schedule's rule; a row asked of a session reads its last attempt; a row whose stopsWhenRefuted is true is asked of every attempt, re-runs included",
+    "words": ["holds", "refuted", "explained", "recorded", "not exercised"],
+    "evidenceRoot": "the session's folder s/<rid>/ of the series, as the frozen harness wrote it; a dated line is read from the registered amendments.md"
+  },
+  "go": {
+    "definition": "GO when every row holds, except that G-5, G-6 and a refused host of G-8 may be explained by a dated line, G-9 is recorded and never gates, and the rows whose notExercised is not false may be not exercised with the replacing evidence they name",
+    "noGo": "any refuted row; a by-hand row (G-10, G-13, G-16) without its dated line; a computed row whose evidence is missing and whose notExercised is false",
+    "stop": "G-2, G-8 or G-12 refuted, or alias drift (G-7)",
+    "exit": "0 GO, 2 NO GO or STOP, 4 a refusal of the tool",
+    "line": "the tool prints YYYY-MM-DD | pilot | GO | verdicts:<12 hex of the sha256 of the file it wrote> | <who> and writes no line itself"
+  },
+  "rows": [
+    {
+      "id": "G-1",
+      "askedOf": "all six pilot sessions",
+      "evidence": "readback.json, field ok (v1's G-1 rule, SESSION_ROWS)",
+      "mode": "computed",
+      "threshold": "the read-back is ok on every init field",
+      "whenMissing": "not exercised for that session: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-2",
+      "askedOf": "all six pilot sessions, every attempt",
+      "evidence": "record.json, cost.checks.t1.status (v1's G-2 rule, SESSION_ROWS)",
+      "mode": "computed",
+      "threshold": "the cost check T1 passes",
+      "whenMissing": "not exercised for that session: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": true
+    },
+    {
+      "id": "G-3",
+      "askedOf": "all six pilot sessions",
+      "evidence": "record.json, cost.checks.t2.status (v1's G-3 rule, SESSION_ROWS)",
+      "mode": "computed",
+      "threshold": "the cost check T2 passes per model and kind",
+      "whenMissing": "not exercised for that session: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-4",
+      "askedOf": "the two A/A twins",
+      "evidence": "each twin's OpenTelemetry records and transcripts, matched by role (v1's g4 and t3Rule)",
+      "mode": "computed",
+      "threshold": "every main-role record is matched by a transcript message and none is unmatched; every subagent-role record is matched; the T3 rule gives t3: stop with main coverage on the twins and subagent coverage on the twins or in a committed smoke fixture of the pinned CLI version, else fallback-t2",
+      "whenMissing": "not exercised: NO GO, except the subagent half as notExercised says",
+      "notExercised": "the subagent half only, with the B-T1 check of a committed smoke fixture of the pinned CLI version as its replacing evidence; the policy that follows is written by a dated input:crosscheck-policy.json line",
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-5",
+      "askedOf": "all six pilot sessions",
+      "evidence": "record.json, cost.checks.t5.status, cost.brokerUsd and cost.cliTotalUsd (v1's G-5 rule, SESSION_ROWS)",
+      "mode": "computed",
+      "threshold": "T5 passes and the broker's total equals the envelope's within $0.000001; may be explained by a dated G-5 line",
+      "whenMissing": "not exercised for that session: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-6",
+      "askedOf": "all six pilot sessions",
+      "evidence": "record.json, time.partition and time.wallMs (v1's G-6 rule, SESSION_ROWS)",
+      "mode": "computed",
+      "threshold": "the categories sum to the registered wall to the millisecond and unattributed is under 5 % of the wall; may be explained by a dated G-6 line naming the cause and its evidence path",
+      "whenMissing": "not exercised for that session: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-7",
+      "askedOf": "the two A/A twins",
+      "evidence": "each twin's session folder (the record kinds of v1's g7) and the series' alias baseline (D12)",
+      "mode": "computed",
+      "threshold": "both twins carry the same set of record kinds, and every alias either twin used resolves to the baseline's id",
+      "whenMissing": "not exercised: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": "alias drift only: a refutation by alias drift is a STOP; any other refutation is NO GO"
+    },
+    {
+      "id": "G-8",
+      "askedOf": "all six pilot sessions, every attempt",
+      "evidence": "record.json, egress and detail, and meta.json samplers (v1's G-8 rule, SESSION_ROWS)",
+      "mode": "computed",
+      "threshold": "allowed CONNECTs within the bare host list, refused ones within the known-refused list or named by a dated G-8 line, the real token counted zero times, no high contamination, canary or token hit",
+      "whenMissing": "not exercised for that session: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": true
+    },
+    {
+      "id": "G-9",
+      "askedOf": "the two A/A twins",
+      "evidence": "the twins' record.json files (v1's g9): cost, wall, model_api and active - model_api ratios, held-out result differences, CPU per mask",
+      "mode": "recorded",
+      "threshold": "none: the spread is recorded and shown beside every ratio as a reference (n = 1), and never gates",
+      "whenMissing": "recorded as missing; it never gates",
+      "notExercised": "always allowed: the row never gates",
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-10",
+      "askedOf": "one A/A twin and each of the four sessions of the two pilot pairs",
+      "evidence": "one dated line per session: YYYY-MM-DD | G-10 | holds|refuted | <rid> | <evidence path> | <who>; the hand's trees, commands and outputs stay in the series' private folder",
+      "mode": "by hand",
+      "threshold": "in a clean copy of the session's tree, through the frozen build the scorer uses, the build and the visible samples run by hand give the scorer's counts, and the hand reads the session's deviations",
+      "whenMissing": "NO GO, naming the session without a line",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-11",
+      "askedOf": "all six pilot sessions",
+      "evidence": "record.json, run.quiet, run.maskObserved and run.spin, and the sampler's samples of the session's window (v1's G-11 rule, SESSION_ROWS)",
+      "mode": "computed",
+      "threshold": "the quiet check passed, the sampler and the spin probe wrote every interval, the mask was observed",
+      "whenMissing": "not exercised for that session: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-12",
+      "askedOf": "all six pilot sessions, every attempt",
+      "evidence": "record.json, class, cost.stopRuleUsd and cost.censoredAtUsd, and a dated G-12 line (v1's g12, at the registered cap)",
+      "mode": "computed",
+      "threshold": "a session whose stop-rule figure reached the registered cap of $50 is killed: cap at a settled spend of at least $50",
+      "whenMissing": "not exercised when no pilot session reached the cap, with the replacing evidence notExercised names; otherwise NO GO",
+      "notExercised": "when no pilot session reached $50: a dated G-12 holds line whose evidence names v1's broker proof P-6 and the budget tests green at the series' harness identity (its 12 hex)",
+      "stopsWhenRefuted": true
+    },
+    {
+      "id": "G-13",
+      "askedOf": "all six pilot sessions",
+      "evidence": "one dated line per session: YYYY-MM-DD | G-13 | holds|refuted | <rid> | <evidence path> | <who>",
+      "mode": "by hand",
+      "threshold": "the session's class read by hand against its stream and the broker's log is the class the harness gave",
+      "whenMissing": "NO GO, naming the session without a line",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-14",
+      "askedOf": "the free rehearsal series of step T (stub round, at the tag's commit)",
+      "evidence": "that rehearsal series' run-map and the records of its slots of task 10 and task 04",
+      "mode": "computed",
+      "threshold": "the slots of task 10 (daemon) and task 04 (web) each ran both stacks, and each of those sessions' records is complete and scored",
+      "whenMissing": "not exercised: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-16",
+      "askedOf": "one session of each pilot task: task 05 (the TCP driver), task 10 (the daemon checks), task 04 (the HTTP driver); the task of the line's rid names the driver",
+      "evidence": "three dated lines: YYYY-MM-DD | G-16 | holds|refuted | <rid> | <evidence path> | <who>; what the hand runs is the private aid's (D41)",
+      "mode": "by hand",
+      "threshold": "task 05: the driver's scenario kinds, driven by hand, give the driver's replies; task 10: memory.peak read by hand agrees with the driver's record, SIGTERM by hand ends the process as the driver says, the timer scenarios give the driver's final report; task 04: one scenario of each kind, a concurrency scenario among them, and a captured dynamic value reused as FORMAT.md defines; in each, the culture check passes inside both boxes and the hand reads the session's deviations; the RSS curve clause lapsed with D74",
+      "whenMissing": "NO GO, naming the missing driver",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-17",
+      "askedOf": "no session: the registry and the frozen record",
+      "evidence": "spikes/lang-explore/inputs/memory-limit.json (its registration), spikes/lang-explore/inputs/packages.json and spikes/lang-bench/inputs/specs.d/spec-states.json",
+      "mode": "computed",
+      "threshold": "twelve references registered at the one memory value of 536870912 bytes; every witness of every package caught; the frozen specs equal the gated ones but for the freeze row (the freeze's own check)",
+      "whenMissing": "NO GO, naming the file",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    },
+    {
+      "id": "G-18",
+      "askedOf": "all six pilot sessions",
+      "evidence": "the settled costs of the pilot sessions (record.json), their stamped streams (stream.stamped.ndjson), their class and cost.stopRuleUsd, and the stall in force (explore.json caps.stallMs, or the one dated caps line)",
+      "mode": "computed",
+      "threshold": "the cross-check figure of a kind, twice the larger settled cost of the pilot pair of that kind (task 10 for the daemons, task 04 for the web tasks), is shown beside the fixed $50 cap and binds nothing; the stall in force is larger than the longest quiet gap of any pilot session; every pilot session that reached $50 is killed: cap",
+      "whenMissing": "not exercised: NO GO",
+      "notExercised": false,
+      "stopsWhenRefuted": false
+    }
+  ],
+  "readback": {
+    "pairs": "in round 1 and in round 2, the one daemon slot and the one web slot that schedule.json's readback names from the seed; both sessions of each",
+    "row": "G-1",
+    "fields": [
+      { "field": "the agent box's argv", "stored": "argv.json and stage-facts.json agent.argv", "comparedWith": "the pinned CLI copy (manifest cliSha256), the cap (manifest caps), the model and effort of explore.json's cli entry, and v1's bare tool list" },
+      { "field": "the agent box's binds", "stored": "stage-facts.json agent.binds", "comparedWith": "the pinned toolchains (manifest toolchains) and the session's own stack's snapshot (manifest snapshot.<stack>)" },
+      { "field": "the cache snapshots' hashes", "stored": "stage-facts.json cache.csharp and cache.node", "comparedWith": "manifest snapshot.csharp and snapshot.node" },
+      { "field": "the package list", "stored": "stage-facts.json cache.packages", "comparedWith": "the registered snapshot records, spikes/lang-bench/inputs/cache-snapshots-lang.json" },
+      { "field": "the agent box's environment keys", "stored": "stage-facts.json agent.envKeys and agent.culture", "comparedWith": "the registered locale, base environment and allow-list (manifest locale); LANG and LC_ALL equal to explore.json's locale" },
+      { "field": "the scoring box's keys of a completed pass, with the two heap keys and their values", "stored": "score/passes/* (the box facts of each completed pass)", "comparedWith": "the memory policy (manifest memoryPolicy) and the heap values it derives from the one memory value (manifest memoryValue)" },
+      { "field": "the effective CPU affinity", "stored": "stage-facts.json launch.affinity (the mask and the mask observed in flight) and each pass's affinity read-back in score/passes/*", "comparedWith": "the cell's mask in schedule.json for the launch and in flight; the pass's profile CPUs in schedule.json for each pass" },
+      { "field": "the spec blob", "stored": "stage-facts.json workspace.statementSha256, and the frozen spec's sha256 the session was cut from", "comparedWith": "the statement's sha256 in prompts-lang.json (the hash list at W), and manifest spec.<NN>" }
+    ],
+    "difference": "refuted",
+    "missingField": "a refusal of the tool naming the field, never a blank",
+    "lines": "an Opus judge writes one dated line per session: YYYY-MM-DD | G-1 | holds|refuted | <rid> | <evidence path> | <who>; a refuted line makes the session void: harness, and its one re-run is the schedule's next step and is read back the same way",
+    "gate": "no later slot runs before the lines of a read-back slot are on main and on the series' branch"
+  }
+}
