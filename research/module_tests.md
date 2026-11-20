@@ -1563,13 +1563,50 @@ GREEN: 11 of 11 on the first run. A test that passes the first time proves nothi
 
 **Counts after the work** (each file alone, `node .agents/conventions/tools/low-priority.mjs taskset -c 0-5 node --test --test-concurrency=1 <file>`, all green): `smoke-pin.test.mjs` 6, `smoke-run.test.mjs` 2, `smoke-real.test.mjs` 7 (the committed fixture's table, unchanged), `smoke-k2.test.mjs` 4, `box-dotnet-paths.test.mjs` 19 and `stream-calls.test.mjs` 2 (they name the smoke files), v1 `code-shape.test.mjs` 65 (`smoke-session.mjs` and `smoke-run.mjs` are owned by E2, left as they are: no function got a decision or a line more), `reuse-scan.test.mjs` 7, `repo-scan.test.mjs` 8; lang-explore `smoke-pinned.test.mjs` 11, `code-shape.test.mjs` 178 (the wrapper's functions are all under 50 lines and a complexity of 4: the highest is `usageProblem`, 4), `network.test.mjs` 3 (the wrapper is in `prereg/`, which the scan does not read, and it imports no networking module and runs no git verb: nothing was widened), `stage-prereg-tools.test.mjs` 33 (the CLI pin's tests, which share `pin-cli.mjs`'s `cliPinProblems`).
 
-**The command of the one paid use** (the team lead; the owner's approval of 2026-11-20, about $0.11, cap $0.20). `explore.json` on `main` still pins 2.1.310, so the run names the file that pins 2.1.329 (PR 6's branch):
-```
-node spikes/lang-explore/prereg/smoke-pinned.mjs --explore <PR 6 checkout>/spikes/lang-explore/inputs/explore.json --out ~/rsd/lang-v2/smoke/<UTC stamp, e.g. 20261120T150000Z> --dry-run
-node spikes/lang-explore/prereg/smoke-pinned.mjs --explore <PR 6 checkout>/spikes/lang-explore/inputs/explore.json --out ~/rsd/lang-v2/smoke/<the same stamp>
-```
-It leaves `spikes/minigit-bench/test/fixtures/real/claude-2.1.329-bare-smoke/` (with `SMOKE.md`) in the checkout it runs from: commit it by path. What it does not do: it does not move v1's other pins (node, SDK, TypeScript stay v1's), and it prices the session with `inputs/prices-2026-10-29.json`, which holds CLI-billed rates for 2.1.289 and 2.1.310 only, so 2.1.329 is billed as published.
+**PR 5c, coai plan round (four points accepted, 2026-11-20; commit `f13ee65c`; same method: tests first, RED on the current code, the change, GREEN, the old code back as one mutation plus one mutation per point, RED again, the change restored).** The tests of the first round were rewritten and extended: `smoke-pinned.test.mjs` is 20 tests. A shared helper `stubSmokeSession({ version })` (`minigit-bench/test/smoke-stub.mjs`, with `binaryNamed`; `smoke-pin.test.mjs`'s full-session test uses it) runs one whole stub session in the real box and gives the raw capture to the wrapper's tests.
+- *R1, recovery after the one paid run* (the most important point: a failure after the session never needs a second one). `sanitise` writes `.claude-<version>-bare-smoke.pending` beside the fixture folder, `verdicts` writes SMOKE.md into it, and it is renamed to `claude-<version>-bare-smoke/` as the last step. A sanitise that fails removes the pending folder; a verdicts that fails keeps it. `--from sanitise --raw <dir>` and `--from verdicts --raw <dir>` launch nothing and refuse a raw dir whose meta.json cannot be read, whose outcome is not ok or whose `cliVersion` is not the pin. Tests: `The_wrapper_runs_v1s_run_then_sanitise_and_verdicts_on_a_staging_folder_and_renames_it_into_place_as_the_last_step` (no fixture folder while the steps run), `A_sanitise_that_fails_leaves_no_fixture_folder_and_no_staging_folder_the_raw_capture_untouched_and_the_resume_line_in_the_message`, `A_verdicts_that_fails_leaves_no_fixture_folder_keeps_the_sanitised_staging_and_names_the_verdicts_resume`, `A_resume_from_sanitise_redoes_...` (a stale pending folder is removed first; no `run` verb), `A_resume_from_verdicts_redoes_only_the_verdicts_...`, `A_resume_refuses_a_raw_dir_that_holds_no_completed_run_of_the_pinned_CLI_and_names_it` (three raw dirs), `A_resume_refuses_a_fixture_folder_that_is_not_empty_...`, and over v1's real `main` on a stub capture `A_real_sanitise_that_fails_leaves_no_fixture_folder_and_the_raw_capture_untouched_and_a_resume_from_the_whole_raw_capture_then_completes` (a copy of the raw capture without `broker.ndjson`: exit 5, `lacks broker.ndjson`, the copy byte for byte as before, then the resume from the whole capture completes).
+- *R2, the checked binary is the one that runs.* `pin.claude` is the copy's absolute path. `The_binary_v1_is_told_to_run_is_the_verified_copys_absolute_path_with_the_pinned_version_and_never_one_from_PATH`: the fake of `main` gets exactly `{ claude: <the copy>, cliPin: 2.1.329 }`, and through v1's real dry run, with a decoy `claude` first on PATH, the plan names the verified copy.
+- *R3, the fixture is usable as G-4 evidence.* `A_fixture_made_through_the_wrappers_own_steps_from_a_stub_capture_is_G_4_evidence_that_names_the_given_CLI_and_gives_B_T1_a_verdict`: `--from sanitise --raw` over the stub capture through v1's real sanitise and verdicts; the folder loads with `loadSmoke`; `computeSmokeVerdicts` gives B-T1 one of the three verdicts; `smokeEvidence({ fixtureDir, compute })` answers `cli` 2.1.329, `fixture` `test/fixtures/real/claude-2.1.329-bare-smoke`, `ok` equal to B-T1's `holds`, `observed` equal to B-T1's; SMOKE.md's table is `renderVerdicts(rows)` byte for byte. No paid CLI is called.
+- *R4, the dry-run contract* (written in the wrapper's header and in `module_lang_explore.md`). `A_dry_run_runs_every_check_of_the_copy_so_a_bad_sha_a_missing_copy_a_wrong_mode_and_a_bad_version_are_each_refused_in_it`; `A_dry_run_does_not_refuse_an_existing_fixture_folder_it_only_says_the_folder_exists_and_leaves_it_as_it_is` (the fake and v1's real dry run: exit 0, the note, the folder unchanged, no session directory); `A_dry_run_reads_the_token_as_v1s_dry_run_does_so_a_home_without_one_is_refused_by_v1` (exit 3, `no token`); the earlier dry-run tests stand (v1 asked for its dry run only; v1's plan has the pinned version and the copy; no directory).
 
+RED (the current code, with only the export `stagingOf` added so the file loads; 10 of 20 fail, `/tmp/claude-1000/msgs/r-red.txt`):
+```
+✖ The_wrapper_runs_v1s_run_then_sanitise_and_verdicts_on_a_staging_folder_and_renames_it_into_place_as_the_last_step
+  AssertionError: no fixture folder while the steps are running   true !== false
+✖ A_dry_run_does_not_refuse_an_existing_fixture_folder_it_only_says_the_folder_exists_and_leaves_it_as_it_is
+  AssertionError: <fixture> is not empty: a fixture is never overwritten; remove it or pick another version first   3 !== 0
+✖ A_sanitise_that_fails_leaves_no_fixture_folder_and_no_staging_folder_the_raw_capture_untouched_and_the_resume_line_in_the_message
+  [ false, true ] expected [ false, false ]
+✖ A_resume_from_sanitise_redoes_sanitise_and_verdicts_from_the_raw_capture_removes_a_stale_staging_folder_and_launches_no_session
+  AssertionError: usage error: Unknown option '--from'   4 !== 0
+✖ A_resume_refuses_a_raw_dir_that_holds_no_completed_run_of_the_pinned_CLI_and_names_it
+  4 !== 3
+✖ A_fixture_made_through_the_wrappers_own_steps_from_a_stub_capture_is_G_4_evidence_that_names_the_given_CLI_and_gives_B_T1_a_verdict
+  AssertionError: usage error: Unknown option '--from'   4 !== 0
+(and the verdicts-failure, resume-from-verdicts, non-empty-fixture and real-sanitise tests the same way; the R2 test, the usage test and the sha tests were already green: they pin what the code did right)
+```
+GREEN: 20 of 20. The old code back (the committed wrapper of `f9195bf1` plus the export): 10 of 20 fail, the same ten. One mutation per point, each restored (`cmp`) and each red on the line it names:
+- the dry run gating the fixture folder like a real run: `A_dry_run_does_not_refuse_an_existing_fixture_folder_...` fails (1 fail, 19 pass);
+- the raw dir not checked (`const problem = null`): `A_resume_refuses_a_raw_dir_that_holds_no_completed_run_...` fails (1);
+- the pin without the binary (`claude: null`, so v1 would look on PATH): `The_binary_v1_is_told_to_run_...` and `A_dry_run_through_v1_plans_the_pinned_version_and_binary_...` fail (2);
+- no staging folder (`stagingOf` returns the fixture): the success test, both resume tests, the verdicts-failure test and the G-4 evidence test fail (5);
+- the pending folder not removed after a failed sanitise: `A_sanitise_that_fails_leaves_no_fixture_folder_and_no_staging_folder_...` fails (1).
+
+**Counts after the plan round** (each file alone, `node .agents/conventions/tools/low-priority.mjs taskset -c 0-5 node --test --test-concurrency=1 <file>`, all green): lang-explore `smoke-pinned.test.mjs` 20, `code-shape.test.mjs` 178 (the wrapper's highest function is 4: `rawProblem`, `finish`, `freshRun`, `main`), `network.test.mjs` 3, `stage-prereg-tools.test.mjs` 33; v1 `smoke-pin.test.mjs` 6, `smoke-run.test.mjs` 2, `smoke-real.test.mjs` 7, `smoke-k2.test.mjs` 4, `code-shape.test.mjs` 65.
+
+**The command lines of the one paid use** (the team lead; the owner's approval of 2026-11-20, about $0.11, cap $0.20). `explore.json` on `main` still pins 2.1.310, so the run names the file that pins 2.1.329 (PR 6's branch). From the checkout where the fixture should land:
+```
+S=~/rsd/lang-v2/smoke/$(date -u +%Y%m%dT%H%M%SZ)
+E=<PR 6 checkout>/spikes/lang-explore/inputs/explore.json
+node spikes/lang-explore/prereg/smoke-pinned.mjs --explore $E --out $S --dry-run      # every check, nothing launched; an existing fixture folder is only noted
+node spikes/lang-explore/prereg/smoke-pinned.mjs --explore $E --out $S                # the ONE paid session, then sanitise, verdicts, rename
+```
+If a step after the session fails, the sentence prints the exact line; no second session is needed. The resume, with the same `$E` and the out dir `$S` of the paid run:
+```
+node spikes/lang-explore/prereg/smoke-pinned.mjs --explore $E --from sanitise --raw $S    # sanitise, verdicts, rename again
+node spikes/lang-explore/prereg/smoke-pinned.mjs --explore $E --from verdicts --raw $S    # only verdicts and the rename, on the pending folder a failed verdicts step kept
+```
+The result is `spikes/minigit-bench/test/fixtures/real/claude-2.1.329-bare-smoke/` (with `SMOKE.md`) in the checkout it runs from: commit it by path. What it does not do: it does not move v1's other pins (node, SDK, TypeScript stay v1's), and it prices the session with `inputs/prices-2026-10-29.json`, which holds CLI-billed rates for 2.1.289 and 2.1.310 only, so 2.1.329 is billed as published.
 
 ## Test leftovers — the C# helper, the start-of-run sweep, the audit, the container pass (E6)
 
