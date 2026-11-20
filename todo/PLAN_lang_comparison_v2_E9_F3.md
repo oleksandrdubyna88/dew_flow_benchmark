@@ -606,7 +606,18 @@ under the explore root (not a rehearsal, not finished, not stopped), naming `sta
 confirmed in `argv.json`'s environment keys, and the scoring box's environment per pass comes from the layer's own `boxEnv` with
 the same inputs; both say their source. `STORED_FIELDS` (12 fields) is the list the later tools read. (6) *`stage-run` on a data
 rid that collides with a pilot rid* is refused for good (the data rid comes from the seed); a pilot rid collision is retried by
-running the command again.
+running the command again. (7) *The code rounds of PR 3*: the facts of a session are written only once it has ended, not
+while it is `launching` (coai code round 1, PR 3); the owner-go event is written only when the unit goes ahead past every refusal check (the `onReady`
+seam of the shared body; coai code round 1, PR 3); `init` fails closed on a series directory whose state cannot be read, naming it (coai code round 1,
+PR 3); the read-back stop and the schedule's gate name the full command `node research/lang-v2/tools/readback.mjs --series <dir> --pair <k>` (coai code
+round 1, PR 3); a failed schedule after a slot ends `--until round` with its reason and exit, not "round finished" (coai code round 1, PR 3);
+the amendments test uses the owned `tmpDir` and `spendLines` builds its totals without mutation (coai code round 1, PR 3); a session with `data === false`
+is a void for the schedule whatever slot a dated `refuted` line names, so its re-run is the next step (Opus review, PR 3); `stage-run` finishes the records an
+ended unit still owes before it offers a unit (Opus review, PR 3); `--until round` does not stop a rehearsal at a read-back slot (Opus review, PR 3);
+`stage-status` puts the data charges of a session the run-map holds as a void on the `void` line (Opus review, PR 3); a package list never recorded and an
+affinity read-back that never ran are stored as unknown (Opus review, PR 3); `stage-run` and `stage-status` print every malformed Stage 1 line and every
+home path as a report line, never a refusal (Opus review, PR 3); a missing pinned price or policy file refuses `stage-init` and `stage-run` with its path
+instead of throwing (Opus review, PR 3).
 
 ### (a) the guards before a paid pair — PR 4
 
