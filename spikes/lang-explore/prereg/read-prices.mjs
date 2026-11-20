@@ -133,8 +133,11 @@ function markProblem({ wanted, page }) {
   return lost.length === 0 ? null : `${wanted.modelId} (${wanted.name}): ${lost.map(([rate, mark]) => `its ${rate} carries footnote mark ${mark} and the page has no footnote ${mark}`).join(' and ')}`;
 }
 
-/** The noted rows (a note in the name) that are a tier of this model: their name before ` (` is the model's display name. */
-const tiersOf = ({ wanted, page }) => [...page.unreadable.keys()].filter(name => name.startsWith(`${wanted.name} (`));
+/** The part of a name before its first `(`, its whitespace collapsed and trimmed: `Claude Opus 5.5  (for ...)` and `Claude Opus 5.5(for ...)` both give `Claude Opus 5.5`. */
+const nameBeforeNote = name => name.split('(')[0].replace(/\s+/g, ' ').trim();
+
+/** The noted rows (a `(` in the name; an unreadable clean row has none) that are a tier of this model: their name before the first `(` is EXACTLY the model's display name. */
+const tiersOf = ({ wanted, page }) => [...page.unreadable.keys()].filter(name => name.includes('(') && nameBeforeNote(name) === wanted.name);
 
 /** The sentence for a model the page prices more than once under notes (tiers), or null: the clean row is never chosen over a tier. */
 function tierProblem({ wanted, page }) {
@@ -157,7 +160,7 @@ const modelOf = ({ modelId, rates }) => ({ modelId, input: rates.input, output: 
 /** The notes of the footnote marks the series' models carry, one per footnote number: the rates that carried it and the page's sentence. */
 function footnoteNotes({ wanted, page }) {
   const used = wanted.flatMap(w => Object.entries(page.marks.get(w.name) ?? {}).map(([rate, mark]) => ({ mark, use: `${w.modelId} ${rate}` })));
-  const numbers = [...new Set(used.map(u => u.mark))].sort((a, b) => a - b);
+  const numbers = [...new Set(used.map(u => u.mark))].toSorted((a, b) => a - b);
   return numbers.map(n => `footnote ${n} (${used.filter(u => u.mark === n).map(u => u.use).join(', ')}): ${page.footnotes.get(n)}`);
 }
 
