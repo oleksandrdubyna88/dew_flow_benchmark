@@ -2,7 +2,7 @@
 // its pins, the series' pinned price file and policy, the plan. Then the one body both verbs share, `run.mjs`'s `runUnit`. No pause point is asked (D7, D53).
 import path from 'node:path';
 import { reclassifyByHand } from '../../minigit-bench/lib/bare-reclass.mjs';
-import { appendLedger } from '../../minigit-bench/lib/ledger.mjs';
+import { appendLedger, readLedger } from '../../minigit-bench/lib/ledger.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { systemClock } from './clock.mjs';
 import { sha256OfFile } from './file-sha.mjs';
@@ -110,15 +110,23 @@ const pinsStep = ({ series, task }) => { const moved = pinsMoved({ series, task 
 const planStep = ({ series, unit, io }) => { const made = planUnit({ map: series.map, unit, ...(io.stage?.pilotRand ? { rand: io.stage.pilotRand } : {}) }); return made.ok ? ok({ plan: made.value }) : made; };
 
 /** The `unit` argument of `runUnit`: the unit's kind, the policy files the series pinned, the guard, `onReady` (the owner-go event, written once the shared body has passed its last refusal check), the Stage 1 parts of the context and the records' finalizer. */
-const unitArgs = ({ series, unit, read, go, guard, explore, policyFiles, io }) => ({
-  kind: unit.kind, policyFiles, guard, onReady: () => sayGo({ series, unit, go, io }),
+const unitArgs = ({ series, unit, read, go, guard, explore, policyFiles, plan, io }) => ({
+  kind: unit.kind, policyFiles, guard, onReady: () => sayGo({ series, unit, go, plan, io }),
   ctx: { stepOf: stepOfUnit(unit), seed: unit.kind === DATA_KIND ? read.gates.seed : null, preregTag: series.state.preregTag, handVerdictsFor: handVerdictsOf({ series, read }) },
   finalize: finalizerOf({ unit, go, alias: explore.cli.model }),
 });
 
-/** The owner's go line a launch used, as an event line of the ledger (an event, never a charge). */
-function sayGo({ series, unit, go, io }) {
-  if (go) appendLedger(ledgerFileOf(series.dir), { event: 'owner-go', pair: unit.pair, what: unit.what, date: go.date, scope: go.scope, words: go.words, t: (io.now ?? systemClock)().toISOString() });
+/** The sessions of a launch (what the plan plans and what it resumes), by rid: what tells one launch of a unit from another (a void's re-run plans another rid). */
+const launchRids = plan => [...plan.planned.map(p => p.rid), ...(plan.resumed ?? [])].sort();
+
+/** Is the go event of this launch of the unit already in the ledger (a process died between the event and the run-map, and the retry calls `onReady` again)? */
+const goSaid = ({ file, unit, rids }) => readLedger(file).some(l => l.event === 'owner-go' && l.pair === unit.pair && l.what === unit.what && JSON.stringify(l.rids) === JSON.stringify(rids));
+
+/** The owner's go line a launch used, as an event line of the ledger (an event, never a charge), once for the launch: a retry of a launch that died after the event adds none. */
+function sayGo({ series, unit, go, plan, io }) {
+  const file = ledgerFileOf(series.dir);
+  const rids = launchRids(plan);
+  if (go && !goSaid({ file, unit, rids })) appendLedger(file, { event: 'owner-go', pair: unit.pair, what: unit.what, rids, date: go.date, scope: go.scope, words: go.words, t: (io.now ?? systemClock)().toISOString() });
 }
 
 /** The run: the series with the plan, the io of the unit (a rehearsal's stub rig) and the one body `runUnit`. The go event is `onReady`'s: a refused run adds no ledger line. */

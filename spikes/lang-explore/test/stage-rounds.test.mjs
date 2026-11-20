@@ -1,6 +1,7 @@
 // `stage-run` over several units (F3.S1 (a), PR 3): `--until round`, the read-back stop, a halted slot that is resumed, a rid that is already in the run-map, the dated `refuted` line, the pilot's own order. The fake loop of `stage-run-fixture.mjs`
 // stands for the box, the CLI and the scoring.
 import assert from 'node:assert/strict';
+import * as nodeFs from 'node:fs';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -14,9 +15,11 @@ import { readGates } from '../lib/stage-gates.mjs';
 import { owedUnits } from '../lib/stage-owed.mjs';
 import { unitOfSession } from '../lib/stage-unit.mjs';
 import { taskFromValues } from '../lib/tasks.mjs';
+import { finalizePair } from '../lib/run.mjs';
 import { stageRun } from '../lib/stage-run.mjs';
 import { GO_ALL, GO_PILOT, PILOT_GO_LINE, SEED, SLOTS, fakeLoop, mapOf, readbackHolds, runRig } from './stage-run-fixture.mjs';
 import { makeSeries } from './stage-series-fixture.mjs';
+import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { readbackSlots } from '../lib/stage-schedule.mjs';
 
 const next = (rig, extra = {}) => stageRun({ values: { series: rig.dir, what: 'next', ...extra }, io: rig.io });
@@ -276,4 +279,59 @@ test('The_pilot_steps_run_in_the_pilots_order_and_one_that_is_not_next_is_refuse
   const kinds = Object.values(mapOf(rig.dir).sessions).map(s => `${s.kind}:${s.task}`);
   assert.deepEqual(kinds.sort(), ['aa:05', 'aa:05', 'pilot:04', 'pilot:04', 'pilot:10', 'pilot:10']);
   void transition;
+});
+
+const pairFileOf = (rig, n) => path.join(rig.dir, 'pairs', `p${n}.json`);
+
+test('A_pair_record_cut_short_by_a_kill_is_rewritten_whole_before_the_next_slot_is_offered', async () => {
+  const rig = await runRig();
+  assert.equal((await next(rig)).exit, 0);
+  diedAfterFacts(rig, ['csharp', 'node'].map(stack => SLOTS[0].rids[stack][0]));
+  assert.equal((await next(rig)).exit, 0, 'the control: slot 1 has complete session records and slot 2 ran');
+  const whole = readFileSync(pairFileOf(rig, 1), 'utf8');
+  writeFileSync(pairFileOf(rig, 1), whole.slice(0, Math.floor(whole.length / 2)));
+  assert.throws(() => JSON.parse(readFileSync(pairFileOf(rig, 1), 'utf8')), SyntaxError, 'the kill left truncated JSON');
+  const seen = [];
+  const real = rig.io.runSeams.loopFn;
+  rig.io.runSeams.loopFn = async a => { seen.push(readFileSync(pairFileOf(rig, 1), 'utf8')); return real(a); };
+  assert.equal((await next(rig)).exit, 0);
+  assert.equal(rig.log.at(-1).pair, 3, 'the next slot was offered');
+  assert.equal(seen[0], whole, 'and when it was offered the pair record of slot 1 was already rewritten, whole and the same as before the kill');
+});
+
+/** A copy of the fs module that tells each call of the names it is given to `calls` (a seam for the pair record's write). */
+const spyFs = (calls, over = {}) => ({
+  ...nodeFs,
+  openSync: (file, ...rest) => { calls.push(['open', path.basename(file)]); return nodeFs.openSync(file, ...rest); },
+  renameSync: (from, to) => { calls.push(['rename', path.basename(from), path.basename(to)]); return nodeFs.renameSync(from, to); },
+  ...over,
+});
+const pairArgs = (dir, fs) => ({ seriesDir: dir, map: { sessions: {} }, pair: 1, stage: { pairExtra: { stage: { slot: 1 } } }, fs });
+
+test('The_pair_record_is_written_to_a_temporary_file_beside_it_and_renamed_into_place_and_a_write_cut_short_leaves_the_old_record_whole', () => {
+  const dir = tmpDir('pair-atomic');
+  mkdirSync(path.join(dir, 'pairs'));
+  const calls = [];
+  finalizePair(pairArgs(dir, spyFs(calls)));
+  assert.deepEqual(calls.map(c => c[0]), ['open', 'rename'], 'the pair record is written through one temporary file and one rename');
+  const [[, temp], [, from, to]] = calls;
+  assert.deepEqual([to, from === temp, temp !== 'p1.json', temp.endsWith('.tmp')], ['p1.json', true, true, true], 'the temporary name is the one renamed to the pair record');
+  const kept = readFileSync(path.join(dir, 'pairs', 'p1.json'), 'utf8');
+  const cut = spyFs([], { writeSync: (fd, text) => { nodeFs.writeSync(fd, text.slice(0, 10)); throw new Error('killed in the middle of the write'); } });
+  assert.throws(() => finalizePair(pairArgs(dir, cut)), /killed in the middle/);
+  assert.equal(readFileSync(path.join(dir, 'pairs', 'p1.json'), 'utf8'), kept, 'the record that was there is whole');
+});
+
+test('A_launch_that_died_between_its_go_event_and_the_run_map_is_launched_again_with_one_go_event_for_the_unit', async () => {
+  const rig = await runRig();
+  const real = rig.io.runSeams.loopFn;
+  rig.io.runSeams.loopFn = async ({ unit }) => { unit.onReady(); throw new Error('killed between the go event and the run-map'); };
+  await assert.rejects(next(rig), /killed between/);
+  const goEvents = () => readLedger(ledgerFileOf(rig.dir)).filter(l => l.event === 'owner-go');
+  assert.equal(goEvents().length, 1, 'the control: the go event is there');
+  assert.deepEqual(Object.keys(mapOf(rig.dir).sessions), [], 'and the run-map holds no plan for the unit (the crash state)');
+  rig.io.runSeams.loopFn = real;
+  assert.equal((await next(rig)).exit, 0);
+  assert.equal(rig.log.length, 1, 'the unit launched');
+  assert.deepEqual(goEvents().map(e => [e.pair, e.what]), [[1, 'next']], 'the ledger holds exactly one go event for it');
 });

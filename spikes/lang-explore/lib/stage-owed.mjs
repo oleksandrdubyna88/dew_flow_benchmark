@@ -32,8 +32,11 @@ function lacksStageFields(dir, session) {
 /** A unit with nothing open and an ended session. */
 const idle = mine => !mine.some(isOpenSession) && mine.some(hasEnded);
 
-/** Does the unit owe records: an ended session lacks its facts or the Stage 1 fields of its record, or a data slot lacks its pair record. The finalizer is safe to run again over what is there (the facts file is written once, the explore section is rebuilt to the same bytes), so a unit that owes only one of them is finished whole. */
-const lacksRecords = ({ dir, unit, mine }) => mine.some(s => lacksFacts(dir, s) || lacksStageFields(dir, s)) || (unit.kind === DATA_KIND && !existsSync(pairFile(dir, unit.pair)));
+/** A data slot's pair record that is absent or cannot be read or parsed (a kill cut its write short): it is owed, and the finalizer rewrites it whole. */
+const lacksPair = ({ dir, unit }) => unit.kind === DATA_KIND && readJsonOrNull(pairFile(dir, unit.pair)) === null;
+
+/** Does the unit owe records: an ended session lacks its facts or the Stage 1 fields of its record, or a data slot lacks its pair record (absent or unreadable). The finalizer is safe to run again over what is there (the facts file is written once, the explore section is rebuilt to the same bytes), so a unit that owes only one of them is finished whole. */
+const lacksRecords = ({ dir, unit, mine }) => mine.some(s => lacksFacts(dir, s) || lacksStageFields(dir, s)) || lacksPair({ dir, unit });
 
 const owes = ({ dir, unit, map }) => { const mine = Object.values(map.sessions).filter(unit.belongs); return idle(mine) && lacksRecords({ dir, unit, mine }); };
 

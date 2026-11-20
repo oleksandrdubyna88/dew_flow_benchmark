@@ -1,7 +1,8 @@
 // `explore.mjs run --pair k [--rerun <stack>]`: ONE pair, the operator reads it before paying for the next (plan D-X1). The pair's sessions are planned in the run-map (kind `pilot`) by `lib/series.mjs`,
 // then v1's `runLoop` does what it does for the bare runner (the gates, the same-tick start on the masks, the barrier, the scoring in v1's order, the classes, the charge), with the pilot's workspace fill,
 // plan, machine and judge. Afterwards each session's record gains its `explore` section and the pair's record is written.
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import * as nodeFs from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { reconcile, runLoop } from '../../minigit-bench/lib/bare-series.mjs';
 import { loadSessionDir } from '../../minigit-bench/lib/smoke-load.mjs';
@@ -16,6 +17,7 @@ import { finalizeSessionRecord, missingPaths, pairRecordOf } from './records.mjs
 import { frozenFill, realMachine, runContext, runDeps, scoreSessionDep } from './run-ctx.mjs';
 import { allOk } from './chain.mjs';
 import { calibrationFor, loadCalibration } from './limits.mjs';
+import { replaceJson } from './package-write.mjs';
 import { pinsOk } from './pins.mjs';
 import { STACK_ORDER, canonicalNameProblem, isRehearsal, ledgerFileOf, loadSeries, planPair, runMapFileOf, seriesInputs, seriesPrompts, seriesRootProblem } from './series.mjs';
 import { appendLedger } from '../../minigit-bench/lib/ledger.mjs';
@@ -53,24 +55,24 @@ function finalizeOne(seriesDir, e, stage) {
 /** What the pair's record already holds of the owner's `--allow-over` texts (a resume rewrites the record and must not erase them). */
 const earlierOverrides = file => { try { return readJson(file).pauseOverrides ?? []; } catch { return []; } };
 
-/** The pair record: v1's `pairRecord` over the pair's sessions, the owner's `--allow-over` texts and, in Stage 1, what the slot adds (`stage.pairExtra`: its task, round, masks and the owner's go line). */
-function pairRecordFile({ seriesDir, pair, entries, pause, stage }) {
+/** The pair record: v1's `pairRecord` over the pair's sessions, the owner's `--allow-over` texts and, in Stage 1, what the slot adds (`stage.pairExtra`: its task, round, masks and the owner's go line). It is rewritten on purpose (a resume), so it replaces the old file whole (`replaceJson`: a temporary file, then a rename): a kill in the middle leaves the old record, never a cut one. */
+function pairRecordFile({ seriesDir, pair, entries, pause, stage, fs }) {
   const recordOf = rid => (existsSync(recordFile(seriesDir, rid)) ? readJson(recordFile(seriesDir, rid)) : null);
   const pairFile = path.join(seriesDir, 'pairs', `p${pair}.json`);
   const base = withOverrides(pairRecordOf({ pair, entries, recordOf }), [...earlierOverrides(pairFile), ...(pause ? [pause] : [])]);
-  writeFileSync(pairFile, `${JSON.stringify({ ...base, ...(stage?.pairExtra ?? {}) }, null, 2)}\n`);
+  replaceJson({ file: pairFile, value: { ...base, ...(stage?.pairExtra ?? {}) }, fs });
   return pairFile;
 }
 
 /**
  * After the loop: each session of `pair` that has a record gains its `explore` section; the records are checked for completeness; the pair record is written, with the owner's `--allow-over` text when the pause
  * point was passed by it (`pause`, see lib/pause.mjs; earlier ones are kept). `only` narrows the sessions to a unit's own (the pilot's units share the pair number 0); `stage` is Stage 1's `{ of(entry), pairExtra }`, and `pairExtra: null`
- * writes no pair record (a pilot unit has none). -> `{ problems, pairFile }`.
+ * writes no pair record (a pilot unit has none). `fs` is the file system the pair record is written through (a seam for tests). -> `{ problems, pairFile }`.
  */
-export function finalizePair({ seriesDir, map, pair, kinds = ['pilot'], pause = null, only = () => true, stage = null }) {
+export function finalizePair({ seriesDir, map, pair, kinds = ['pilot'], pause = null, only = () => true, stage = null, fs = nodeFs }) {
   const entries = Object.values(map.sessions).filter(s => s.pair === pair && kinds.includes(s.kind) && only(s));
   const problems = entries.flatMap(e => finalizeOne(seriesDir, e, stage));
-  const pairFile = stage?.pairExtra === null ? null : pairRecordFile({ seriesDir, pair, entries, pause, stage });
+  const pairFile = stage?.pairExtra === null ? null : pairRecordFile({ seriesDir, pair, entries, pause, stage, fs });
   return { problems, pairFile };
 }
 
