@@ -7,7 +7,7 @@
 //   restoreSeries  copies a freed session's files back from the archive, verifies them against `freed.json`'s list and removes `freed.json`.
 // Who needs a freed folder: nothing between the halt and the report reads `FREEABLE` (the scoring builds from `work/` over the registered snapshot, never the session's cache). The final hash list of the record (PR 13) and the last archive
 // after the series ended do need the whole tree, and each refuses a series that still holds a `freed.json` (`freedSessionProblem`), naming `stage-restore`.
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { acquireSeriesLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { makeWritable } from '../../minigit-bench/lib/cache-snapshot.mjs';
@@ -182,16 +182,28 @@ function unproven({ series, rel, archive }) {
   return hashAt(path.join(archive.entry.copy, rel)) === listed ? null : 'the archived copy no longer has the listed hash';
 }
 
-/** The entries under a session's FREEABLE folders, paths from the series root: `[{ rel, kind, size, mode, target }]`. */
-const cacheEntriesOf = ({ series, rid }) => FREEABLE.map(root => `s/${rid}/${root}`).filter(root => existsSync(path.join(series, root)))
-  .flatMap(root => walkEntries(path.join(series, root)).map(e => ({ ...e, rel: `${root}/${e.rel}` })));
+const lstatOf = file => { try { return lstatSync(file); } catch { return undefined; } };
+
+/** The first link on the way from the series to `rel` (every folder on it is `lstat`ed, none is followed): its path from the series, or null. */
+const linkOnWay = ({ series, rel }) => rel.split('/').map((_, i, parts) => parts.slice(0, i + 1).join('/')).find(part => lstatOf(path.join(series, part))?.isSymbolicLink()) ?? null;
+
+/** A session's FREEABLE roots that are there: `{ rel, link }`, `link` the first link on the way to the root (the root itself included), else null. A root behind a link is outside what a free may touch. */
+const rootsOf = ({ series, rid }) => FREEABLE.map(root => `s/${rid}/${root}`).map(rel => ({ rel, link: linkOnWay({ series, rel }) })).filter(r => r.link !== null || lstatOf(path.join(series, r.rel)) !== undefined);
+
+const plainRoots = ({ series, rid }) => rootsOf({ series, rid }).filter(r => r.link === null).map(r => r.rel);
+
+/** The entries under a session's FREEABLE folders that no link leads to, paths from the series root: `[{ rel, kind, size, mode, target }]`. */
+const cacheEntriesOf = ({ series, rid }) => plainRoots({ series, rid }).flatMap(root => walkEntries(path.join(series, root)).map(e => ({ ...e, rel: `${root}/${e.rel}` })));
+
+/** The roots a link leads to or hides, named as kept: they are never walked, chmodded or removed. */
+const linkedRoots = ({ series, rid }) => rootsOf({ series, rid }).filter(r => r.link !== null).map(r => ({ path: r.rel, why: `${r.link} is a link and ${r.rel} is, or lies under, it: a link is never followed, so nothing behind it is walked, changed or removed` }));
 
 const freedItem = (rid, e, hash) => ({ path: e.rel.slice(`s/${rid}/`.length), kind: e.kind, bytes: e.size, mode: e.mode, sha256: hash, ...(e.kind === 'link' ? { target: e.target } : {}) });
 
 /** What the archive proves among a session's cache files: `{ removable: [{ entry, hash }], kept: [{ path, why }] }`. */
 function judgeSession({ series, rid, archive }) {
   const judged = cacheEntriesOf({ series, rid }).map(e => ({ e, why: e.kind === 'other' ? 'it is neither a file nor a link' : unproven({ series, rel: e.rel, archive }) }));
-  return { removable: judged.filter(j => j.why === null).map(j => ({ entry: j.e, hash: archive.list.get(j.e.rel) })), kept: judged.filter(j => j.why !== null).map(j => ({ path: j.e.rel, why: j.why })) };
+  return { removable: judged.filter(j => j.why === null).map(j => ({ entry: j.e, hash: archive.list.get(j.e.rel) })), kept: [...judged.filter(j => j.why !== null).map(j => ({ path: j.e.rel, why: j.why })), ...linkedRoots({ series, rid })] };
 }
 
 const oldFreed = dir => (existsSync(path.join(dir, FREED_FILE)) ? JSON.parse(readFileSync(path.join(dir, FREED_FILE), 'utf8')) : { removed: [] });
@@ -211,9 +223,10 @@ function removeEmptyDirs(dir) {
 }
 
 function removeFiles({ series, rid, removable }) {
-  for (const root of FREEABLE) makeWritable(path.join(sessionDir(series, rid), root));
+  const roots = plainRoots({ series, rid }).map(root => path.join(series, root));
+  roots.forEach(makeWritable);
   for (const { entry } of removable) rmSync(path.join(series, entry.rel), { force: true });
-  FREEABLE.map(root => path.join(sessionDir(series, rid), root)).filter(existsSync).forEach(removeEmptyDirs);
+  roots.filter(existsSync).forEach(removeEmptyDirs);
 }
 
 function freeSession({ series, rid, archive, now }) {

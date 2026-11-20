@@ -2,7 +2,7 @@
 // local space, a closed list of three cache folders of final sessions of finished slots, each file proven by the verified archive) and `stage-restore` (the freed folders back from the archive, verified). Fakes and temporary folders only: the
 // "backup" is an owned folder, the sessions are a few invented files, no held-out content exists here.
 import assert from 'node:assert/strict';
-import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { appendLedger, readLedger } from '../../minigit-bench/lib/ledger.mjs';
@@ -346,4 +346,34 @@ test('Without_a_progress_callback_a_long_operation_says_nothing_and_does_the_sam
   const { series } = archived(t);
   assert.equal(freeSeries({ series, unreadSlots: [] }).ok, true);
   assert.equal(restoreSeries({ series }).ok, true, 'a restore without a callback goes through');
+});
+
+// ---- Opus review (PR 4), O2: a cache folder that is a link out of the series is kept and named, never followed ------------------------------------------------------------------------------------------------
+
+/** What a folder is: every entry under it with its mode, and its own mode. A link is not followed. */
+const stateOf = dir => ({ own: lstatSync(dir).mode & 0o777, entries: readdirSync(dir, { recursive: true }).map(String).sort().map(name => [name, lstatSync(path.join(dir, name)).mode & 0o777]) });
+
+test('A_cache_folder_that_is_a_link_out_of_the_series_or_lies_under_one_is_kept_and_named_and_nothing_outside_is_changed_or_removed', t => {
+  for (const linked of ['box/home/.dotnet', 'box/home', 'box']) {
+    const { series } = archived(t);
+    const rid = ridOf(1, 'csharp');
+    const inside = path.join(series, 's', rid, linked);
+    const outside = path.join(backupFolder(t), 'moved-out');
+    renameSync(inside, outside);
+    symlinkSync(outside, inside);
+    mkdirSync(path.join(outside, 'empty-folder'));
+    for (const name of readdirSync(outside, { recursive: true }).map(String).filter(n => lstatSync(path.join(outside, n)).isFile())) chmodSync(path.join(outside, name), 0o444);
+    const before = stateOf(outside);
+    const bytesBefore = snapshotOf(outside);
+    const freed = freeSeries({ series, unreadSlots: [] });
+    assert.equal(freed.ok, true, `${linked}: the free does not throw or fail: ${freed.reason}`);
+    assert.deepEqual(stateOf(outside), before, `${linked}: nothing outside the series changed its mode, and its empty folder is still there`);
+    assert.deepEqual(snapshotOf(outside), bytesBefore, `${linked}: and no file outside was removed`);
+    assert.equal(lstatSync(inside).isSymbolicLink(), true, `${linked}: the link itself stays`);
+    const kept = freed.value.kept.filter(k => k.path === `s/${rid}/box/home/.dotnet`);
+    assert.equal(kept.length, 1, `${linked}: the cache root is named as kept`);
+    assert.match(kept[0].why, /is a link/, `${linked}: with the reason: ${kept[0].why}`);
+    const other = freed.value.kept.filter(k => !k.path.startsWith(`s/${rid}/box/`) || k.path.startsWith(`s/${rid}/${linked}`) === false);
+    assert.deepEqual(other, [], `${linked}: only roots on or under the link are kept`);
+  }
 });
