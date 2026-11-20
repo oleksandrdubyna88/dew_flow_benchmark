@@ -883,10 +883,12 @@ fixes):
    commit of `main` it is; `stage-sync --accept-harness <12 hex>` then takes the harness folders of exactly that commit,
    and is refused once a data session has left `planned`.
    *(2026-11-20, epoch 11, the re-review's decisions on PR 5's three candidates:)*
-   - **(b) reverted to this brief.** A harness acceptance needs the dated line `instrument | harness:<12 hex>`, which names
-     the commit of `main` that holds the fix. `stage-sync --accept-harness <12 hex>` then takes the harness folders of
-     exactly that commit, checks that their identity is the 12 hex, and is refused once a data session has left
-     `planned`. The acceptance is frozen into the run-map at the first data plan. A public hash identifies bytes but does
+   - **(b) reverted to this brief.** A harness acceptance needs the dated line
+     `YYYY-MM-DD | instrument | harness:<12 hex> | <reason>`. Its `<12 hex>` is the accepted HARNESS IDENTITY, the 12 hex
+     of the hash over the live tree ids of the harness folders, and never a commit sha; the same line also names, in its
+     reason, the commit of `main` that holds the fix. `stage-sync --accept-harness <12 hex>` repeats that identity: it
+     takes the harness folders of the commit that the line names, checks that their identity is the 12 hex, refuses when
+     it is not, and is refused once a data session has left `planned`. The acceptance is frozen into the run-map at the first data plan. A public hash identifies bytes but does
      not supply the reviewed source, so the fix must be on `main` first, and the series takes it from there. PR 5, which
      removed the flag (an operator's commit on the series' branch under the dated line), restores it with the freeze
      kept (`harnessAtFirstData`); scenario 79e stands as written.
@@ -1152,7 +1154,9 @@ rehearsal series. The series runs from one worktree on its own branch, cut at th
    projection counts: the reserve is recomputed before it with those two and everything still to run, and it is refused
    when the rest of the series would no longer fit (PR 4). A second NO GO on the same row goes to the owner before a third
    pair is paid for (v1's rule). *(2026-11-20, epoch 11: as written, (b) reverted to the brief: the fix is on `main`
-   first, its dated `instrument | harness:<12 hex>` line names that commit, and `stage-sync --accept-harness` takes it.)*
+   first; its dated `instrument | harness:<12 hex>` line carries the harness identity of the fixed folders as the 12 hex
+   and names that commit in its reason; `stage-sync --accept-harness <12 hex>` repeats the identity, takes the harness
+   folders of that commit and checks that their identity is the 12 hex.)*
 7. The wall and the stall: the one dated `caps` line. The policy of the cost checks T3 and T5, if the A/A asks for another,
    as a commit of `crosscheck-policy.json` in its free fields. *(2026-11-20, epoch 11, (d): the free fields are `t3`, `t5`,
    `decidedOn` and `reason`, and the change needs its dated `input:crosscheck-policy.json:<12 hex>` line.)*
