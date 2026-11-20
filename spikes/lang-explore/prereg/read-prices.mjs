@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Reads the published prices (F3.S1 (b), PR 5; closed point 11: the day the pre-registration files are generated) and writes `inputs/prereg/prices-<yyyy-mm-dd>.json` in v1's shape (`spikes/minigit-bench/lib/prices.mjs`). The ONE step of
-// the pre-registration that uses the network, and it makes exactly one request: a GET of the pricing page (or, with `--from-file`, reads a saved copy and uses no network). NOBODY HAS SEEN THE REAL PAGE YET, so the parser never guesses: it
-// finds the table by its EXACT header row (`PRICE_HEADER`) and reads a price only in the form `$<number> / MTok`; unless it finds that header and a price for every model of the base file (the models the series uses) it refuses, naming what it
-// found. The first real read happens when PR 6 generates the files, and the operator compares the values with the page then. `cliRates` keep only the entries observed on the pinned CLI version. `--check` is offline: the committed file must be
-// valid and exactly the form this tool writes it in.
+// the pre-registration that uses the network, and it makes exactly one request: a GET of the pricing page (or, with `--from-file`, reads a saved copy and uses no network). The parser never guesses: it finds the table by its EXACT header
+// row (`PRICE_HEADER`, the header of the real page as read on 2026-11-20, PR 5b: no case folding, no "&" for "and") and reads a price only in the form `$<number> / MTok`, optionally followed by exactly ONE footnote mark `<sup>N</sup>`; the number
+// of the cell IS the price and the mark only explains it, so a mark is never dropped: the price file's `notes` record, per footnote, the rates that carried it and the footnote's sentence from the page (a mark whose sentence is not on the page is a
+// refusal). A row with a note in the model's name (`(limited availability)`, `(retired ...)`, `(for prompts over ...)`) is not read, and never breaks the read of the others. Unless it finds that header and a clean row for every model of the
+// base file (the models the series uses) it refuses, naming what it found. `cliRates` keep only the entries observed on the pinned CLI version. `--check` is offline: the committed file must be valid and exactly the form this tool writes it in.
 //   node spikes/lang-explore/prereg/read-prices.mjs [--explore <explore.json>] [--base <prices file>] [--from-file <saved page>] [--out <file>] [--check]   (the CLI version is explore.json's cli.version, the day the fetch date: nothing is typed)
 // Exit 0 written (or checked equal) | 1 `--check` differs | 4 usage | 5 the page cannot be read or lacks a model.
 import { createHash } from 'node:crypto';
@@ -21,9 +22,15 @@ export const PRICING_URL = 'https://platform.claude.com/docs/en/about-claude/pri
 /** How long the one GET of the pricing page may take, the body included: a page that does not answer in this time is a refusal that names the timeout (`AbortSignal.timeout`). */
 export const FETCH_TIMEOUT_MS = 30_000;
 const BASE_FILE = path.join(REPO, 'spikes', 'minigit-bench', 'inputs', 'prices-2026-10-29.json');
-/** The header row of the price table, exactly: the first cell and the five prices. A table with any other header is not read. */
-export const PRICE_HEADER = Object.freeze(['Model', 'Base Input Tokens', '5m Cache Writes', '1h Cache Writes', 'Cache Hits & Refreshes', 'Output Tokens']);
-const PRICE = /^\$(\d+(?:\.\d+)?) \/ MTok$/;
+/** The header row of the price table, exactly (the real page's, read on 2026-11-20): the first cell and the five prices. A table with any other header is not read. */
+export const PRICE_HEADER = Object.freeze(['Model', 'Base input tokens', '5m cache writes', '1h cache writes', 'Cache hits and refreshes', 'Output tokens']);
+/** The rates in the order of the header's price columns. */
+const RATE_KEYS = Object.freeze(['input', 'cacheWrite5m', 'cacheWrite1h', 'cacheRead', 'output']);
+/** A price cell: `$<number> / MTok` and, directly after it, at most ONE footnote mark. Anything else is not a price. */
+const PRICE = /^\$(\d+(?:\.\d+)?) \/ MTok(?:<sup>(\d+)<\/sup>)?$/;
+/** A footnote line of the page: `*<sup>N sentence</sup>*`. */
+const FOOTNOTE = /^\*<sup>(\d+) (.+)<\/sup>\*$/;
+const NOTED = 'its name carries a note, so the row is not read';
 const SEPARATOR = /^:?-+:?$/;
 
 /** The name the pricing page gives a model id: `claude-opus-5-5` is `Claude Opus 5.5`; a trailing date is dropped. */
@@ -35,7 +42,7 @@ export function displayNameOf(modelId) {
 
 const cells = line => line.trim().split('|').slice(1, -1).map(c => c.trim());
 const isTableLine = line => line.trim().startsWith('|');
-const plainName = cell => cell.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]/g, '').replace(/\s*\(.*\)\s*$/, '').trim();
+const plainName = cell => cell.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]/g, '').trim();
 const isSeparator = row => row.length > 0 && row.every(c => SEPARATOR.test(c));
 const sameCells = (a, b) => a.length === b.length && a.every((c, i) => c === b[i]);
 
@@ -51,42 +58,76 @@ function noTableSentence(tables) {
   return `the pricing page has no table with the exact header row | ${PRICE_HEADER.join(' | ')} |: it holds ${found.length === 0 ? 'no table' : `the tables ${found.join(' and ')}`}`;
 }
 
-/** One table row: `{ name, rates }` when every price cell is `$<number> / MTok`, else `{ name, why }` naming the first cell that is not. */
-function rowOf(row) {
-  const [name, ...rest] = row;
-  const bad = rest.findIndex(c => !PRICE.test(c));
-  if (row.length !== PRICE_HEADER.length) return { name: plainName(name), why: `${row.length} cells, not ${PRICE_HEADER.length}` };
-  if (bad >= 0) return { name: plainName(name), why: `${PRICE_HEADER[bad + 1]} is '${rest[bad]}', not a price in the form $5 / MTok` };
-  const [input, cacheWrite5m, cacheWrite1h, cacheRead, output] = rest.map(c => Number(PRICE.exec(c)[1]));
-  return { name: plainName(name), rates: { input, cacheWrite5m, cacheWrite1h, cacheRead, output } };
+/** A price cell: `{ value, mark }` (`mark` the digits of the one footnote mark, or undefined), or null when the cell is not a price. */
+function priceCell(cell) {
+  const found = PRICE.exec(cell);
+  return found ? { value: Number(found[1]), mark: found[2] } : null;
 }
 
-/** The names the page gives twice with different content (rates, or the reason a row is unreadable): the page never chooses between them. */
-const conflictsOf = rows => [...new Set(rows.map(r => r.name))].filter(name => new Set(rows.filter(r => r.name === name).map(r => JSON.stringify(r.rates ?? r.why))).size > 1);
+/** The footnote marks of a row's price cells: `{ <rate>: '<digits>' }` for the cells that carry one. */
+const marksOfCells = priced => Object.fromEntries(RATE_KEYS.flatMap((key, i) => (priced[i].mark === undefined ? [] : [[key, priced[i].mark]])));
+
+/** One table row: `{ name, rates, marks }` when every price cell is a price, `{ name, why }` naming the first cell that is not, or `{ name, why, noted }` for a row with a note in its name (left unread, and out of every comparison). */
+function rowOf(row) {
+  const [cell, ...rest] = row;
+  const name = plainName(cell);
+  if (name.includes('(')) return { name, why: NOTED, noted: true };
+  if (row.length !== PRICE_HEADER.length) return { name, why: `${row.length} cells, not ${PRICE_HEADER.length}` };
+  const priced = rest.map(priceCell);
+  const bad = priced.findIndex(p => p === null);
+  if (bad >= 0) return { name, why: `${PRICE_HEADER[bad + 1]} is '${rest[bad]}', not a price in the form $5 / MTok` };
+  return { name, rates: Object.fromEntries(RATE_KEYS.map((key, i) => [key, priced[i].value])), marks: marksOfCells(priced) };
+}
+
+/** The names the page gives twice with different content (rates and marks, or the reason a row is unreadable): the page never chooses between them. A row with a note in its name is not compared. */
+const conflictsOf = rows => [...new Set(rows.map(r => r.name))].filter(name => new Set(rows.filter(r => r.name === name).map(r => JSON.stringify([r.rates ?? r.why, r.marks]))).size > 1);
+
+/** The footnote lines of the page: a list of `[digits, sentence]`. */
+const footnoteLines = text => text.split('\n').map(line => FOOTNOTE.exec(line.trim())).filter(Boolean).map(f => [f[1], f[2]]);
+
+/** The footnote numbers the page gives twice with different sentences. */
+const footnoteConflicts = lines => [...new Set(lines.map(([n]) => n))].filter(n => new Set(lines.filter(([m]) => m === n).map(([, sentence]) => sentence)).size > 1);
 
 /**
- * The page's price tables -> `ok({ prices: Map(display name -> { input, output, cacheRead, cacheWrite5m, cacheWrite1h }), unreadable: Map(display name -> why) })` | `fail(reason)`. A table is found by its EXACT header row (`PRICE_HEADER`); a
- * price is read only in the form `$<number> / MTok`; a row with a cell in another form is `unreadable`, and the build refuses it when the series needs that model; a name given twice with different content is refused.
+ * The page's price tables -> `ok({ prices: Map(display name -> { input, output, cacheRead, cacheWrite5m, cacheWrite1h }), marks: Map(display name -> { <rate>: '<footnote number>' }), footnotes: Map('<number>' -> sentence), unreadable: Map(name -> why) })`
+ * | `fail(reason)`. A table is found by its EXACT header row (`PRICE_HEADER`); a price is read only in the form `$<number> / MTok` with at most one footnote mark; a row with a cell in another form is `unreadable`, and the build refuses it when the
+ * series needs that model; a row with a note in its name is `unreadable` too (never read, never compared); a name given twice with different content, or a footnote number given twice with different sentences, is refused.
  */
 export function parsePricingPage(text) {
   const tables = tablesOf(text);
   const priced = tables.filter(isPriceTable);
   if (priced.length === 0) return fail(noTableSentence(tables));
   const rows = priced.flatMap(group => group.slice(2)).map(rowOf);
-  const conflicts = conflictsOf(rows);
+  const conflicts = conflictsOf(rows.filter(r => !r.noted));
   if (conflicts.length > 0) return fail(`the pricing page gives ${conflicts.join(', ')} twice with different content: a price is never chosen between two`);
-  return ok({ prices: new Map(rows.filter(r => r.rates).map(r => [r.name, r.rates])), unreadable: new Map(rows.filter(r => r.why).map(r => [r.name, r.why])) });
+  const lines = footnoteLines(text);
+  const twice = footnoteConflicts(lines);
+  if (twice.length > 0) return fail(`the pricing page gives footnote ${twice.join(', ')} twice with different sentences: a footnote is never chosen between two`);
+  return ok({ prices: new Map(rows.filter(r => r.rates).map(r => [r.name, r.rates])), marks: new Map(rows.filter(r => r.rates).map(r => [r.name, r.marks])), footnotes: new Map(lines), unreadable: new Map(rows.filter(r => r.why).map(r => [r.name, r.why])) });
+}
+
+/** The sentence for the footnote marks of a priced model whose footnote is not on the page, or null: a mark is never dropped, so a mark with no sentence is a refusal. */
+function markProblem({ wanted, page }) {
+  const lost = Object.entries(page.marks.get(wanted.name) ?? {}).filter(([, mark]) => !page.footnotes.has(mark));
+  return lost.length === 0 ? null : `${wanted.modelId} (${wanted.name}): ${lost.map(([rate, mark]) => `its ${rate} carries footnote mark ${mark} and the page has no footnote ${mark}`).join(' and ')}`;
 }
 
 /** The sentence for a model the page does not price, naming what it found, or null. */
 function modelProblem({ wanted, page }) {
-  if (page.prices.has(wanted.name)) return null;
+  if (page.prices.has(wanted.name)) return markProblem({ wanted, page });
   if (page.unreadable.has(wanted.name)) return `${wanted.modelId} (${wanted.name}): its row cannot be read: ${page.unreadable.get(wanted.name)}`;
   return `${wanted.modelId} (${wanted.name}): no row (the rows it found: ${[...page.prices.keys(), ...page.unreadable.keys()].join(', ') || 'none'})`;
 }
 
 /** One model of the price file, from its row. */
 const modelOf = ({ modelId, rates }) => ({ modelId, input: rates.input, output: rates.output, cacheRead: rates.cacheRead, cacheWrite5m: rates.cacheWrite5m, cacheWrite1h: rates.cacheWrite1h });
+
+/** The notes of the footnote marks the series' models carry, one per footnote number: the rates that carried it and the page's sentence. */
+function footnoteNotes({ wanted, page }) {
+  const used = wanted.flatMap(w => Object.entries(page.marks.get(w.name) ?? {}).map(([rate, mark]) => ({ mark, use: `${w.modelId} ${rate}` })));
+  const numbers = [...new Set(used.map(u => u.mark))].sort((a, b) => a - b);
+  return numbers.map(n => `footnote ${n} (${used.filter(u => u.mark === n).map(u => u.use).join(', ')}): ${page.footnotes.get(n)}`);
+}
 
 /** The note of a generated price file. */
 const noteOf = ({ day, cliVersion }) => `generated by spikes/lang-explore/prereg/read-prices.mjs on ${day} from ${PRICING_URL}; the models are those of the base file, each read from its own row of the page; a CLI rate is kept only where it was observed on the pinned CLI version ${cliVersion}`;
@@ -101,7 +142,7 @@ export function buildPrices({ base, page, day, cliVersion, provenance }) {
   if (problems.length > 0) return fail(`the pricing page cannot price the series' models: ${problems.join('; ')}: a price is never carried over from the older file or guessed`);
   const models = wanted.map(w => modelOf({ modelId: w.modelId, rates: page.prices.get(w.name) }));
   const cliRates = (base.cliRates ?? []).filter(c => c.cliVersion === cliVersion);
-  const file = { source: PRICING_URL, readOn: day, models, cliRates, notes: [noteOf({ day, cliVersion })], ...(provenance === undefined ? {} : { provenance }) };
+  const file = { source: PRICING_URL, readOn: day, models, cliRates, notes: [noteOf({ day, cliVersion }), ...footnoteNotes({ wanted, page })], ...(provenance === undefined ? {} : { provenance }) };
   const loaded = loadPrices(file);
   return loaded.ok ? ok(file) : fail(`the price file is refused: ${loaded.reason}`);
 }

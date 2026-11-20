@@ -88,7 +88,8 @@ test('Rows_with_a_note_in_the_name_never_break_the_read_of_the_models_the_base_f
   assert.equal(page.value.prices.has('Claude Haiku 5.5'), false, 'a row with a note in its name is left unread');
   assert.equal(built(PAGE).ok, true);
   const only = buildPrices({ base: { models: [{ modelId: 'claude-haiku-5-5' }] }, page: page.value, day: 'x', cliVersion: '2.1.310' });
-  assert.match(only.reason, /claude-haiku-5-5 \(Claude Haiku 5\.5\): its row cannot be read: its name carries a note/, 'a base model that has only a noted row is a refusal');
+  assert.match(only.reason, /claude-haiku-5-5 \(Claude Haiku 5\.5\): no row \(the rows it found: .*Claude Haiku 5\.5 \(for prompts up to 100,000 tokens\)/, 'a base model that has only noted rows is a refusal, and the noted rows are named');
+  assert.equal(page.value.unreadable.get('Claude Mythos 5.2 (limited availability)'), 'its name carries a note, so the row is not read');
 });
 
 test('The_check_from_the_saved_snapshot_reproduces_the_bytes_of_the_price_file_and_records_the_footnotes', async () => {

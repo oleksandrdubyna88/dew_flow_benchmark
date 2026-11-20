@@ -242,14 +242,15 @@ test('A_model_id_is_named_the_way_the_pricing_page_names_it_and_the_page_is_read
   const page = parsed(PAGE);
   assert.deepEqual([...page.prices.keys()], ['Claude Opus 5.5', 'Claude Sonnet 5.5', 'Claude Haiku 4.5'], 'a link and an emphasis are stripped; a row with no dollar amounts is not a priced row');
   assert.deepEqual(page.prices.get('Claude Opus 5.5'), { input: 4, cacheWrite5m: 5, cacheWrite1h: 8, cacheRead: 0.2, output: 20 });
-  assert.deepEqual([...page.unreadable], [['Claude Old 1', "Cache Writes is 'n/a', not a price in the form $5 / MTok".replace('Cache Writes', '5m Cache Writes')]], 'the row it could not read is kept with the cell that is not a price');
+  assert.deepEqual([...page.unreadable], [['Claude Old 1 (deprecated)', 'its name carries a note, so the row is not read']], 'a row with a note in its name is left unread and named (PR 5b: before, its cell was read and named)');
+  assert.deepEqual([...parsed(PAGE.replace('| Claude Old 1 (deprecated) |', '| Claude Old 1 |')).unreadable], [['Claude Old 1', "5m cache writes is 'n/a', not a price in the form $5 / MTok"]], 'the row it could not read is kept with the cell that is not a price');
 });
 
 test('A_page_without_the_exact_header_row_is_refused_naming_the_headers_it_found_and_nothing_is_guessed', () => {
   const none = parsePricingPage('no table here');
   assert.equal(none.ok, false);
-  assert.match(none.reason, /^the pricing page has no table with the exact header row \| Model \| Base Input Tokens \| 5m Cache Writes \| 1h Cache Writes \| Cache Hits & Refreshes \| Output Tokens \|: it holds no table$/);
-  const variants = [['lower case', HEADER.toLowerCase()], ['a column renamed', HEADER.replace('Output Tokens', 'Output')], ['a column missing', '| Model | Base Input Tokens | 5m Cache Writes | 1h Cache Writes | Output Tokens |'], ['a column added', HEADER.replace(' Output Tokens |', ' Output Tokens | Batch |')], ['the columns reordered', '| Model | 5m Cache Writes | Base Input Tokens | 1h Cache Writes | Cache Hits & Refreshes | Output Tokens |']];
+  assert.match(none.reason, /^the pricing page has no table with the exact header row \| Model \| Base input tokens \| 5m cache writes \| 1h cache writes \| Cache hits and refreshes \| Output tokens \|: it holds no table$/);
+  const variants = [['lower case', HEADER.toLowerCase()], ['a column renamed', HEADER.replace('Output tokens', 'Output')], ['a column missing', '| Model | Base input tokens | 5m cache writes | 1h cache writes | Output tokens |'], ['a column added', HEADER.replace(' Output tokens |', ' Output tokens | Batch |')], ['the columns reordered', '| Model | 5m cache writes | Base input tokens | 1h cache writes | Cache hits and refreshes | Output tokens |']];
   for (const [what, header] of variants) {
     const refused = parsePricingPage(PAGE.replace(HEADER, header).replace('|---|---|---|---|---|---|', header.replace(/[^|]+/g, '---')));
     assert.equal(refused.ok, false, what);
@@ -262,9 +263,9 @@ test('A_page_without_the_exact_header_row_is_refused_naming_the_headers_it_found
 test('A_price_cell_is_read_only_in_the_form_dollars_per_MTok_and_a_name_given_twice_with_different_content_is_refused', () => {
   const page = parsed(PAGE.replace('$4 / MTok', '4 USD').replace('| Claude Haiku 4.5 | $1 / MTok', '| Claude Haiku 4.5 | $1.5 per MTok'));
   assert.deepEqual([...page.prices.keys()], ['Claude Sonnet 5.5'], 'a cell in another form leaves its row unread');
-  assert.match(page.unreadable.get('Claude Opus 5.5'), /^Base Input Tokens is '4 USD', not a price in the form \$5 \/ MTok$/);
+  assert.match(page.unreadable.get('Claude Opus 5.5'), /^Base input tokens is '4 USD', not a price in the form \$5 \/ MTok$/);
   const refused = buildPrices({ base: BASE, page, day: 'x', cliVersion: '2.1.310' });
-  assert.match(refused.reason, /the pricing page cannot price the series' models: claude-opus-5-5 \(Claude Opus 5\.5\): its row cannot be read: Base Input Tokens is '4 USD'.*claude-haiku-4-5-20251001 \(Claude Haiku 4\.5\): its row cannot be read: Base Input Tokens is '\$1\.5 per MTok'.*: a price is never carried over from the older file or guessed/);
+  assert.match(refused.reason, /the pricing page cannot price the series' models: claude-opus-5-5 \(Claude Opus 5\.5\): its row cannot be read: Base input tokens is '4 USD'.*claude-haiku-4-5-20251001 \(Claude Haiku 4\.5\): its row cannot be read: Base input tokens is '\$1\.5 per MTok'.*: a price is never carried over from the older file or guessed/);
   const twice = parsePricingPage(`${PAGE}\n${HEADER}\n|---|---|---|---|---|---|\n| Claude Opus 5.5 | $5 / MTok | $5 / MTok | $8 / MTok | $0.20 / MTok | $20 / MTok |\n`);
   assert.match(twice.reason, /the pricing page gives Claude Opus 5\.5 twice with different content: a price is never chosen between two/);
   const same = parsePricingPage(`${PAGE}\n${HEADER}\n|---|---|---|---|---|---|\n| Claude Opus 5.5 | $4 / MTok | $5 / MTok | $8 / MTok | $0.20 / MTok | $20 / MTok |\n`);
@@ -282,7 +283,7 @@ test('The_price_file_has_the_base_files_models_each_from_its_own_row_and_never_a
   assert.equal(built.value.source, PRICING_URL);
   assert.equal(loadPrices(built.value).ok, true, 'v1\'s own loader accepts it');
   const gone = buildPrices({ base: { ...BASE, models: [...BASE.models, { modelId: 'claude-fable-5-1' }] }, page: parsed(PAGE), day: '2026-11-19', cliVersion: '2.1.310' });
-  assert.match(gone.reason, /the pricing page cannot price the series' models: claude-fable-5-1 \(Claude Fable 5\.1\): no row \(the rows it found: Claude Opus 5\.5, Claude Sonnet 5\.5, Claude Haiku 4\.5, Claude Old 1\): a price is never carried over from the older file or guessed/);
+  assert.match(gone.reason, /the pricing page cannot price the series' models: claude-fable-5-1 \(Claude Fable 5\.1\): no row \(the rows it found: Claude Opus 5\.5, Claude Sonnet 5\.5, Claude Haiku 4\.5, Claude Old 1 \(deprecated\)\): a price is never carried over from the older file or guessed/);
   assert.equal(buildPrices({ base: { ...BASE, models: [] }, page: parsed(PAGE), day: 'x', cliVersion: '2.1.310' }).ok, false, 'a table prices at least one model');
 });
 
@@ -321,11 +322,11 @@ test('A_pricing_page_that_changed_its_header_writes_no_file_and_exits_5_naming_w
   const base = path.join(dir, 'base.json');
   writeFileSync(base, JSON.stringify(BASE));
   const out = path.join(dir, 'prices-2026-11-19.json');
-  const changed = PAGE.replace(HEADER, HEADER.replace('Output Tokens', 'Output Tokens (per million)'));
+  const changed = PAGE.replace(HEADER, HEADER.replace('Output tokens', 'Output tokens (per million)'));
   const fetchFn = async () => ({ ok: true, status: 200, text: async () => changed });
   const ran = await run(pricesMain, ['--explore', PRICE_EXPLORE, '--base', base, '--out', out], { fetchFn, clock: () => new Date('2026-11-19T10:00:00Z') });
   assert.equal(ran.code, 5);
-  assert.match(ran.lines.join('|'), /^the pricing page has no table with the exact header row .*: it holds the tables \| Model \| Base Input Tokens .* \| Output Tokens \(per million\) \|$/);
+  assert.match(ran.lines.join('|'), /^the pricing page has no table with the exact header row .*: it holds the tables \| Model \| Base input tokens .* \| Output tokens \(per million\) \|$/);
   assert.equal(existsSync(out), false, 'no file was written');
   const dayless = await run(pricesMain, ['--explore', PRICE_EXPLORE, '--base', base, '--out', out, '--from-file', path.join(dir, 'absent.md')], {});
   assert.equal(dayless.code, 5, 'a saved page that is not there is a refusal, not a throw');
@@ -350,7 +351,7 @@ test('A_valid_price_table_is_parsed_into_one_price_file_with_each_models_own_row
 });
 
 test('A_header_that_is_not_the_exact_one_is_refused_and_no_file_is_written', async () => {
-  const ran = await priceRun(answering(PAGE.replace('Cache Hits & Refreshes', 'Cache Hits')));
+  const ran = await priceRun(answering(PAGE.replace('Cache hits and refreshes', 'Cache hits')));
   assert.equal(ran.code, 5);
   assert.match(ran.lines[0], /^the pricing page has no table with the exact header row/);
   assert.equal(existsSync(ran.out), false);
