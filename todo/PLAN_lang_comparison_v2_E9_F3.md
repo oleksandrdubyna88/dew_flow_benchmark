@@ -1,6 +1,6 @@
 # PLAN — language comparison v2, F3 stories: the series and the report — the series over six tasks, one pre-registration, the pilot, five paid rounds, the read-back, the record, blind adjudication and the Stage 2 decision line
 
-> Status: **plan only, 2026-11-19: F3's stories document, written when F3 starts. F2 is done (the freeze `spec-frozen-B-20261118` is accepted: C `502b65ad153887464c0c45ebc13e9bbef545c415`, W `f3d256e5fe1f774e189a9850056559b39b995a27`). Nothing of F3 is built. Three steps of it need the owner's explicit go before they run: the push of the pre-registration tag, the pilot's paid sessions, and the paid rounds (§4). Fourteen open points are in §11, each marked for the owner or the consultants; nine must be answered before the pre-registration files are written and one, the owner's, before PR 3. Revised 2026-11-19 for F3's plan round 1 (`proceed`, 2 of 2 reviewers, five findings accepted) and again the same day for the team lead's decision on the build order (consults `c823a3ae` and `757cdb08`) and an Opus review (all findings accepted): the parent's build order is kept; the harness (PRs 2 to 5) is frozen by the tag and the series runs from a branch that takes registered files only; the pilot's GO table, the read-back's print and the blind adjudication are tools under `research/lang-v2/tools/`, outside the harness identity, whose every consequential rule the tagged contract fixes; no merge condition is lowered; seven open points are closed from the parent's text.**
+> Status: **2026-11-20: PRs 2 to 4 of F3.S1 (a) are merged (#236, #237, #238); PR 5 is built on `feat/lang-v2-f3s1-prereg-tools` and not merged; nothing paid has run, and O1, O2 and O3 still wait for the owner. The parent is stopped for re-review (its entry 10.2, PR 3's narrowed `init` refusal), and its epoch-11 revision adds dated lines here, each marked "(2026-11-20, epoch 11)": the reading of `init` in PR 3's brief item 3 (change 10.2); in PR 5's brief item 2, candidate (b) reverted to the brief (`stage-sync --accept-harness` comes back, the freeze at the first data plan kept), (c) the widened harness identity with the `.agents/conventions` submodule's commit, and (d) the policy's free fields `t3`, `t5`, `decidedOn` and `reason`; the same in §3 and in the pilot's step 6. Next, once epoch 11 opens: PR 5 (restore (b), the whole suites, CI, the merge), PR 6, step T.** *Before this:* **plan only, 2026-11-19: F3's stories document, written when F3 starts. F2 is done (the freeze `spec-frozen-B-20261118` is accepted: C `502b65ad153887464c0c45ebc13e9bbef545c415`, W `f3d256e5fe1f774e189a9850056559b39b995a27`). Nothing of F3 is built. Three steps of it need the owner's explicit go before they run: the push of the pre-registration tag, the pilot's paid sessions, and the paid rounds (§4). Fourteen open points are in §11, each marked for the owner or the consultants; nine must be answered before the pre-registration files are written and one, the owner's, before PR 3. Revised 2026-11-19 for F3's plan round 1 (`proceed`, 2 of 2 reviewers, five findings accepted) and again the same day for the team lead's decision on the build order (consults `c823a3ae` and `757cdb08`) and an Opus review (all findings accepted): the parent's build order is kept; the harness (PRs 2 to 5) is frozen by the tag and the series runs from a branch that takes registered files only; the pilot's GO table, the read-back's print and the blind adjudication are tools under `research/lang-v2/tools/`, outside the harness identity, whose every consequential rule the tagged contract fixes; no merge condition is lowered; seven open points are closed from the parent's text.**
 > Epic F3 of [PLAN_lang_comparison_v2.md](PLAN_lang_comparison_v2.md) (*Operative plan for epoch 9* with its epoch-10 lines,
 > *Epics in force*, F3; build order steps 5 to 7; D69–D76). A stories document keeps no ledger: its changes are entries in the
 > parent (`common.plan-change-control`), and writing it when the epic starts is not a change. Read at `main` `5740809f` (#230, the
@@ -153,6 +153,13 @@ F1's §3 and F2's §3 hold here unchanged (roles, the merge conditions, red-gree
   fields of `explore.json`, `quiet.json`, `package-flags.json`. The guard refuses a paid launch when the branch differs from
   the tag in any other path, or when one of those files is not `origin/main`'s blob. So a harness change that reaches `main`
   after the tag neither reaches the series nor stops it, and every dated line the series acts on is public first.
+  *(2026-11-20, epoch 11, candidate (c):)* the Stage 1 harness identity also holds `spikes/lang-explore/runner`,
+  `spikes/lang-explore/templates`, `spikes/lang-bench/tools` and the `.agents/conventions` submodule's commit (its
+  gitlink), because the harness imports or runs them. So a rules pin on `main` moves the identity too: one merged before
+  PR 6 is in the manifest PR 6 generates, and one merged after the tag does not reach the series' branch. A paid launch
+  is refused while the submodule is off its recorded commit or has local changes. The first bullet's "every pull request
+  that changes a folder of the Stage 1 harness identity is one of PRs 2 to 5" binds F3's own pull requests; another
+  plan's change to a harness folder before PR 6 (#232, #234 and the rules pins so far) is read by PR 6's manifest.
 - **Three tools stand outside the harness identity** (the team lead's decision of 2026-11-19, below).
 - **No task-repository pull request.** Merge condition 5 does not bite in F3. Merge conditions 1 to 4 do, and §8 says which for
   each pull request.
@@ -500,6 +507,11 @@ through the code a quick-run pair runs through today; what is new is which task 
    part of `lib/run.mjs` after the plan (`readyOrRefused`, `loopAndFinalize`, `finishedIfInterrupted`, `finalizePair`) is called
    with the slot's task and the task's slice; it is extracted into one exported function both verbs call, not copied.
    `run` and `init` refuse a Stage 1 series and name the new verbs; `stage-run` refuses any other series.
+   *(2026-11-20, epoch 11, change 10.2 as the baseline:)* `init` refuses only while an OPEN paid Stage 1 series exists
+   under the explore root, naming `stage-init` and `stage-run`; a rehearsal, a finished and a stopped series do not
+   count, and a series directory whose state cannot be read refuses, naming it. `run` and `prune` refuse a Stage 1 series
+   by its `stage` field, and `stage-run` refuses any other series. Scenario 29's "init refuses a stage series" reads so.
+   Built in #237 (coai plan round, PR 3, finding 5; *What the code settled* below, point (4)).
 4. **The kinds.** Run-map entries carry `kind` `aa`, `pilot` or `data`, and `task`, `round` and `arm: 'bare'`. A `data`
    session must be charged as `data` or `void` (`ledgerKind`), freeze the instrument (`hasDataSession`) and ask the gate for
    the revealed seed (`bare-gates.mjs:19`), which v1 does for the kind `data` only, and v1's loop gives that kind its own
@@ -870,6 +882,25 @@ fixes):
    changed; it takes nothing else and never pushes. A dated instrument line that accepts another harness identity names the
    commit of `main` it is; `stage-sync --accept-harness <12 hex>` then takes the harness folders of exactly that commit,
    and is refused once a data session has left `planned`.
+   *(2026-11-20, epoch 11, the re-review's decisions on PR 5's three candidates:)*
+   - **(b) reverted to this brief.** A harness acceptance needs the dated line `instrument | harness:<12 hex>`, which names
+     the commit of `main` that holds the fix. `stage-sync --accept-harness <12 hex>` then takes the harness folders of
+     exactly that commit, checks that their identity is the 12 hex, and is refused once a data session has left
+     `planned`. The acceptance is frozen into the run-map at the first data plan. A public hash identifies bytes but does
+     not supply the reviewed source, so the fix must be on `main` first, and the series takes it from there. PR 5, which
+     removed the flag (an operator's commit on the series' branch under the dated line), restores it with the freeze
+     kept (`harnessAtFirstData`); scenario 79e stands as written.
+   - **(c) adopted.** `STAGE_HARNESS_DIRS` also holds `spikes/lang-explore/runner`, `spikes/lang-explore/templates` and
+     `spikes/lang-bench/tools`, and the identity holds the `.agents/conventions` submodule's commit, which counts as its
+     gitlink. A paid launch is refused when the submodule is off its recorded commit or has local changes. Code the
+     harness imports or runs belongs inside the frozen instrument (§3: the instrument the pilot and the rounds use is the
+     one the tag names): `lib/workspace-quick.mjs` imports `spikes/lang-bench/tools`, and `lib/pass-seams.mjs` and
+     `lib/score-quick.mjs` import the submodule's `owned.mjs`. Scenario 76 reads "a byte of lang-explore, lang-bench or v1,
+     or the submodule's commit".
+   - **(d) adopted.** The policy's free fields are `t3`, `t5` and their record fields `decidedOn` and `reason`; every other
+     field stays frozen. A policy change needs its dated line `input:crosscheck-policy.json:<12 hex>`. The record fields
+     describe a permitted T3 or T5 decision, and freezing them would leave misleading metadata. Scenario 71 reads these
+     four fields.
 3. **The generators**, in a new folder `spikes/lang-explore/prereg/`, each taking `--parent-commit <sha on origin/main>` where it
    quotes, and reading the parent through v1's `readAtCommit` (`spikes/minigit-bench/prereg/parent.mjs:27`, which takes the
    file): `extract-contract.mjs`, `write-prompts.mjs`, `write-schedule.mjs`, `write-manifest.mjs`, `read-prices.mjs`. Each
@@ -1120,9 +1151,11 @@ rehearsal series. The series runs from one worktree on its own branch, cut at th
    so under O2's words if they cover a repeat, else under a new go. The repeat is two more sessions than the 66 the
    projection counts: the reserve is recomputed before it with those two and everything still to run, and it is refused
    when the rest of the series would no longer fit (PR 4). A second NO GO on the same row goes to the owner before a third
-   pair is paid for (v1's rule).
+   pair is paid for (v1's rule). *(2026-11-20, epoch 11: as written, (b) reverted to the brief: the fix is on `main`
+   first, its dated `instrument | harness:<12 hex>` line names that commit, and `stage-sync --accept-harness` takes it.)*
 7. The wall and the stall: the one dated `caps` line. The policy of the cost checks T3 and T5, if the A/A asks for another,
-   as a commit of `crosscheck-policy.json` in its free fields.
+   as a commit of `crosscheck-policy.json` in its free fields. *(2026-11-20, epoch 11, (d): the free fields are `t3`, `t5`,
+   `decidedOn` and `reason`, and the change needs its dated `input:crosscheck-policy.json:<12 hex>` line.)*
 8. `seed-reveal`: `seed.txt` is written; the guard asks for it from the first data slot on.
 9. PR 9 carries steps 5, 7 and 8, the GO line the tool printed, and the table's result as counts. It runs D68's whole runs
    before it merges. Then `stage-sync`. The pilot's spend is on its two ledger lines.
