@@ -150,3 +150,29 @@ test('The_units_prerequisites_read_the_folder_the_slot_opened_without_taking_its
   assert.match(inside.other.reason, new RegExp(`in use by pid ${process.pid}`), inside.other.reason);
   assert.equal(existsSync(casesOf(w)), false, 'and the folder is removed after the slot');
 });
+
+// ---- Opus review (PR 4), O8: a folder still in clear after the slot is always said, whether the slot returned, failed or threw -------------------------------------------------------------------------------------
+
+test('A_slot_that_throws_with_its_folder_still_open_says_so_in_the_error_it_throws', async () => {
+  const w = await sealedClosed();
+  const warnings = [];
+  await assert.rejects(
+    withSlotHeldout({ task: w.task, tasks: [w.task], heldout: { ...heldoutOf(w), warn: line => warnings.push(line) }, fn: async () => { rmSync(w.backupFile); throw new Error('the slot broke'); } }),
+    error => { assert.match(error.message, /the slot broke/, 'the slot\'s own error is not hidden'); assert.match(error.message, /left open after the slot.*heldout-close --task 04/s, `and the folder is named: ${error.message}`); return true; },
+  );
+  assert.equal(existsSync(casesOf(w)), true, 'the folder really is still there (the backup could not be verified for its removal)');
+});
+
+test('An_open_that_fails_after_the_folder_was_placed_says_the_folder_is_left_open_and_the_slot_did_not_run', async () => {
+  const w = await sealedClosed();
+  let ran = false;
+  const stamp = path.join(taskPaths(w.task, w.home).heldoutDir, '.open');
+  const hooks = { beforeRename: () => writeFileSync(stamp, '{"operator":true}\n') };
+  const refused = await withSlotHeldout({ task: w.task, tasks: [w.task], heldout: { ...heldoutOf(w), hooks }, fn: async () => { ran = true; } });
+  assert.equal(refused.ok, false, 'a stamp that appeared after the check refuses the open');
+  assert.equal(ran, false, 'the slot did not run');
+  assert.equal(existsSync(casesOf(w)), true, 'but the folder was placed and is in clear');
+  assert.match(refused.reason, /already exists/, 'the reason of the open is kept');
+  assert.match(refused.reason, /left open after the slot.*heldout-close --task 04/s, `and the folder is named: ${refused.reason}`);
+  assert.equal(refused.result, undefined, 'it is no result of a slot');
+});
