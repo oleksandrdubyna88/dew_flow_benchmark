@@ -909,13 +909,13 @@ node .agents/conventions/tools/low-priority.mjs taskset -c 0-5 node --test --tes
 
 | Scenarios (stories document numbers) | Test | What it proves |
 |---|---|---|
-| 42, 43, 44, 45, 46, 47, 48, 49, 50 | `stage-guard.test.mjs` (12; fixture `stage-guard-fixture.mjs`) | the guard names every problem of the frozen record, the twelve references, the six spec blobs at the tag (a change outside a spec is the permitted one), W, the pinned commit, the hash list, the twelve workspaces by tree hash, all 41 identities against the manifest (the list written out so it cannot shrink), memory certification and the agent box's environment; two more tests read the live identities from the places that own them and ask the paid checks for a paid launch only |
-| 51, 51a, 51b, 51c, 52, 53, 54h | `stage-disk.test.mjs` (7) | the reserve before every launch over what is still to run, a pilot repeat's two sessions, what the ended sessions really hold, the rule's halt with its ledger line, a missing or zero size refused, the session size live and written nowhere |
-| 54, 54a to 54g | `stage-archive.test.mjs` (8) | a copy that differs in one byte is no archive; `stage-free` removes only the three cache folders of final sessions of finished slots; nothing that the verified archive does not prove; a missing or changed archive refuses; `stage-restore` back to the listed bytes; the halted-archived-freed-resumed series ends with the records of one that never halted; the last archive refuses a freed session; a read-back slot waits |
-| 55, 56, 57, 58 | `stage-heldout.test.mjs` (4) | the slot's folder made and removed, whether the slot ends or throws, and a folder that cannot be closed keeps the slot's `result`; a stale folder removed first; the slot refused when the key's backup cannot be verified; only the slot's own task in clear |
+| 42, 43, 44, 45, 46, 47, 48, 49, 50 | `stage-guard.test.mjs` (18; fixture `stage-guard-fixture.mjs`) | the guard names every problem of the frozen record, the twelve references, the six spec blobs at the tag (a change outside a spec is the permitted one), W, the pinned commit, the hash list, the twelve workspaces by tree hash, all 41 identities against the manifest (the list written out so it cannot shrink), memory certification and the agent box's environment; two more tests read the live identities from the places that own them and ask the paid checks for a paid launch only |
+| 51, 51a, 51b, 51c, 52, 53, 54h | `stage-disk.test.mjs` (10) | the reserve before every launch over what is still to run, a pilot repeat's two sessions, what the ended sessions really hold, the rule's halt with its ledger line, a missing or zero size refused, the session size live and written nowhere |
+| 54, 54a to 54g | `stage-archive.test.mjs` (17) | a copy that differs in one byte is no archive; `stage-free` removes only the three cache folders of final sessions of finished slots; nothing that the verified archive does not prove; a missing or changed archive refuses; `stage-restore` back to the listed bytes; the halted-archived-freed-resumed series ends with the records of one that never halted; the last archive refuses a freed session; a read-back slot waits |
+| 55, 56, 57, 58 | `stage-heldout.test.mjs` (7) | the slot's folder made and removed, whether the slot ends or throws, and a folder that cannot be closed keeps the slot's `result`; a stale folder removed first; the slot refused when the key's backup cannot be verified; only the slot's own task in clear |
 | 59 (real) | `stage-guard-real.test.mjs` (3; 2 pass and 1 skips without `LANG_V2_TASK_REPO`) | the probe passes on this host and reads the peak of an empty program; the probe `stage-run` runs by default (`hostProbe`) does the same over the pinned toolchains and the registered memory value; the real record and the task repository at W pass the task-repository half |
-| wiring: the default guard, the environment, memory, disk, the held-out folder, the order, `stage-init` at W | `stage-wiring.test.mjs` (7) | through `stage-run` and `stage-init` with PR 3's fakes: each refusal leaves the run-map and the ledger byte for byte as they were (the disk halt adds its one event line), a rehearsal still runs its round with the stub rig |
-| the three verbs on the command line | `stage-recovery-commands.test.mjs` (5) | through `main`: the table, the options, what each verb says and exits with, the read-back slot that waits for its lines, the last archive that refuses a freed session, each verb taking the series lock |
+| wiring: the default guard, the environment, memory, disk, the held-out folder, the order, `stage-init` at W | `stage-wiring.test.mjs` (9) | through `stage-run` and `stage-init` with PR 3's fakes: each refusal leaves the run-map and the ledger byte for byte as they were (the disk halt adds its one event line), a rehearsal still runs its round with the stub rig |
+| the three verbs on the command line | `stage-recovery-commands.test.mjs` (8) | through `main`: the table, the options, what each verb says and exits with, the read-back slot that waits for its lines, the last archive that refuses a freed session, each verb taking the series lock |
 
 **Observed red, green, red** (2026-11-19 and 2026-11-20; "red first" = the test against missing code, or the code of `HEAD` put back; "red again" = one mutation of the fix at a time, the file put back from a copy; scenarios 42 to 58 are from the logs of the first session, `[S..: what was broken]`):
 
@@ -994,6 +994,89 @@ RED again, one mutation each:
  stage-restore without the lock: AssertionError: stage-restore is refused while another process holds the series; stage-free without the lock: AssertionError: stage-free names the holder; stage-archive without the lock: AssertionError: stage-archive is refused while another process holds the series
  `--rid` ignored by stage-restore: AssertionError: Expected values to be strictly equal (the restore did not stop at the one session named)
 ```
+
+### PR 4 coai code round 1 (2026-11-20, branch `feat/lang-v2-f3s1-guards` from `1859bace`)
+
+Seven findings accepted by coai, each with RED-GREEN-RED: the test first against the code of `HEAD` (red), the fix (green), then the old code put back as one mutation (red again), the fix restored from a copy. A, B, C1, C2, C3 have a test of their own; C4 (`FREED_FILE` imported from `stage-archive.mjs`, `DATA_SLOTS` exported once from `stage-schedule.mjs`) and C5 (`walkEntries` as a recursive generator, `readRecord` building new values) change no behaviour and are covered by the existing tests, which stay green (the importers of `workspaces-tree.mjs` and `stage-record.mjs` were run alone: `quick-freeze-workspaces` 15, `quick-freeze-record` 1, `quick-freeze-consumers` 4, `quick-workspace` 9 (8 pass, 1 skipped), `stage-guard` and `stage-guard-real`, lang-bench `spec-freeze-record` 27). Test names are sentences. A red run of A left two empty `*.sha256list` files beside the series in the temp folder; they were removed by hand, and the green run leaves none.
+
+```
+## A. the archive's place is never the series (stage-archive.test.mjs, 4 tests; commit 253c8f23)
+RED (HEAD code): tests 12 pass 8 fail 4
+ An_archive_whose_backup_folder_is_the_parent_of_the_series...: AssertionError: the parent folder: the archive is refused (true !== false)
+ ..._is_a_link_to_the_parent_of_the_series_is_refused: AssertionError: a link to the parent: the archive is refused
+ ..._is_inside_the_series_or_a_link_into_it...: AssertionError: a link into the series: the archive is refused (the inside folder was already refused by the old lexical check; the link into it was not)
+ Two_paths_overlap_when_they_are_equal_or_one_is_inside_the_other...: TypeError: stageArchive.pathsOverlap is not a function
+GREEN: 12/12
+RED again (`locationProblem` back to the lexical check of `to` against the series): tests 12 pass 9 fail 3: the same three messages (parent, link to the parent, link into the series)
+## B. a session freed once is not freed again (stage-archive.test.mjs, stage-recovery-commands.test.mjs; commit 1e5e476b)
+RED (HEAD code): A_session_that_is_already_freed_is_named_and_left_alone_by_the_next_free_and_stage_restore_still_brings_it_back_from_its_own_archive: AssertionError: the second free removes nothing in a session that is already freed (false !== true)
+ stage_free_through_the_command_layer_names_the_sessions_that_are_already_freed_and_leaves_them_alone: AssertionError: Expected values to be strictly equal: 'freed 0 file(s), 0 bytes, of 0 session(s)' (the line "already freed, left alone (stage-restore first to free again): ..." is missing)
+GREEN: stage-archive 13/13, stage-recovery-commands 6/6
+RED again (the `held` filter of `freeLocked` removed): the same assertion, "the second free removes nothing in a session that is already freed (false !== true)"; the command test stays green under this mutation (it is red only against the code before the fix)
+## C1. a free without the unread slots is refused (stage-archive.test.mjs; commit 2e456518; the argument became `reading` for the Opus review O3, below)
+RED (HEAD code): A_free_that_is_not_given_the_unread_slots_is_refused_with_a_sentence_and_removes_nothing: AssertionError: undefined: refused (true !== false)
+GREEN: 14/14 (every existing call now says its unread slots)
+RED again (`unreadSlots = []` back and the guard off): the same assertion
+## C2. progress of the long operations (stage-archive.test.mjs, stage-recovery-commands.test.mjs; commit ef81830e)
+RED (HEAD code): Stage_archive_says_its_progress_in_the_listing_the_copying_and_the_verifying_phase...: AssertionError: listing starts at 0 (undefined !== 'listing: 0 of 52 file(s)')
+ stage_archive_and_stage_restore_print_one_progress_line_per_phase_before_their_last_line: AssertionError: listing ends at its total
+GREEN: stage-archive 16/16, stage-recovery-commands 7/7 (the summary line is the last line of each verb; two older assertions now read the last line)
+RED again (`mapSaying` says nothing): the same two messages
+## C3. one gate call walks each ended session once (stage-disk.test.mjs; commit 1ac50082; the `bytesOf` seam was added first, with no change of behaviour)
+RED (HEAD code plus the seam): One_disk_gate_call_walks_each_ended_session_folder_once...: AssertionError: every ended session folder is sized once per gate call (20 !== 10)
+GREEN: 8/8
+RED again (the facts not handed to the gates): 30 !== 10
+```
+
+### PR 4 Opus review (2026-11-20, nine findings, same branch)
+
+An independent Opus review of PR 4 at `1859bace`; the team lead accepted nine findings. Each has RED-GREEN-RED as above. The first red of every finding is its test against the code before the fix.
+
+```
+## O1. a paid unit is refused by its own held-out lock (stage-heldout.test.mjs with the REAL withSlotHeldout and the REAL readerHeldout over an invented sealed task; stage-wiring.test.mjs; commit 680772e8)
+RED: The_units_prerequisites_read_the_folder_the_slot_opened...: AssertionError: the reader given the slot's folder reads it: the clear held-out folder of task 04 is in use by pid <self> (started ...): another reader holds .../heldout-04/.clear.lock; wait for it to end (false !== true)
+ The_prerequisites_of_a_paid_unit_are_handed_the_folder_its_slot_opened: AssertionError: the reader of the unit is told which folder is open, so it does not take the lock the slot holds (actual [undefined])
+GREEN: stage-heldout 5/5 (then 7 with O8), stage-wiring 8/8
+RED again (`isSlotsOwn` ignored and `withSlotFolder` removed): the same two messages
+Kept in the same test as controls: a reader that is not handed the folder still asks for the lock and is refused ("in use by pid"); a folder of another task does not skip the lock; another process (another pid) is refused while the slot holds the lock.
+## O2. stage-free follows a symlinked cache folder (stage-archive.test.mjs, three layouts: `box/home/.dotnet`, `box/home`, `box` each a link out of the series; commit 8ff4803e)
+RED: Error: ENOTDIR: not a directory, rmdir '.../s/<rid>/box/home/.dotnet' (at removeEmptyDirs; by then the old code had followed the link, chmodded the outside tree and removed a file outside)
+GREEN: 17/17 (nothing outside changed: its modes, its empty folder and its files stay; the root is named as kept with "is a link"; the free does not throw)
+RED again (`linkOnWay` finds no link): the same ENOTDIR
+## O3. stage-free frees a read-back slot that is not finished (stage-recovery-commands.test.mjs; commit c41f0ee5)
+RED: stage_free_keeps_every_session_of_a_read_back_slot_whose_one_session_is_refuted_and_owes_its_re_run: AssertionError: a refuted session is a void whose re-run is owed: the slot is not finished, so neither of its sessions is freed ([0, 0] !== [4, 4])
+GREEN: stage-recovery-commands 8/8, stage-archive 17/17 (`freeSeries` takes `reading`, a function the command gives; it runs under the series lock and gives the run-map as `stage-run` reads it (`mapAsRead`) with the unread slots)
+RED again (the free reads the raw run-map again): the same assertion
+## O4. a missing value passes the identity check (stage-guard.test.mjs, 5 tests; commit 95d23ba9)
+RED: The_runner_manifest_identity...: runnerManifest gave the text "undefined"; The_caps_identity...: caps gave the text "capUsd:undefined"; The_memory_value_identity...: memoryValue gave the text "6c3b66cf..."; The_series_defaults_identity...: seriesDefaults gave the text "b6489654..."; A_reader_that_answers_undefined_or_null...: host gave the text "undefined" (all: a missing value is never hashed or compared)
+GREEN: 17/17 at that commit
+RED again (both identity modules from the commit before): the same five
+## O5. the D15 environment check tests a rebuilt environment (stage-wiring.test.mjs; commit 7d07dd28)
+RED: The_environment_check_judges_the_quick_profile_the_agent_box_is_built_from...: AssertionError: the environment is built from the quick profile (`quickExplore`), as the agent box is (actual undefined)
+GREEN: 9/9
+RED again (`quickExplore` taken out of `envOf`): the same message
+Honest limit: `quickExplore` adds only `DOTNET_ROOT` today, so the "heap key that only the quick profile adds" is simulated by a seam that adds it when it sees `quickProfile`; the default builder is proven by `DOTNET_ROOT` being among the keys it judges.
+## O6. a missing size is a refusal, not a resumable halt (stage-disk.test.mjs, stage-wiring.test.mjs; commit fcde68dd)
+RED: A_size_that_cannot_be_read_is_a_refusal_with_exit_4...: AssertionError: freeBytes 0: exit 4, a refusal the same command cannot cure by waiting; A_missing_or_zero_size...: freeBytes 0: a refusal, not a resumable halt; The_disk_gate_halts_a_paid_unit...: AssertionError: next: the run-map and the ledger are byte for byte as they were
+GREEN: stage-disk 9/9, stage-wiring 9/9 (a size that cannot be read: exit 4, "the disk check cannot be made: ...", no ledger line; a real shortage: exit 3 and its event, both asserted)
+RED again (the two modules from the commit before): the same three
+## O7. a freed.json with a missing or damaged size is counted as 0 (stage-disk.test.mjs; commit b9544da5)
+RED: A_freed_json_with_a_missing_or_damaged_size_is_named...: AssertionError: a size missing: refused (true !== false)
+GREEN: 10/10 (four damaged forms: a size missing, a size that is text, a negative size, no list; each refused with exit 4 naming the file)
+RED again (`hasSize` always true, the old `: 0`): the same message
+## O8. the "left open" check ran only after a normal return (stage-heldout.test.mjs; commit 80533e95)
+RED: A_slot_that_throws_with_its_folder_still_open_says_so_in_the_error_it_throws: AssertionError: and the folder is named: the slot broke
+ An_open_that_fails_after_the_folder_was_placed_says_the_folder_is_left_open_and_the_slot_did_not_run: AssertionError: and the folder is named: .../heldout-04/.open already exists, held by the operator: ...
+GREEN: stage-heldout 7/7
+RED again (`stage-heldout.mjs` from the commit before): the same two messages
+Choice: a throw still propagates (the series must not go on); the error is a new one with the slot's message, the sentence ("left open after the slot ... heldout-close --task NN") and the original as `cause`.
+## O9. a missing hashes-lang.txt makes stageGuard reject (stage-guard.test.mjs; commits e09f3ebc, e1e10227)
+RED: Error: ENOENT: no such file or directory, open '.../spikes/lang-bench/inputs/hashes-lang.txt'
+GREEN: 18/18 (the file is named as one problem and the record's missing field is still named beside it; a first version of the test asked for another problem and was corrected in e1e10227 after one red run of the green code)
+RED again (`stage-guard.mjs` from the commit before): the same ENOENT
+```
+
+**Files run alone after the last commit** (`taskset -c 0-5 node --test --test-concurrency=1`, 2026-11-20; pass, 0 fail each): `stage-amendments` 9, `stage-archive` 17, `stage-commands` 12, `stage-disk` 10, `stage-facts` 3, `stage-guard-real` 3 (2 pass, 1 skipped), `stage-guard` 18, `stage-heldout` 7, `stage-loop` 8, `stage-recovery-commands` 8, `stage-rounds` 16, `stage-run` 19, `stage-schedule` 53, `stage-series` 8, `stage-wiring` 9, `commands` 15, `code-shape` 156, `quick-freeze-workspaces` 15, `quick-freeze-record` 1, `quick-freeze-consumers` 4, `quick-workspace` 9 (8 pass, 1 skipped), `quick-heldout-sealed-readers` 8, `quick-heldout-entry-points` 14, `quick-run-harness-gate` 3, `workspace` 8; lang-bench `spec-freeze-record` 27.
 
 **What this does not prove.** The wiring tests run the fake loop (`io.runSeams.loopFn`), so no real held-out folder is made, no real probe runs inside `stage-run`, and the disk gate reads a fake free-bytes function and a fake floor; each real half is tested alone (`stage-heldout.test.mjs` with invented keys, 59 with the layer). The default `io.stage.floorBytes` is read from the pre-registration's manifest, which is PR 6's file and does not exist yet: until then a paid launch is refused by the guard first and by the missing size second. A rehearsal now runs the probe once per unit; with `--until round` that is one empty program per slot.
 
