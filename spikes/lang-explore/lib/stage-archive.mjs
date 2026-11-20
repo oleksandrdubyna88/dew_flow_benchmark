@@ -7,7 +7,7 @@
 //   restoreSeries  copies a freed session's files back from the archive, verifies them against `freed.json`'s list and removes `freed.json`.
 // Who needs a freed folder: nothing between the halt and the report reads `FREEABLE` (the scoring builds from `work/` over the registered snapshot, never the session's cache). The final hash list of the record (PR 13) and the last archive
 // after the series ended do need the whole tree, and each refuses a series that still holds a `freed.json` (`freedSessionProblem`), naming `stage-restore`.
-import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, constants, copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { acquireSeriesLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { makeWritable } from '../../minigit-bench/lib/cache-snapshot.mjs';
@@ -51,7 +51,8 @@ function readArchives(series) {
   const file = path.join(series, ARCHIVE_FILE);
   if (!existsSync(file)) return ok([]);
   try {
-    return ok(JSON.parse(readFileSync(file, 'utf8')).archives);
+    const { archives } = JSON.parse(readFileSync(file, 'utf8'));
+    return Array.isArray(archives) ? ok(archives) : fail(`${file} holds no list of archives (its "archives" is not an array): no archive is trusted over it`);
   } catch (e) {
     return fail(`${file} cannot be read (${e.message}): no archive is trusted over it`);
   }
@@ -73,9 +74,19 @@ function copyEntry({ series, dest, entry }) {
   rmSync(target, { force: true });
   if (entry.kind === 'link') { symlinkSync(entry.target, target); return; }
   const tmp = `${target}.${process.pid}.tmp`;
-  copyFileSync(path.join(series, entry.rel), tmp);
+  rmSync(tmp, { force: true }); // a link planted at the temporary name is removed, never written through
+  copyFileSync(path.join(series, entry.rel), tmp, constants.COPYFILE_EXCL);
   chmodSync(tmp, entry.mode);
-  renameSync(tmp, target);
+  renameSync(tmp, target); // a link at the target is replaced by the file, never followed
+}
+
+/** Every folder from the copy's root down to the folders of the listed entries, as paths from the root (`.` is the root itself). */
+const foldersOf = entries => [...new Set(entries.flatMap(e => path.dirname(e.rel).split('/').map((_, i, parts) => parts.slice(0, i + 1).join('/'))).concat('.'))].sort();
+
+/** The sentence for the first folder on the way from `dest` to a listed entry that is a link (`dest` itself included), or null: a copy is never written through a link, so an archive into a backup that holds one is refused whole. */
+function linkInCopyRoot({ dest, entries }) {
+  const link = foldersOf(entries).map(folder => path.join(dest, folder)).find(folder => lstatOf(folder)?.isSymbolicLink());
+  return link === undefined ? null : `the archive's copy folder holds a link on the way to a listed file (${link}): a copy is never written through a link, so nothing is copied or recorded; remove the link or choose another backup folder`;
 }
 
 /** The real path of `p` as far as it exists (every link resolved); the part that is not there yet is appended as written. A link cannot hide where a folder really is. */
@@ -101,8 +112,8 @@ function locationProblem({ series, to }) {
   return pathsOverlap(realIn(dest), realIn(series)) ? `the archive's place ${dest} is the series folder, inside it or around it (links followed): an archive is a copy elsewhere` : null;
 }
 
-/** The sentence refusing an archive before anything is read, or null. */
-const archiveRefusal = ({ series, to, final }) => locationProblem({ series, to }) ?? (final ? freedSessionProblem(series) : null);
+/** The sentence refusing an archive before anything is read, or null. The last archive's own refusal (a freed session) is asked under the series lock, in `archiveLocked`. */
+const archiveRefusal = ({ series, to }) => locationProblem({ series, to });
 
 function recordArchive({ series, to, dest, entries, text, now }) {
   const listFile = `${dest}.${sha256Text(text).slice(0, 12)}.sha256list`;
@@ -116,25 +127,46 @@ function recordArchive({ series, to, dest, entries, text, now }) {
   return ok(entry);
 }
 
-function archiveLocked({ series, to, now, hooks, report }) {
+/** The refusals that are asked under the lock, before the listing: the last archive's freed session, and an `archive.json` that holds no list. -> a sentence or null. */
+function lockedRefusal({ series, final }) {
+  const known = readArchives(series);
+  if (!known.ok) return known.reason;
+  return final ? freedSessionProblem(series) : null;
+}
+
+/** The listing, after the refusals asked under the lock and the check of the copy folder for links: `ok({ listed, dest })` | `fail`. */
+function listedUnderLock({ series, to, final, report }) {
+  const refused = lockedRefusal({ series, final });
+  if (refused !== null) return fail(refused);
   const listed = listSeries(series, report);
   if (!listed.ok) return listed;
   const dest = destOf({ series, to });
-  mapSaying({ items: listed.value, phase: 'copying', report, fn: entry => copyEntry({ series, dest, entry }) });
+  const linked = linkInCopyRoot({ dest, entries: listed.value });
+  return linked === null ? ok({ listed: listed.value, dest }) : fail(linked);
+}
+
+function archiveLocked({ series, to, now, hooks, report, final }) {
+  const prepared = listedUnderLock({ series, to, final, report });
+  if (!prepared.ok) return prepared;
+  const { listed, dest } = prepared.value;
+  mapSaying({ items: listed, phase: 'copying', report, fn: entry => copyEntry({ series, dest, entry }) });
   hooks.afterCopy?.(dest);
-  const problems = copyProblems({ entries: listed.value, root: dest, report });
+  const problems = copyProblems({ entries: listed, root: dest, report });
   if (problems.length > 0) return fail(`the copy differs from the source (${problems.length} file(s)): ${problems.slice(0, 5).join('; ')}; nothing is recorded`);
-  return recordArchive({ series, to, dest, entries: listed.value, text: listText(listed.value), now });
+  return recordArchive({ series, to, dest, entries: listed, text: listText(listed), now });
 }
 
 /**
  * `stage-archive`: copy the whole series to `to`, verify the copy file by file against the sha256 list, record it in `archive.json` (the list's sha256, the bytes, the place, the date and the slots finished at that time). It deletes nothing.
  * `progress(sentence)` (optional) hears one line per phase step: listing, copying and verifying, every `progressEvery` files (500 by default).
- * `final: true` is the last archive after the series ended and refuses a series that still holds a freed session. -> `ok(entry)` | `fail(sentence)`.
+ * `final: true` is the last archive after the series ended and refuses a series that still holds a freed session; that look is taken UNDER the series lock, so a free that runs at the same moment cannot come in between. An `archive.json` with no list of archives is refused
+ * before anything is copied. A copy folder that holds a link on the way to a listed file is refused whole, and a link at a target or at its temporary name is replaced, never written through. `hooks.beforeLock` (a test seam) runs just before the lock is taken. -> `ok(entry)` | `fail(sentence)`.
  */
 export function archiveSeries({ series, to, now = systemClock, final = false, hooks = {}, progress, progressEvery }) {
-  const refused = archiveRefusal({ series, to, final });
-  return refused ? fail(refused) : withSeriesLock(series, () => archiveLocked({ series, to, now, hooks, report: { say: progress, every: progressEvery } }));
+  const refused = archiveRefusal({ series, to });
+  if (refused) return fail(refused);
+  hooks.beforeLock?.();
+  return withSeriesLock(series, () => archiveLocked({ series, to, now, hooks, final, report: { say: progress, every: progressEvery } }));
 }
 
 // ---- who is freed ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -296,14 +328,11 @@ function restoreSession({ series, rid, report }) {
 }
 
 /** The sessions restored one after the other; the first refusal ends it (what was restored stays restored). */
-function restoreAll({ series, rids, report }) {
-  const done = [];
-  for (const rid of rids) {
-    const restored = restoreSession({ series, rid, report });
-    if (!restored.ok) return restored;
-    done.push(rid);
-  }
-  return ok({ restored: done });
+function restoreAll({ series, rids, report }, done = []) {
+  if (rids.length === 0) return ok({ restored: done });
+  const [rid, ...rest] = rids;
+  const restored = restoreSession({ series, rid, report });
+  return restored.ok ? restoreAll({ series, rids: rest, report }, [...done, rid]) : restored;
 }
 
 function restoreLocked({ series, rid, report }) {

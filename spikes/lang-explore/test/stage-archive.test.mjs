@@ -381,3 +381,72 @@ test('A_cache_folder_that_is_a_link_out_of_the_series_or_lies_under_one_is_kept_
     assert.deepEqual(other, [], `${linked}: only roots on or under the link are kept`);
   }
 });
+
+// ---- coai code round 2 (PR 4), R1: a copy is never written through a link in a backup that already exists ------------------------------------------------------------------------------------------------------------
+
+test('A_backup_that_already_holds_a_link_on_the_way_to_a_listed_file_refuses_the_whole_archive_and_nothing_outside_changes', t => {
+  for (const linked of ['s', `s/${ridOf(1, 'csharp')}/box`, `s/${ridOf(1, 'csharp')}/box/nuget`]) {
+    const series = seriesFolder(t, MAP, { cacheBytes: 50 });
+    const to = backupFolder(t);
+    const dest = path.join(to, path.basename(series));
+    const outside = path.join(backupFolder(t), 'outside');
+    mkdirSync(path.join(outside, 'nuget', 'pkg-a'), { recursive: true });
+    writeFileSync(path.join(outside, 'nuget', 'pkg-a', 'a.nupkg'), 'outside original');
+    mkdirSync(path.dirname(path.join(dest, linked)), { recursive: true });
+    symlinkSync(outside, path.join(dest, linked));
+    const before = snapshotOf(outside);
+    const refused = archiveSeries({ series, to, now: NOW });
+    assert.equal(refused.ok, false, `${linked}: the archive is refused`);
+    assert.ok(refused.reason.includes(path.join(dest, linked)), `${linked}: the link is named: ${refused.reason}`);
+    assert.deepEqual(snapshotOf(outside), before, `${linked}: no file outside the backup was written or replaced`);
+    assert.equal(existsSync(path.join(series, 'archive.json')), false, `${linked}: nothing is recorded`);
+  }
+});
+
+test('A_target_that_is_itself_a_link_or_a_planted_temporary_link_is_replaced_and_never_written_through', t => {
+  const series = seriesFolder(t, MAP, { cacheBytes: 50 });
+  const to = backupFolder(t);
+  const dest = path.join(to, path.basename(series));
+  const outside = path.join(backupFolder(t), 'outside-file');
+  writeFileSync(outside, 'outside original');
+  const target = path.join(dest, 'private', 'note.txt');
+  mkdirSync(path.dirname(target), { recursive: true });
+  symlinkSync(outside, target);
+  const planted = `${path.join(dest, 'pairs', 'p1.json')}.${process.pid}.tmp`;
+  mkdirSync(path.dirname(planted), { recursive: true });
+  symlinkSync(outside, planted);
+  const made = archiveSeries({ series, to, now: NOW });
+  assert.equal(made.ok, true, made.reason);
+  assert.equal(readFileSync(outside, 'utf8'), 'outside original', 'nothing was written through a link, neither the target\'s nor a planted temporary one');
+  assert.equal(lstatSync(target).isSymbolicLink(), false, 'the link target was replaced by the file');
+  assert.equal(readFileSync(target, 'utf8'), 'private\n', 'with the listed bytes');
+});
+
+// ---- coai code round 2 (PR 4), R2: the final archive asks for freed sessions under the series lock ------------------------------------------------------------------------------------------------------------------
+
+test('The_final_archive_refuses_a_session_that_a_free_made_between_its_first_look_and_its_lock', t => {
+  const { series, to } = archived(t);
+  const racing = archiveSeries({ series, to, now: NOW, final: true, hooks: { beforeLock: () => assert.equal(freeSeries({ series, reading: readingOf(series) }).ok, true, 'the free that comes in between') } });
+  assert.equal(racing.ok, false, 'the final archive sees the freed sessions under the lock');
+  assert.match(racing.reason, /stage-restore/, racing.reason);
+  assert.equal(archiveEntries(series).length, 1, 'and appends nothing');
+});
+
+// ---- coai code round 2 (PR 4), R4: an archive.json that holds no list is a refusal, never a TypeError --------------------------------------------------------------------------------------------------------------------
+
+test('An_archive_json_without_a_list_of_archives_is_refused_with_a_sentence_by_the_free_and_by_the_archive', t => {
+  for (const text of ['{}', '{"archives": null}', '{"archives": "none"}']) {
+    const { series } = archived(t);
+    writeFileSync(path.join(series, 'archive.json'), `${text}\n`);
+    const before = snapshotOf(series, { skip: ['series.lock'] });
+    const freed = freeSeries({ series, reading: readingOf(series) });
+    assert.equal(freed.ok, false, `${text}: the free is refused`);
+    assert.match(freed.reason, /archive\.json.*no list of archives/, `${text}: ${freed.reason}`);
+    const to = backupFolder(t);
+    const made = archiveSeries({ series, to, now: NOW });
+    assert.equal(made.ok, false, `${text}: the archive is refused`);
+    assert.match(made.reason, /archive\.json.*no list of archives/, `${text}: ${made.reason}`);
+    assert.deepEqual(readdirSync(to), [], `${text}: nothing was copied before the refusal`);
+    assert.deepEqual(snapshotOf(series, { skip: ['series.lock'] }), before, `${text}: nothing in the series changed`);
+  }
+});
