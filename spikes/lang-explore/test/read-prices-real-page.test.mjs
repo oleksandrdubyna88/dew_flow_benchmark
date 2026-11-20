@@ -172,3 +172,14 @@ test('A_footnote_that_spans_lines_or_has_text_after_its_closing_is_refused_namin
   const nospace = parsePricingPage(PAGE.replace(FOOTNOTE_2, FOOTNOTE_2.replace('2 Cache', '2Cache')));
   assert.equal(nospace.ok, false, 'no space after the number');
 });
+
+// ---- coai code round, PR 5b (C2): a tier row is found by the name before the first "(", whatever the spacing ------------------------------------------------------------------------------------------
+
+test('A_tier_row_with_two_spaces_or_no_space_before_the_parenthesis_is_still_a_tier_of_the_base_model_and_the_table_is_refused', () => {
+  for (const [what, name] of [['two spaces', 'Claude Opus 5.5  (for prompts over 100,000 tokens)'], ['no space', 'Claude Opus 5.5(for prompts over 100,000 tokens)'], ['a tab and spaces', 'Claude Opus 5.5 \t (for prompts over 100,000 tokens)']]) {
+    const refused = built(withRow(TIER.replace('Claude Opus 5.5 (for prompts over 100,000 tokens)', name)));
+    assert.equal(refused.ok, false, what);
+    assert.match(refused.reason, /claude-opus-5-5 \(Claude Opus 5\.5\): the page also gives the row '.*\(for prompts over 100,000 tokens\)': the pricing is tiered, so no price is chosen/, what);
+  }
+  assert.equal(built(withRow(TIER.replace('Claude Opus 5.5 (', 'Claude Opus 5.55 ('))).ok, true, 'another name before the parenthesis is not a tier of this model: the comparison is exact');
+});
