@@ -3,6 +3,7 @@
 import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { loadExplore } from '../lib/inputs.mjs';
 import { materialOf } from '../lib/material.mjs';
 import { resolveTask, taskPaths } from '../lib/tasks.mjs';
 import { loadWorld } from '../lib/world.mjs';
@@ -156,12 +157,22 @@ export function calibratedHome(id, real) {
 }
 
 /**
- * A home of the test's own for the tests that run the real toolchains, boxes and judge: the explore root (the series, the plan lock, the held-out folders) is its own and empty, and the toolchains, the snapshots and the pinned CLI
- * are LINKED from `realHome` (read, never written), so a test never sees, takes a lock in, or writes to the operator's real `~/rsd/lang-v2/explore/` (a paid run in progress holds its lock). -> the home.
+ * The folders of the operator's home a rig home links: the nvm node, v1's registered snapshots and toolchains, the registered caches, and the folder that holds the pinned CLI copy. The CLI's folder is read from the CURRENT
+ * `explore.json` (`cli.pathParts`), never written here, so a pre-registration that moves the CLI pin (2.1.310 under `rsd/minigit/toolchains` to 2.1.329 under `rsd/lang-v2/toolchains`) moves the rig with it.
  */
-export function rigHome(realHome) {
+export function linkedParts(explore = loadExplore().value) {
+  const parts = [['.nvm'], ['rsd', 'minigit', 'toolchains'], ['rsd', 'lang-v2', 'caches'], explore.cli.pathParts.slice(0, -1)];
+  return parts.filter((p, i) => parts.findIndex(q => q.join('/') === p.join('/')) === i);
+}
+
+/**
+ * A home of the test's own for the tests that run the real toolchains, boxes and judge: the explore root (the series, the plan lock, the held-out folders) is its own and empty, and the toolchains, the snapshots and the pinned CLI
+ * are LINKED from `realHome` (read, never written), so a test never sees, takes a lock in, or writes to the operator's real `~/rsd/lang-v2/explore/` (a paid run in progress holds its lock). The pinned CLI copy is NOT made here: a host
+ * without it leaves the pin check to refuse it by name, and a copy of other bytes is refused by its sha256. -> the home.
+ */
+export function rigHome(realHome, explore = loadExplore().value) {
   const home = tmpDir('o-rig-home');
-  for (const parts of [['.nvm'], ['rsd', 'minigit', 'toolchains'], ['rsd', 'lang-v2', 'caches']]) linkIfThere(realHome, home, parts);
+  for (const parts of linkedParts(explore)) linkIfThere(realHome, home, parts);
   const own = path.join('rsd', 'lang-v2', 'explore', 'toolchains'); // a real folder (the pause check classifies the children of the explore root; a link there has no type), its entries linked
   mkdirSync(path.join(home, own), { recursive: true });
   if (existsSync(path.join(realHome, own))) for (const name of readdirSync(path.join(realHome, own))) linkIfThere(realHome, home, [...own.split(path.sep), name]);

@@ -116,8 +116,10 @@ test('No_module_names_a_task_s_private_folder_or_calibration_file_itself_so_a_fo
 
 // ---- T-O2: task 1 is unchanged ------------------------------------------------------------------------------------------------------------
 
-/** The sha256 of task 1's pre-change `explore.json` content (every field but the two added keys), as JSON.stringify gives it. */
+/** The sha256 of task 1's pre-change `explore.json` content (every field but the two added keys), as JSON.stringify gives it, with `cli` as the recorded series was made with it (`RECORDED_CLI`). */
 const TASK_1_FIELDS_SHA256 = '527b0fbf09a6b67f056c8324241f550311d1f5c8b00a1c8ce307646fd4d2aff9';
+/** The `cli` entry the recorded task-1 series was made with: the one its `inputs.json` stores. The live entry has since moved by a dated pre-registration amendment (F3 PR 6: CLI 2.1.329, pinned and hashed by the manifest), so this record is compared with what it was MADE with, not with the live file. */
+const RECORDED_CLI = { version: '2.1.310', pathParts: ['rsd', 'minigit', 'toolchains', 'claude-2.1.310'], sha256: 'b73676430af12f97316a798b8371f81d640f90a58bdcb8f3ce56a835bb47df56', model: 'opus', effort: 'high' };
 /** What `status`, `readback` and the note of the recorded series printed before this change (taken from the unchanged harness over a copy of the series). */
 const GOLDEN = {
   status: '79cffca43f6d885d0a2e352c89be3a45c76f75759739688c03539924b00988eb', readback: '9886ac944e585a8efbbdf4cc3f8cb84874f5b805532b70ee8ae4a8bd61c3edbf', note: '55e3e927848f763fd4678dc14484a83d859bf302ffd95ed2564609ef783d9920',
@@ -127,8 +129,13 @@ const subject = { branch: 'test', sha: 'a'.repeat(40), harnessPath: 'spikes/lang
 
 test('Task_1_s_pins_are_byte_for_byte_the_recorded_ones_and_the_tasks_map_repeats_them_exactly', () => {
   const raw = JSON.parse(readFileSync(path.join(INPUTS, 'explore.json'), 'utf8'));
-  const { tasks, olympiad, quick, ...recorded } = raw; // the quick run added the `quick` block beside `olympiad`; task 1's own fields are every other key
+  const { tasks, olympiad, quick, ...live } = raw; // the quick run added the `quick` block beside `olympiad`; task 1's own fields are every other key
+  const recorded = Object.fromEntries(Object.entries(live).map(([key, value]) => [key, key === 'cli' ? RECORDED_CLI : value]));
   assert.equal(sha(JSON.stringify(recorded)), TASK_1_FIELDS_SHA256, 'a field of task 1 moved');
+  // what the substitution leaves unguarded is guarded here: the live CLI entry keeps the registered model and effort and is one copy (the folder name, the version and the sha256 agree)
+  assert.deepEqual([live.cli.model, live.cli.effort], [RECORDED_CLI.model, RECORDED_CLI.effort], 'the CLI\'s model and effort did not move');
+  assert.equal(live.cli.pathParts.at(-1), `claude-${live.cli.version}`, 'the CLI copy is named by its version');
+  assert.match(live.cli.sha256, /^[0-9a-f]{64}$/);
   assert.deepEqual(tasks['01'].spec, recorded.specs.spec01);
   assert.deepEqual({ ...tasks['01'].format, label: undefined }, { ...recorded.specs.format, label: undefined });
   assert.deepEqual(tasks['01'].privateNotes, recorded.privateNotes);
@@ -150,6 +157,9 @@ test('Status_readback_and_the_note_over_a_copy_of_the_recorded_task_1_series_pri
   const got = seriesCopy(t);
   if (!got) return;
   const { home, copy } = got;
+  const stored = seriesInputs(copy).value.cli;
+  assert.equal(stored.version, RECORDED_CLI.version, 'the recorded series was made with the CLI the golden texts were taken under');
+  const pins = { ...EXPLORE, cli: stored }; // the pins the record was made with: its stored CLI entry, not the live one (the CLI pin has moved since)
   const status = io(home);
   assert.equal(await cmdStatus({ series: copy, task: '01' }, status), EXIT.done);
   assert.equal(sha(status.said.join('\n')), GOLDEN.status);
@@ -157,10 +167,10 @@ test('Status_readback_and_the_note_over_a_copy_of_the_recorded_task_1_series_pri
   assert.equal(await cmdReadback({ series: copy, task: '01' }, readback), EXIT.done);
   assert.equal(sha(readback.said.join('\n')), GOLDEN.readback);
   const out = path.join(tmpDir('o-note'), 'note.md');
-  const note = io(home, { worldFn: async () => ok({ explore: EXPLORE }), subject, date: '2026-11-01' });
+  const note = io(home, { worldFn: async () => ok({ explore: pins }), subject, date: '2026-11-01' });
   assert.equal(await cmdNote({ series: copy, task: '01', out }, note), EXIT.done, note.said.join('\n'));
   assert.equal(sha(readFileSync(out, 'utf8')), GOLDEN.note);
-  const again = noteFor({ series: loadSeries(copy).value.state, seriesDir: copy, map: loadSeries(copy).value.map, world: { calibration: { limits: seriesInputs(copy).value.limits } }, pins: EXPLORE, task: task('01'), rehearsal: false, subject, date: '2026-11-01' });
+  const again = noteFor({ series: loadSeries(copy).value.state, seriesDir: copy, map: loadSeries(copy).value.map, world: { calibration: { limits: seriesInputs(copy).value.limits } }, pins, task: task('01'), rehearsal: false, subject, date: '2026-11-01' });
   assert.equal(sha(again), GOLDEN.note, 'the generator alone gives the same text');
 });
 

@@ -8,7 +8,6 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { TOKEN_FILE_PARTS } from '../../minigit-bench/capture/capture-env.mjs';
 import { appendLedger, readLedger } from '../../minigit-bench/lib/ledger.mjs';
-import { stubClaude } from '../../minigit-bench/lib/stub-cli.mjs';
 import { chunksOf, sseAnswer, sseBody, stubUpstream } from '../../minigit-bench/lib/stub-upstream.mjs';
 import { hostLacks, sandboxGate, tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
@@ -23,6 +22,7 @@ import { createSeries, drawMask, ledgerFileOf, loadSeries, runMapFileOf, seriesD
 import { planSeriesDirs } from '../lib/pause.mjs';
 import { resolveTask } from '../lib/tasks.mjs';
 import { rigHome, toyExplore, writeToyHeldout } from './olympiad-fixture.mjs';
+import { stubClaudeForPins } from './stub-pinned.mjs';
 
 const REAL = loadExplore().value;
 /** The home these tests run with: its explore root is its own; the toolchains are linked from the operator's home (see `rigHome`). */
@@ -86,7 +86,7 @@ test('A_stub_pair_past_the_pause_point_runs_only_with_allow_over_and_the_owner_s
   const said = [];
   const quiet = { hostCpus: 0.1, harnessCpus: 0.05, foreignCpus: 0, foreignAgents: [], memAvailablePct: 80, liveSessions: [], spinMs: 20 };
   const machine = machineFor({ thresholds: pilotQuiet().value, calibratedMs: 20, seriesDir: dir, samplerFn: async () => async () => quiet, sleepFn: async () => {}, now: (() => { let n = 0; return () => (n += 7000); })() });
-  const seams = { fill: referenceFill({ world: { filesFor: (await toy.worldFn({ home: realHome, work: tmpDir('o-toy-w2'), task })).value.filesFor }, heldout: loadHeldout(realHome, task).value }), claudeBinary: stubClaude(tmpDir('o-toy-stub')), planOver: { upstream: stub.upstream, tickMs: 500, sampleMs: 500, settleMs: 500, graceMs: 2000 }, preflightHome: fakeHome(), stub: true, machine };
+  const seams = { fill: referenceFill({ world: { filesFor: (await toy.worldFn({ home: realHome, work: tmpDir('o-toy-w2'), task })).value.filesFor }, heldout: loadHeldout(realHome, task).value }), claudeBinary: stubClaudeForPins(tmpDir('o-toy-stub'), { explore: toy.explore }), planOver: { upstream: stub.upstream, tickMs: 500, sampleMs: 500, settleMs: 500, graceMs: 2000 }, preflightHome: fakeHome(), stub: true, machine };
   const io = (over = {}) => ({ home: realHome, say: l => said.push(l), abort: { reason: null, exit: 130 }, worldFn: toy.worldFn, tokenFn: async () => ({ ok: true, value: 'sk-ant-fake-for-the-test' }), seams, ...over });
   const before = readFileSync(runMapFileOf(dir), 'utf8');
   const stopped = await runPair({ seriesDir: dir, pair: 1, explore: toy.explore, task, io: io() });

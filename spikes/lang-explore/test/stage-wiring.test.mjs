@@ -124,10 +124,12 @@ test('The_disk_gate_halts_a_paid_unit_before_it_is_planned_with_its_one_event_li
   const events = readLedger(ledgerFileOf(rig.dir));
   assert.equal(ledgerBefore, '', 'the ledger was empty');
   assert.deepEqual(events.map(e => [e.event, e.slot, e.freeBytes, 'usd' in e, 'rid' in e]), [['disk-reserve', 1, 1_000_000_000, false, false]], 'one event line, never a charge, naming the slot');
-  const noSize = await runRig({ stage: { floorBytes: undefined } });
-  const refused = await refusedWith(noSize);
-  assert.equal(refused.exit, 4, 'a missing size is a refusal (exit 4), not a resumable halt');
-  assert.match(refused.message, /^the disk check cannot be made: floorBytes .* must be a positive whole number/, 'and never a gate that passes');
+  // a missing size is handed in through the seam as `null` (and a size of 0): `undefined` is the seam's own "not given" and would read the repository's real manifest, which a unit test never does (and which exists since F3 PR 6)
+  for (const floorBytes of [null, 0]) {
+    const refused = await refusedWith(await runRig({ stage: { floorBytes } }));
+    assert.equal(refused.exit, 4, `a missing size (${floorBytes}) is a refusal (exit 4), not a resumable halt`);
+    assert.match(refused.message, /^the disk check cannot be made: floorBytes .* must be a positive whole number/, 'and never a gate that passes');
+  }
   const unread = await runRig({ stage: { freeBytesFn: () => { throw new Error('statfs failed'); } } });
   const unreadRefused = await refusedWith(unread);
   assert.equal(unreadRefused.exit, 4);
