@@ -5,10 +5,12 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import path from 'node:path';
 import { test } from 'node:test';
 import { readLedger } from '../../minigit-bench/lib/ledger.mjs';
+import { ok } from '../../minigit-bench/lib/result.mjs';
 import { transition, writeRunMap } from '../../minigit-bench/lib/run-map.mjs';
 import { ledgerFileOf, runMapFileOf } from '../lib/series.mjs';
 import { stageRun } from '../lib/stage-run.mjs';
-import { GO_ALL, GO_PILOT, PILOT_GO_LINE, SEED, SLOTS, mapOf, readbackHolds, runRig } from './stage-run-fixture.mjs';
+import { GO_ALL, GO_PILOT, PILOT_GO_LINE, SEED, SLOTS, fakeLoop, mapOf, readbackHolds, runRig } from './stage-run-fixture.mjs';
+import { makeSeries } from './stage-series-fixture.mjs';
 import { readbackSlots } from '../lib/stage-schedule.mjs';
 
 const next = (rig, extra = {}) => stageRun({ values: { series: rig.dir, what: 'next', ...extra }, io: rig.io });
@@ -82,6 +84,17 @@ test('until_round_does_not_say_the_round_is_finished_when_the_schedule_refuses_t
   assert.equal(unreadable.log.length, 13, 'one slot ran, and the loop went no further');
   const control = await roundThreeRig(() => {});
   assert.match((await round(control)).message, /the round's last slot is finished/, 'the control: the next slot in another round is the end of the round, exit 0');
+});
+
+test('until_round_does_not_stop_a_rehearsal_at_its_read_back_slot_because_no_judge_reads_a_rehearsal', async () => {
+  const { io, dir } = await makeSeries({ stage: { initGuardFn: undefined } }, { rehearsal: true, 'task-repo': '/fake/task-repo' });
+  const log = [];
+  io.runSeams = { prerequisitesFn: async () => ok({ calibration: {}, heldout: {}, world: { quick: false }, token: 'fake-token', prompts: {} }), loopFn: fakeLoop(log) };
+  const ended = await round({ dir, io });
+  assert.equal(ended.exit, 0, ended.message);
+  assert.doesNotMatch(ended.message, /read-back slot|two dated read-back lines/, 'no line is awaited: the lines of a rehearsal hold by themselves');
+  assert.match(ended.message, /the round's last slot is finished/);
+  assert.equal(log.length, 6, 'the whole round ran, its read-back slots included');
 });
 
 test('A_halted_slot_is_resumed_and_plans_no_new_session', async () => {

@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { acquireSeriesLock } from '../../minigit-bench/lib/series-lock.mjs';
 import { fail, ok } from '../../minigit-bench/lib/result.mjs';
-import { pairComplete, seriesInputs } from './series.mjs';
+import { isRehearsal, pairComplete, seriesInputs } from './series.mjs';
 import { stageDryRun } from './stage-dryrun.mjs';
 import { readGates } from './stage-gates.mjs';
 import { DATA_KIND } from './stage-schedule.mjs';
@@ -38,10 +38,10 @@ function dryRun({ dir, io }) {
   return { exit: EXIT.done, message: stageDryRun({ caps, seed }).join('\n') };
 }
 
-/** Is the slot that just ran a finished read-back slot? (`stage-run` ends its round loop there.) */
+/** Is the slot that just ran a finished read-back slot of a PAID series? (`stage-run` ends its round loop there; a rehearsal is not stopped, no judge reads it: `stage-gates.mjs` gives its slots lines that hold.) */
 const readbackDone = ({ dir, unit, io }) => {
   const series = openStage({ seriesDir: dir, io });
-  return unit.readback && series.ok && pairComplete(series.value.map, unit.pair, DATA_KIND);
+  return unit.readback && !isRehearsal(dir) && series.ok && pairComplete(series.value.map, unit.pair, DATA_KIND);
 };
 
 const readbackStop = ({ dir, unit }) => ({ exit: EXIT.halt, message: `slot ${unit.pair} (round ${unit.round}, task ${unit.task}) is a read-back slot: nothing later runs until its two dated read-back lines are on main; the print is \`node research/lang-v2/tools/readback.mjs --series ${dir} --pair ${unit.pair}\``, unit });
