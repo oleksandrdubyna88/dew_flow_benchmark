@@ -135,11 +135,14 @@ function sayGo({ series, unit, go, plan, io }) {
 /** The run of the unit: the one body `runUnit` over the series with the plan. */
 const runBody = s => runUnit({ series: { ...s.series, map: s.plan.map }, pair: s.unit.pair, planned: s.plan, io: s.rig.io, task: s.task, unit: unitArgs(s) });
 
+/** `rig` whose io tells the unit's prerequisites which clear folder its slot opened (`heldoutArgs.slotFolder`): the slot holds that task's lock for the whole unit, so the unit's reader reads the folder and does not take the lock again. */
+const withSlotFolder = (rig, folder) => ({ ...rig, io: { ...rig.io, heldoutArgs: { ...rig.io.heldoutArgs, slotFolder: folder } } });
+
 /** The run: the io of the unit (a rehearsal's stub rig) and the one body, a paid unit's inside the clear folder of its own task. The go event is `onReady`'s: a refused run adds no ledger line. */
 async function launch(s) {
   const rig = await (isRehearsal(s.series.dir) ? rehearsalIo(s) : { io: s.io, close: async () => {} });
   try {
-    return await underHeldout({ series: s.series, task: s.task, explore: s.explore, io: s.io, fn: () => runBody({ ...s, rig }) });
+    return await underHeldout({ series: s.series, task: s.task, explore: s.explore, io: s.io, fn: folder => runBody({ ...s, rig: withSlotFolder(rig, folder) }) });
   } finally {
     await rig.close();
   }

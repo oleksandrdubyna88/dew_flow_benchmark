@@ -108,7 +108,7 @@ const closedLate = ({ result, reason }) => ({ ...result, exit: result.exit === 0
 const heldoutEnd = refusal => (refusal.result === undefined ? { exit: CONFIG_EXIT, message: refusal.reason } : closedLate(refusal));
 
 /**
- * `fn()` (the unit's run) inside the clear held-out folder of the unit's own task: a PAID unit only (a rehearsal's held-out cases are fixtures). A unit refused before its launch (the key's backup cannot be verified, another task is in clear, a
+ * `fn(folder)` (the unit's run, given the folder the slot opened: `{ casesDir, opened }`) inside the clear held-out folder of the unit's own task: a PAID unit only (a rehearsal's held-out cases are fixtures). A unit refused before its launch (the key's backup cannot be verified, another task is in clear, a
  * folder is held) is `{ exit: 4, message }` and `fn` did not run. -> what `fn` returns, or that refusal.
  */
 export async function underHeldout({ series, task, explore, io, fn }) {

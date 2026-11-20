@@ -138,6 +138,16 @@ test('The_disk_gate_halts_a_paid_unit_before_it_is_planned_with_its_one_event_li
 
 // ---- the clear held-out folder around the unit --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+test('The_prerequisites_of_a_paid_unit_are_handed_the_folder_its_slot_opened', async () => {
+  const slot = { casesDir: '/invented/heldout-04/cases', opened: true };
+  const rig = await runRig({ stage: { slotHeldoutFn: async ({ fn }) => ok(await fn(slot)) } });
+  const given = [];
+  const fake = rig.io.runSeams.prerequisitesFn;
+  rig.io.runSeams.prerequisitesFn = async args => { given.push(args.heldout); return fake(args); };
+  assert.equal((await next(rig)).exit, 0);
+  assert.deepEqual(given.map(h => h?.slotFolder), [slot], 'the reader of the unit is told which folder is open, so it does not take the lock the slot holds');
+});
+
 test('A_paid_unit_runs_inside_the_clear_folder_of_its_own_task_and_a_unit_the_folder_refuses_changes_nothing', async () => {
   const seen = [];
   let open = false;

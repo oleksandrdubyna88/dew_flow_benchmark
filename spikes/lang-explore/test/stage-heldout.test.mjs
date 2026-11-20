@@ -8,6 +8,8 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { casesTreeHash } from '../lib/heldout-quick.mjs';
 import { registeredEntry } from '../lib/heldout-registry.mjs';
+import { readerHeldout } from '../lib/heldout-reader.mjs';
+import { sweepClearFolder } from '../lib/heldout-lifecycle.mjs';
 import { closeClearFolder, openClearFolder, sealPackage } from '../lib/package-seal.mjs';
 import { withSlotHeldout } from '../lib/stage-heldout.mjs';
 import { taskPaths } from '../lib/tasks.mjs';
@@ -121,4 +123,30 @@ test('Only_the_slots_own_task_is_ever_in_clear', async () => {
   assert.equal(ran, false);
   assert.equal(JSON.stringify(refused).includes(TOKEN), false, 'no case text is in the refusal (D41)');
   assert.equal((await closeClearFolder({ ...second.args })).ok, true, 'the operator closes it');
+});
+
+// ---- Opus review (PR 4), O1: the unit's own prerequisites read the folder its slot opened ------------------------------------------------------------------------------------------------------------------------
+
+test('The_units_prerequisites_read_the_folder_the_slot_opened_without_taking_its_lock_again_and_any_other_reader_is_still_refused', async () => {
+  const w = await sealedClosed();
+  const heldout = heldoutOf(w);
+  const inside = {};
+  const ended = await withSlotHeldout({ task: w.task, tasks: [w.task], heldout, fn: async slot => {
+    inside.today = await readerHeldout({ home: w.home, task: w.task, heldout });
+    inside.handed = await readerHeldout({ home: w.home, task: w.task, heldout: { ...heldout, slotFolder: slot } });
+    inside.foreign = await readerHeldout({ home: w.home, task: w.task, heldout: { ...heldout, slotFolder: { ...slot, casesDir: `${slot.casesDir}-of-another-task` } } });
+    inside.other = await sweepClearFolder({ ...heldout, home: w.home, task: w.task, pid: DEAD_PID - 1, startTime: '1' });
+    inside.exists = existsSync(slot.casesDir);
+    return 'ran';
+  } });
+  assert.equal(ended.ok, true, ended.reason);
+  assert.equal(inside.handed.ok, true, `the reader given the slot's folder reads it: ${inside.handed.reason}`);
+  assert.equal(inside.handed.value.casesDir, casesOf(w), 'it is the slot\'s own folder');
+  assert.equal(inside.exists, true, 'the folder was open while the unit read it');
+  assert.equal(inside.today.ok, false, 'the control: a reader that is not handed the folder asks for the lock the slot holds');
+  assert.match(inside.today.reason, /in use by pid/, inside.today.reason);
+  assert.equal(inside.foreign.ok, false, 'a folder that is not this task\'s own does not skip the lock');
+  assert.equal(inside.other.ok, false, 'another process is refused while the slot holds the lock');
+  assert.match(inside.other.reason, new RegExp(`in use by pid ${process.pid}`), inside.other.reason);
+  assert.equal(existsSync(casesOf(w)), false, 'and the folder is removed after the slot');
 });
