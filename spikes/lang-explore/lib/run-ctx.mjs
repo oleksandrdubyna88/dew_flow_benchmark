@@ -16,7 +16,8 @@ import { systemClock } from './clock.mjs';
 import { maskReadBack } from './mask-preflight.mjs';
 import { scorePasses } from './passes.mjs';
 import { harnessMovedProblem, driftSeamsOf } from './harness-moved.mjs';
-import { ledgerFileOf, runMapFileOf, seriesInputs } from './series.mjs';
+import { isStageState, ledgerFileOf, runMapFileOf, seriesInputs } from './series.mjs';
+import { STAGE_HARNESS_LISTS } from './stage-lists.mjs';
 import { fillWorkspace, fillerFor } from './workspace.mjs';
 import { loadPrompts, planForSession } from './plan.mjs';
 import { recordPlan } from './readback.mjs';
@@ -35,6 +36,9 @@ function snapshotFacts(snapshots) {
   return { snapshotPackages: records.flatMap(r => r.packages ?? []), snapshotBytes: records.reduce((n, r) => n + (r.sizeBytes ?? 0), 0) };
 }
 
+/** The harness identity a session's context records: Stage 1's (its folders, the freeze tools and the shared rules' commit) for a Stage 1 series, v1's own for every other series. `series` is the series' state. */
+export const harnessIdentityOf = series => (isStageState(series) ? harnessIdentity(REPO, STAGE_HARNESS_LISTS) : harnessIdentity(REPO));
+
 /**
  * The fixed configuration of a loop run. `world` is `loadWorld`'s value; `kind` is `pilot` or `rehearsal`; `fill` the workspace filler (the pilot's frozen workspace, or the rehearsal's reference tree).
  * -> `ok(ctx)` | `fail`.
@@ -42,7 +46,7 @@ function snapshotFacts(snapshots) {
 export async function runContext(a) {
   const policy = crosscheckPolicyFrom(V1, a.policyFiles);
   if (!policy.ok) return policy;
-  const identity = await harnessIdentity(REPO);
+  const identity = await harnessIdentityOf(a.series);
   return identity.ok ? ok(contextOf({ ...a, policy: policy.value, identity: identity.value })) : identity;
 }
 

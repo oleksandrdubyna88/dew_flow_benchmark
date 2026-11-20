@@ -11,7 +11,7 @@ import { hasDataSession, readRunMap } from '../../minigit-bench/lib/run-map.mjs'
 import { harness } from '../../minigit-bench/test/bare-loop-harness.mjs';
 import { missingPaths } from '../lib/records.mjs';
 import { contextOf } from '../lib/run-ctx.mjs';
-import { REHEARSAL_PILOT } from '../lib/stage-init.mjs';
+import { STAGE_PILOT } from '../lib/stage-lists.mjs';
 import { finalizerOf } from '../lib/stage-final.mjs';
 import { STAGE_ROUNDS } from '../lib/stage-schedule.mjs';
 import { planUnit, stepOfUnit, unitOf } from '../lib/stage-unit.mjs';
@@ -19,7 +19,7 @@ import { SEED, SLOTS } from './stage-run-fixture.mjs';
 import { EXPLORE } from './stage-series-fixture.mjs';
 
 const GATES = { seed: SEED, seedRevealed: true, pilotGo: true, readbackLines: [] };
-const unitFor = ({ what, map }) => unitOf({ what, state: { pilot: REHEARSAL_PILOT }, map, gates: GATES }).value;
+const unitFor = ({ what, map }) => unitOf({ what, state: { pilot: STAGE_PILOT }, map, gates: GATES }).value;
 const COUNTER = (() => { let n = 0; return () => () => `00${(n += 1)}`; })();
 
 /** Plan `what` into `map` and run the loop over it with the unit's step; `rig` is v1's harness (fresh unless given). */

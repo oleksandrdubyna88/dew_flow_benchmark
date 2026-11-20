@@ -67,6 +67,8 @@ const baseSlots = ({ seed }) => Array.from({ length: STAGE_ROUNDS }, (_, i) => i
   .flatMap(round => orderOfRound({ seed, round }).map((task, position) => slotOf({ seed, round, task, position })));
 
 const KINDS = Object.freeze(['daemon', 'web']);
+/** The rounds that hold a read-back slot: one for each kind of task, in the first rounds (round 1 and round 2). The ONE rule: `write-schedule.mjs` and its prose read it from here. */
+export const READBACK_ROUNDS = Object.freeze(KINDS.map((_, i) => i + 1));
 
 /** The task of `kind` the read-back takes in `round`: one of the kind's three, by the seed. */
 function pickTask({ seed, round, kind }) {
@@ -77,7 +79,7 @@ function pickTask({ seed, round, kind }) {
 /** The two cells of the read-back: round 1 and round 2, one daemon task and one web task, which kind comes first decided by the seed. */
 function readbackCells(seed) {
   const kinds = bitOf(`${seed}:lang-v2:readback:kind`) ? [...KINDS].reverse() : KINDS;
-  return kinds.map((kind, i) => ({ round: i + 1, kind, task: pickTask({ seed, round: i + 1, kind }) }));
+  return kinds.map((kind, i) => ({ round: READBACK_ROUNDS[i], kind, task: pickTask({ seed, round: READBACK_ROUNDS[i], kind }) }));
 }
 
 /** The 30 slots in the order they run: `{ slot, round, task, kind, masks: { csharp, node }, first, rids: { csharp: [a1, a2], node: [a1, a2] }, readback }`. */

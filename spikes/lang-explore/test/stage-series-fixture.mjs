@@ -6,7 +6,8 @@ import { tmpDir } from '../../minigit-bench/test/helpers.mjs';
 import { loadExplore } from '../lib/inputs.mjs';
 import { quickCalibration } from '../lib/quick.mjs';
 import { pinsOfTask, resolveTask } from '../lib/tasks.mjs';
-import { REHEARSAL_PILOT, stageInit } from '../lib/stage-init.mjs';
+import { stageInit } from '../lib/stage-init.mjs';
+import { STAGE_PILOT } from '../lib/stage-lists.mjs';
 import { FREEZE_TASKS } from '../lib/workspaces-sources.mjs';
 
 export const EXPLORE = loadExplore().value;
@@ -29,7 +30,7 @@ export const fakeSlice = async ({ task }) => ok(sliceOfTask(task));
 export const LAUNCH_FAKES = Object.freeze({
   probeFn: async () => ({ launched: true, certified: true, peakBytes: 1_500_000 }), floorBytes: 1_400_000_000, freeBytesFn: () => 10 ** 13, slotHeldoutFn: async ({ fn }) => ok(await fn()),
 });
-export const PRE = Object.freeze({ preregTag: 'prereg/lang-v2-20261120', preregCommit: COMMIT, seedSha256: sha('seed'), manifestSha256: sha('manifest'), pilot: REHEARSAL_PILOT });
+export const PRE = Object.freeze({ preregTag: 'prereg/lang-v2-20261120', preregCommit: COMMIT, seedSha256: sha('seed'), manifestSha256: sha('manifest'), pilot: STAGE_PILOT });
 
 /** The `io` of a stage-init over a fresh home: every seam a fake. `over` replaces seams (`stage.*`) or fields. */
 export function initIo(over = {}) {

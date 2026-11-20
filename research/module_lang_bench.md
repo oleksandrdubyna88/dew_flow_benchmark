@@ -1160,3 +1160,16 @@ its answer was lost reads `unchanged`). Exit 3 for a `gh` failure, 1 for a diffe
 
 **Tests.** `node spikes/lang-bench/run-tests.mjs test/github-lang.test.mjs test/github-rulesets.test.mjs`. Every call goes to the fake GitHub of `test/support/github-fixtures.mjs` (the `runBounded` seam) or, in four tests, to a `gh` shell shim of the test's
 own on the child's `PATH`; no test writes to GitHub or touches the network (a test proves it from the recorded calls).
+
+### The bench repository's two tag rulesets (F3.S1 (b), PR 5; open point 20, the owner's answer of 2026-11-19)
+
+The same library and command also serve THIS repository (`BENCH_REPO`, `oleksandrdubyna88/dew_flow_benchmark`), for the one thing the pre-registration needs: its tag `prereg/lang-v2-<yyyymmdd>` must not be moved or deleted once pushed. `BENCH_RULESETS` is data like the task repository's: `prereg-tags` (tag, `refs/tags/prereg/*`: update, deletion, force push; **no bypass actor**) and `prereg-tags-create` (the same refs: creation only; the one bypass actor is the repository admin role, `ADMIN_ROLE_ACTOR_ID` 5, `always`, so the admin creates the tag once at step T). The pattern also covers v1's `prereg/minigit-bare-20261030`. The reads, the compare and the apply are the task repository's code over `rulesetsOf(repo)`; any repository but these two is still refused before the first call.
+
+```bash
+node spikes/lang-bench/github-rulesets.mjs --bench [--check]                       # read, compare, change nothing (the default)
+node spikes/lang-bench/github-rulesets.mjs --bench --apply --owner-go 2026-11-19    # create the absent ones, read each back
+```
+
+- **The apply gate is a date.** `--bench --apply` needs `--owner-go <date>` and the date must be `BENCH_OWNER_GO`, 2026-11-19: the owner's go covers ONE creation of the two rulesets, applied and read back BEFORE step T's tag; a later change of them needs a go of its own. A missing flag is a usage error (exit 2); another date is exit 1 with the problem and `the apply needs the owner's go of 2026-11-19; nothing was read or written`; neither makes a `gh` call. `--owner-go` is refused without `--bench --apply`; `--dry-run-record` belongs to the task repository's apply and is refused with `--bench`; the task repository's gate (six packages, the dry-run record) is unchanged.
+- **What `--bench` does not do:** it reads no merge settings (the task repository's `sayMergeSettings` is skipped) and it never deletes. The apply reads every ruleset first, refuses a present one that differs before any write, creates only the absent ones one by one and reads each back, exactly as the task repository's does.
+- **Nothing here applies it.** The real apply is the team lead's, after the owner's go, before the tag; no test and no build of PR 5 touched GitHub: every call goes to the fake `gh` of `test/support/github-fixtures.mjs`. Tests: `test/github-lang.test.mjs` and `test/github-rulesets.test.mjs` (the bench data, the gate, the compare and the apply for `BENCH_REPO`, the usage errors of the new flags).

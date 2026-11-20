@@ -14,7 +14,7 @@ import { pythonProblem } from './world.mjs';
 const sha256File = file => createHash('sha256').update(readFileSync(file)).digest('hex');
 
 /** `null` when the file is there and hashes to `want`, else the sentence. */
-function fileProblem(what, file, want) {
+export function fileProblem(what, file, want) {
   if (!existsSync(file)) return `${what} ${file} is missing`;
   const got = sha256File(file);
   return got === want ? null : `${what} ${file} hashes to ${got.slice(0, 12)}, the pin says ${want.slice(0, 12)}`;

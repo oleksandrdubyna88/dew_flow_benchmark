@@ -14,14 +14,14 @@ import { BENCH_RUNNER, packagesInputs, packagesMdHashes, quickStackSentence } fr
 
 const sha256 = text => createHash('sha256').update(text).digest('hex');
 
-/** `inputs/prompts.json`'s shape for the quick tasks: the template and each stack's text with its sha256. */
-export function quickPrompts(explore) {
+/** `inputs/prompts.json`'s shape for the quick tasks: the template and each stack's text with its sha256. `template` is the bare prompt's template: the quick run's own unless a later series passes its own (Stage 1's, `stage-prompts.mjs`). */
+export function quickPrompts(explore, template = PROMPT_TEMPLATE) {
   return {
     source: 'todo/PLAN_lang_comparison_v2.md section 4.5, Bare; stack sentences as D67 (5) amended them, with the toolchains of the quick run (the owner\'s order of 2026-11-05)',
-    template: PROMPT_TEMPLATE, templateSha256: sha256(PROMPT_TEMPLATE),
+    template, templateSha256: sha256(template),
     prompts: Object.fromEntries(Object.keys(STACK_NAMES).map(stack => {
       const sentence = quickStackSentence(explore, stack);
-      const text = promptText({ stack, sentence });
+      const text = promptText({ template, stack, sentence });
       return [stack, { stackSentence: sentence, text, sha256: sha256(text) }];
     })),
   };

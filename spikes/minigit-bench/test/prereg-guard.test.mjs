@@ -2,7 +2,7 @@
 // the tree is clean and the harness is the one the run-map pinned. Over a real temporary repository with a real bare remote.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { PREREG_FILES, harnessIdentity, preregGuard } from '../lib/prereg-guard.mjs';
+import { PREREG_FILES, V1_PREREG_CONFIG, harnessIdentity, preregGuard } from '../lib/prereg-guard.mjs';
 import { sdkCheckOfTexts, sdkProblem } from '../lib/prereg-consistency.mjs';
 import { createHash } from 'node:crypto';
 import { INPUTS, SEED, commit, fixture, git, promptsText, stacksText, write } from './prereg-fixtures.mjs';
@@ -82,6 +82,15 @@ test('The_crosscheck_policy_may_change_only_in_its_t2_and_t3_decisions', async (
   const weakened = await guard(f);
   assert.equal(weakened.ok, false);
   assert.match(weakened.reason, /crosscheck-policy\.json.*t1/);
+});
+
+test('A_damaged_crosscheck_policy_is_a_refusal_naming_it_and_never_a_throw', async () => {
+  const f = await pinned(fixture());
+  write(f.repo, `${INPUTS}/crosscheck-policy.json`, '{not json');
+  commit(f.repo, 'a damaged policy');
+  const refused = await guard(f);
+  assert.equal(refused.ok, false);
+  assert.match(refused.reason, /crosscheck-policy\.json at HEAD is not JSON: the policy cannot be compared with the tag/);
 });
 
 test('An_untracked_file_under_spikes_refuses_a_paid_run_only', async () => {
@@ -186,4 +195,107 @@ test('The_quiet_thresholds_and_the_package_flags_change_only_through_a_dated_ame
   write(frozen.repo, `${INPUTS}/amendments.md`, `# Dated amendments\n2026-11-02 | instrument | input:statement.md:${hash12('rewritten\n')} | no\n`);
   commit(frozen.repo, 'try to amend the statement');
   assert.equal((await guard(frozen)).ok, false, 'only the instrument inputs are amendable: the statement, the prompts, the prices and the pins are frozen');
+});
+
+// ---- the configuration: the lists the guard works over are an argument (language comparison v2's Stage 1 passes its own) --------------------------------------------
+
+/** A repository shaped nothing like v1's: registered files in two folders, a folder entry, a structured exception, two harness folders and a top-level folder. */
+function otherFixture() {
+  const f = fixture();
+  for (const [rel, text] of Object.entries({ 'docs/rules.md': 'rules\n', 'docs/limits.json': '{"cap":50,"wall":75}\n', 'data/one.json': '{"a":1}\n', 'data/two.json': '{"b":2}\n', 'ledger/amend.md': '# lines\n', 'ledger/seed.hash': `${sha256Of(SEED)}\n`, 'engine/lib/e.mjs': '// e\n', 'tools/t.mjs': '// t\n', 'tools/more/skip.mjs': '// skipped\n', 'pre/prices-2026-11-19.json': '{"p":1}\n' })) write(f.repo, rel, text);
+  const sha = commit(f.repo, 'the other shape');
+  git(f.repo, 'tag', '-a', 'prereg/other', '-m', 'other', sha);
+  git(f.repo, 'push', '-q', 'origin', 'main', 'prereg/other');
+  return { ...f, sha, runMap: { preregTag: 'prereg/other', preregCommit: sha, harnessIdentity: null, harnessAccepted: [] } };
+}
+const sha256Of = text => createHash('sha256').update(text).digest('hex');
+const OTHER = Object.freeze({
+  ...V1_PREREG_CONFIG,
+  labelBase: 'nothing/',
+  files: ['docs/rules.md', 'docs/limits.json', { dir: 'data', pattern: /\.json$/, what: 'the data files' }, { dir: 'pre', pattern: /^prices-\d{4}-\d{2}-\d{2}\.json$/, what: 'the price file', exactlyOne: true }],
+  amendments: 'ledger/amend.md', seedFile: 'ledger/seed.txt', seedHash: 'ledger/seed.hash', amendable: {}, policy: null,
+  structured: { 'docs/limits.json': async ({ repo }) => ((await git(repo, 'show', 'HEAD:docs/limits.json')).includes('"cap":50') ? null : 'the cap changed') },
+  harnessDirs: ['engine/lib'], harnessTopDirs: ['tools/'], consistency: async () => [],
+});
+const otherGuard = (f, over = {}) => preregGuard({ repo: f.repo, runMap: f.runMap, paid: false, requireSeed: false, config: OTHER, ...over });
+
+test('v1s_guard_over_v1s_lists_answers_as_before', async () => {
+  assert.deepEqual(V1_PREREG_CONFIG.files, PREREG_FILES.map(name => `${INPUTS}/${name}`), 'the default configuration lists exactly v1\'s registered files');
+  const f = await pinned(fixture());
+  write(f.repo, `${INPUTS}/quiet.json`, 'changed\n');
+  write(f.repo, `${INPUTS}/amendments.md`, '# rewritten\n');
+  commit(f.repo, 'two problems');
+  const [byDefault, byConfig] = [await guard(f), await guard(f, { config: V1_PREREG_CONFIG })];
+  assert.equal(byDefault.reason, byConfig.reason, 'the same sentence with the configuration passed and without');
+  const line = `quiet.json differs from the tagged commit and no dated amendments.md line names it: add \`YYYY-MM-DD | instrument | input:quiet.json:${sha256Of('changed\n').slice(0, 12)} | <reason, with its G-id>\``;
+  assert.equal(byDefault.reason, `the pre-registration guard refuses: ${line}; amendments.md at HEAD is not the tagged text with lines appended (a registered amendment file is append-only)`, 'v1\'s sentences, word for word: the file names are cut at labelBase');
+  assert.equal((await harnessIdentity(f.repo)).value, (await harnessIdentity(f.repo, V1_PREREG_CONFIG)).value);
+});
+
+test('The_guard_answers_over_a_configuration_of_other_files_folders_and_rules', async () => {
+  const f = otherFixture();
+  f.runMap.harnessIdentity = (await harnessIdentity(f.repo, OTHER)).value;
+  assert.equal((await otherGuard(f)).ok, true, (await otherGuard(f)).reason);
+  write(f.repo, 'docs/rules.md', 'changed\n');
+  commit(f.repo, 'edit a registered file outside v1\'s folder');
+  assert.match((await otherGuard(f)).reason, /docs\/rules\.md differs from the tagged commit/, 'a path that is not under labelBase is named whole');
+  git(f.repo, 'checkout', '-q', 'HEAD~1', '--', 'docs/rules.md');
+  write(f.repo, 'data/three.json', '{"c":3}\n');
+  commit(f.repo, 'a file added to a registered folder after the tag');
+  assert.match((await otherGuard(f)).reason, /data\/three\.json is missing at the tagged commit/, 'a folder entry covers the files HEAD holds too');
+  git(f.repo, 'rm', '-q', 'data/three.json');
+  write(f.repo, 'pre/prices-2026-11-20.json', '{"p":2}\n');
+  commit(f.repo, 'a second price file');
+  assert.match((await otherGuard(f)).reason, /pre\/prices-2026-11-20\.json is missing at the tagged commit/);
+});
+
+test('A_structured_exception_lets_one_registered_file_differ_the_way_it_says_and_no_other_way', async () => {
+  const f = otherFixture();
+  write(f.repo, 'docs/limits.json', '{"cap":50,"wall":90}\n');
+  commit(f.repo, 'the wall moved');
+  assert.equal((await otherGuard(f)).ok, true, (await otherGuard(f)).reason);
+  write(f.repo, 'docs/limits.json', '{"cap":60,"wall":90}\n');
+  commit(f.repo, 'the cap moved');
+  assert.match((await otherGuard(f)).reason, /the cap changed/);
+});
+
+test('The_configuration_decides_the_paid_checks_the_harness_folders_the_top_level_files_and_the_branch', async () => {
+  const f = otherFixture();
+  const before = (await harnessIdentity(f.repo, OTHER)).value;
+  f.runMap.harnessIdentity = before;
+  write(f.repo, 'tools/more/skip.mjs', '// not a top-level file of tools/\n');
+  commit(f.repo, 'a file below the top level');
+  assert.equal((await harnessIdentity(f.repo, OTHER)).value, before, 'only the top-level *.mjs of a top folder count');
+  for (const rel of ['engine/lib/e.mjs', 'tools/t.mjs']) {
+    const last = (await harnessIdentity(f.repo, OTHER)).value;
+    write(f.repo, rel, `// changed ${rel}\n`);
+    commit(f.repo, `change ${rel}`);
+    assert.notEqual((await harnessIdentity(f.repo, OTHER)).value, last, `${rel} is in this configuration's harness`);
+  }
+  assert.match((await otherGuard(f, { paid: true })).reason, /harnessIdentity/, 'the paid check reads this configuration\'s identity');
+  const branch = { ...OTHER, branch: async () => ['the branch is not the tag\'s'] };
+  assert.equal((await otherGuard(f, { config: branch, paid: false })).ok, true, 'the branch check is for a paid launch only');
+  f.runMap.harnessAccepted = [(await harnessIdentity(f.repo, OTHER)).value];
+  assert.match((await otherGuard(f, { config: branch, paid: true })).reason, /the branch is not the tag's/);
+});
+
+test('A_history_that_was_cut_at_the_tag_gives_the_identity_of_that_commit_when_a_commit_is_named', async () => {
+  const f = otherFixture();
+  const atTag = (await harnessIdentity(f.repo, OTHER)).value;
+  write(f.repo, 'engine/lib/e.mjs', '// later\n');
+  const later = commit(f.repo, 'later');
+  assert.equal((await harnessIdentity(f.repo, OTHER, f.sha)).value, atTag, 'the identity at the tag\'s commit is the one it had then');
+  assert.notEqual((await harnessIdentity(f.repo, OTHER, later)).value, atTag);
+});
+
+test('A_folder_entry_that_must_hold_exactly_one_file_at_the_tag_is_refused_when_the_tag_holds_two', async () => {
+  const f = fixture();
+  write(f.repo, 'pre/prices-2026-11-19.json', '{"p":1}\n');
+  write(f.repo, 'pre/prices-2026-11-20.json', '{"p":2}\n');
+  const sha = commit(f.repo, 'two price files at the tag');
+  git(f.repo, 'tag', '-a', 'prereg/two', '-m', 'two', sha);
+  git(f.repo, 'push', '-q', 'origin', 'main', 'prereg/two');
+  const config = { ...V1_PREREG_CONFIG, files: [{ dir: 'pre', pattern: /^prices-/, what: 'the price file', exactlyOne: true }] };
+  const refused = await preregGuard({ repo: f.repo, runMap: { preregTag: 'prereg/two', preregCommit: sha }, paid: false, config });
+  assert.match(refused.reason, /the price file must be exactly one file of pre\/ at the tagged commit \(found 2: pre\/prices-2026-11-19\.json, pre\/prices-2026-11-20\.json\)/);
 });

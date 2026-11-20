@@ -121,11 +121,12 @@ export async function workspacesProblems(args) {
 
 const manifestOf = (repo, deps) => deps.manifest ?? readJson(path.join(repo, PREREG_DIR, 'manifest.json'));
 
+/** The identities' step: `{ problems, harness }`, `harness` the live harness identity this step compared (null when it could not be read). */
 async function identityStep({ repo, taskRepo, record, deps }) {
   const manifest = manifestOf(repo, deps);
-  if (manifest === null) return [`${path.join(PREREG_DIR, 'manifest.json')} is not there or cannot be read: nothing is registered to compare the identities with (the pre-registration's manifest is PR 6's file)`];
+  if (manifest === null) return { harness: null, problems: [`${path.join(PREREG_DIR, 'manifest.json')} is not there or cannot be read: nothing is registered to compare the identities with (the pre-registration's manifest is PR 6's file)`] };
   const live = deps.live ? await deps.live() : await liveIdentities({ repo, home: deps.home ?? os.homedir(), taskRepo, record, readers: deps.readers });
-  return identityProblems(manifest, live, { harnessAccepted: deps.harnessAccepted ?? [] });
+  return { problems: identityProblems(manifest, live, { harnessAccepted: deps.harnessAccepted ?? [] }), harness: live.harness?.value ?? null };
 }
 
 const NO_PREREG_GUARD = 'the pre-registration guard (PR 5: the tag, the registered blobs, the clean tree, the harness identity and the seed for a data slot) is not wired into this guard: a paid launch is refused without it';
@@ -140,7 +141,7 @@ async function taskStep({ repo, given, rec, deps }) {
 }
 
 /**
- * `stageGuard({ repo, series, taskRepo, paid, requireSeed, deps })` -> `ok(null)` | `fail(reason, { problems })` with every problem named (see the head of this file). `repo` is the bench repository's root, `series` the series folder,
+ * `stageGuard({ repo, series, taskRepo, paid, requireSeed, deps })` -> `ok({ harness })` | `fail(reason, { problems })` with every problem named (see the head of this file). `harness` is the live harness identity the guard just accepted (the plan of the first data session records it). `repo` is the bench repository's root, `series` the series folder,
  * `paid` whether the launch spends (then PR 5's checks are asked as well), `requireSeed` whether it is a data slot.
  */
 export async function stageGuard({ repo, series, taskRepo, paid = false, requireSeed = false, deps = {} }) {
@@ -149,6 +150,6 @@ export async function stageGuard({ repo, series, taskRepo, paid = false, require
   const task = await taskStep({ repo, given, rec, deps });
   const identities = await identityStep({ repo, taskRepo: given, record: rec.record, deps });
   const spends = paid ? await paidStep({ repo, series, requireSeed, deps }) : [];
-  const problems = [...rec.problems, ...task, ...identities, ...spends];
-  return problems.length === 0 ? ok(null) : fail(`${problems.length} problem(s) before a ${paid ? 'paid ' : ''}launch: ${problems.join('; ')}`, { problems });
+  const problems = [...rec.problems, ...task, ...identities.problems, ...spends];
+  return problems.length === 0 ? ok({ harness: identities.harness }) : fail(`${problems.length} problem(s) before a ${paid ? 'paid ' : ''}launch: ${problems.join('; ')}`, { problems });
 }

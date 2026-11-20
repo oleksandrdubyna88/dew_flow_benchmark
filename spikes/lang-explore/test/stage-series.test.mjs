@@ -14,11 +14,13 @@ import { runnerPinNow } from '../lib/harness-pin.mjs';
 import { heldoutMovedProblem } from '../lib/heldout-quick.mjs';
 import { seriesLimits } from '../lib/limits.mjs';
 import { CANONICAL_SERIES, createSeries, isRehearsal, loadSeries, runMapFileOf, seriesInputs, seriesPrompts, seriesRootProblem } from '../lib/series.mjs';
-import { stageInit } from '../lib/stage-init.mjs';
+import { defaultInitGuard, stageInit } from '../lib/stage-init.mjs';
+import { STAGE_PILOT } from '../lib/stage-lists.mjs';
 import { inputsOfTask, loadStageSeries, stageSeriesDirs } from '../lib/stage-series.mjs';
 import { seedProblem, STAGE_ROUNDS } from '../lib/stage-schedule.mjs';
 import { frozenPinsProblem, pinsOfTask, seriesTaskProblem, taskIds } from '../lib/tasks.mjs';
 import { COMMIT, EXPLORE, PRE, TASKS, fakeSlice, initIo, makeSeries, sliceOfTask } from './stage-series-fixture.mjs';
+import { TAG, git, stageFixture } from './stage-prereg-fixture.mjs';
 import { FREEZE_TASKS } from '../lib/workspaces-sources.mjs';
 
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
@@ -94,13 +96,15 @@ test('A_changed_pin_of_one_task_refuses_that_tasks_slot_and_names_the_task', asy
   assert.equal(taskIds(EXPLORE).includes('07'), true);
 });
 
-test('stage_init_with_the_default_guard_makes_a_rehearsal_series_only', async () => {
-  const io = initIo({ stage: { initGuardFn: undefined } });
+test('stage_init_with_the_default_guard_refuses_a_paid_series_while_no_tag_is_on_the_remote_and_makes_a_rehearsal_series', async () => {
+  const w = await stageFixture();
+  git(w.repo, 'push', '-q', '--delete', 'origin', TAG);
+  const io = initIo({ stage: { initGuardFn: undefined, repo: w.repo } });
   const paid = await stageInit({ values: { 'task-repo': '/t' }, io });
   assert.equal(paid.exit, 4);
-  assert.match(paid.message, /^stage-init: the pre-registration guard .* is not merged yet: until it is, stage-init makes a rehearsal series only \(--rehearsal\)/);
+  assert.match(paid.message, /^origin holds 0 tags named prereg\/lang-v2-\* \(none\): a paid series is made under exactly one, pushed by step T/, 'PR 5\'s guard: before PR 6 there is no tag, so no paid series');
   assert.deepEqual(readdirSyncOrEmpty(io.home), [], 'nothing was written');
-  const rehearsal = await stageInit({ values: { rehearsal: true, 'task-repo': '/t' }, io });
+  const rehearsal = await stageInit({ values: { rehearsal: true, 'task-repo': '/t' }, io: { ...io, stage: { ...io.stage, repo: undefined } } });
   assert.equal(rehearsal.exit, 0, rehearsal.message);
   assert.match(path.basename(rehearsal.dir), /^r-\d{8}-[0-9a-f]{4}$/, 'an r- series: no paid run can pick it by its name');
   assert.equal(isRehearsal(rehearsal.dir), true);
@@ -108,6 +112,13 @@ test('stage_init_with_the_default_guard_makes_a_rehearsal_series_only', async ()
   assert.equal(state.preregTag, null);
   assert.equal(seedProblem(state.rehearsalSeed), null, 'its own seed has 120 distinct rids');
   assert.equal(seriesTaskProblem({ state: loadSeries(rehearsal.dir).value.state, task: TASKS[0] }) !== null, true);
+});
+
+test('a_rehearsal_series_is_made_with_the_one_registered_pilot_the_schedule_generator_uses', async () => {
+  const guard = defaultInitGuard({ rehearsal: true, base: {}, io: {}, values: {} });
+  assert.equal(guard.value.pilot, STAGE_PILOT, 'the very object of the registered pilot, not a second literal that equals it today');
+  const { dir } = await makeSeries({ stage: { initGuardFn: async a => defaultInitGuard(a) } }, { rehearsal: true, 'task-repo': '/t' });
+  assert.deepEqual(readJson(path.join(dir, 'explore-series.json')).pilot, STAGE_PILOT);
 });
 
 const readdirSyncOrEmpty = dir => (existsSync(path.join(dir, 'rsd')) ? readdirSync(path.join(dir, 'rsd', 'lang-v2', 'explore')) : []);

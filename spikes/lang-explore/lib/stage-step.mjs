@@ -16,6 +16,7 @@ import { finishOwedRecords } from './stage-owed.mjs';
 import { guardOf, ownerGoFor, readGates } from './stage-gates.mjs';
 import { certifyStep, diskStep, envStep, underHeldout } from './stage-launch.mjs';
 import { rehearsalIo } from './stage-rehearsal.mjs';
+import { instrumentInputsNow } from './stage-prereg.mjs';
 import { DATA_KIND } from './stage-schedule.mjs';
 import { loadStageSeries } from './stage-series.mjs';
 import { planUnit, stepOfUnit, unitOf } from './stage-unit.mjs';
@@ -84,7 +85,7 @@ const goStep = ({ series, unit, read }) => { const go = ownerGoFor({ series, uni
 async function guardStep({ series, unit, io }) {
   const guard = guardOf({ series, io });
   const answer = await guard({ paid: !isRehearsal(series.dir), requireSeed: unit.kind === DATA_KIND });
-  return answer.ok ? ok({ guard }) : answer;
+  return answer.ok ? ok({ guard, harnessNow: answer.value?.harness ?? null }) : answer;
 }
 
 const taskStep = ({ unit, io }) => taskFromValues({ task: unit.task }, io.exploreFn);
@@ -110,7 +111,13 @@ function policyStep({ series }) {
 
 const pinsStep = ({ series, task }) => { const moved = pinsMoved({ series, task }); return moved ? fail(moved) : ok({}); };
 const diskCheck = s => diskStep({ ...s, map: mapAsRead(s) });
-const planStep = ({ series, unit, io }) => { const made = planUnit({ map: series.map, unit, ...(io.stage?.pilotRand ? { rand: io.stage.pilotRand } : {}) }); return made.ok ? ok({ plan: made.value }) : made; };
+/** The instrument inputs a data plan records (`inputsAtFirstData`): read from the checkout the guard judged, for a paid series only (a rehearsal has no dated input line). */
+const inputsNowOf = ({ series, unit, io }) => (unit.kind === DATA_KIND && !isRehearsal(series.dir) ? instrumentInputsNow(io.stage?.guardArgs?.repo ?? REPO) : {});
+
+const planStep = async ({ series, unit, io, harnessNow }) => {
+  const made = planUnit({ map: series.map, unit, harnessNow, inputsNow: await inputsNowOf({ series, unit, io }), ...(io.stage?.pilotRand ? { rand: io.stage.pilotRand } : {}) });
+  return made.ok ? ok({ plan: made.value }) : made;
+};
 
 /** The `unit` argument of `runUnit`: the unit's kind, the policy files the series pinned, the guard, `onReady` (the owner-go event, written once the shared body has passed its last refusal check), the Stage 1 parts of the context and the records' finalizer. */
 const unitArgs = ({ series, unit, read, go, guard, explore, policyFiles, plan, io }) => ({

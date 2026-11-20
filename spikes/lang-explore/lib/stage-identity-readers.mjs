@@ -3,7 +3,7 @@
 // failure: a missing field is `need`, and the one boundary where a system exception (a missing file, JSON that does not parse) becomes a value is `guarded`. The order is the order the guard names them.
 //   harness            the Stage 1 harness identity (PR 5's list of folders, `STAGE_HARNESS_DIRS`): no default; PR 5 hands its reader in as `readers.harness`
 //   composite values   (`heldout.NN`, `memoryValue`, `policy`, `locale`, `seriesDefaults`, `toolchains`) are the sha256 of a stated text, so a difference shows as two short hashes whatever it was in
-//   amendable inputs   are never an identity: the caps' wall and stall, `quiet.json`, `package-flags.json` and the policy's free fields (`t3`, `t5`, `POLICY_FREE_FIELDS`) change by a dated line
+//   amendable inputs   are never an identity: the caps' wall and stall, `quiet.json`, `package-flags.json` and the policy's four free fields (`t3`, `t5`, `decidedOn`, `reason`: `POLICY_FREE_FIELDS`) change by a dated line
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import os from 'node:os';
@@ -20,13 +20,13 @@ import { fail, ok } from '../../minigit-bench/lib/result.mjs';
 import { underHome } from './paths.mjs';
 import { quickSnapshots } from './quick.mjs';
 import { registeredEntry } from './heldout-registry.mjs';
+import { POLICY_FREE_FIELDS } from './stage-lists.mjs';
 import { PREREG_DIR, RECORD_PATHS } from './stage-record.mjs';
 import { resolveTask, taskPaths } from './tasks.mjs';
 import { FREEZE_TASKS } from './workspaces-sources.mjs';
 import { sha256OfFile } from './workspaces-tree.mjs';
 
-/** The policy's free fields: the A/A may set them by a dated line (parent, `:1562`, `:1611`, `:1510`), so they are not part of the policy's identity. PR 5's `STAGE_PREREG` list of free fields is this list. */
-export const POLICY_FREE_FIELDS = Object.freeze(['t3', 't5']);
+export { POLICY_FREE_FIELDS };
 
 const sha256Text = text => createHash('sha256').update(text).digest('hex');
 const sorted = value => (Array.isArray(value) ? value.map(sorted) : value !== null && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(k => [k, sorted(value[k])])) : value);

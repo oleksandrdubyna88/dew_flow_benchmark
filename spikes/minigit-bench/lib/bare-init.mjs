@@ -211,7 +211,8 @@ function copyCli(plan) {
   return sha256File(plan.copy.to) === plan.copy.sha256 ? null : fail('the CLI copy does not hash to its source');
 }
 
-const installCli = plan => (existsSync(plan.copy.to) ? existingCliProblem(plan) : copyCli(plan));
+/** The pinned CLI at its place: made (read-only, executable, hash re-checked) or, when one is there, checked to be the pinned one. `plan.copy` is `{ from, to, sha256 }`. -> `fail` or null. Exported: a later series pins its own copy through the same step. */
+export const installCli = plan => (existsSync(plan.copy.to) ? existingCliProblem(plan) : copyCli(plan));
 
 /** The ledger starts with the prior lines (and the earlier series' spend); a ledger that already has lines is left alone. */
 function seedLedger(plan) {

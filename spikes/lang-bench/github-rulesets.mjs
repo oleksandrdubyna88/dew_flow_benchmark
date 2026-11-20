@@ -3,6 +3,8 @@
 //
 //   node spikes/lang-bench/github-rulesets.mjs [--check]      read the rulesets and say `equal`, `absent` or `different` for each of the three; change nothing (the default)
 //   node spikes/lang-bench/github-rulesets.mjs --apply --dry-run-record <file>     create the absent ones, never update or delete one; read every one back
+//   node spikes/lang-bench/github-rulesets.mjs --bench [--check]                    the same read for the BENCH repository's two rulesets on `refs/tags/prereg/*` (F3.S1 (b); the owner's answer of 2026-11-19)
+//   node spikes/lang-bench/github-rulesets.mjs --bench --apply --owner-go <date>    create the absent ones; the date must be the owner's go, 2026-11-19; step T runs it, a test never does
 //
 // `--apply` starts only when the owner's go of 2026-11-08 holds, and checks it before any `gh` call: `spikes/lang-explore/inputs/packages.json` shows a passed package for each of the six tasks (04, 05, 06, 07, 08, 10: an `identity`
 // and an `archiveSha256` of 64 hex, `referenceVerdicts` csharp and node both `accepted`), and the dry-run record named by `--dry-run-record` is a file whose FIRST line is exactly
@@ -12,7 +14,7 @@
 import { createHash } from 'node:crypto';
 import { closeSync, openSync, readFileSync, readSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DRY_RUN_LINE, PACKAGE_TASKS, TASK_REPO, applyGateProblems, applyRulesets, readMergeSettings, rulesetsReadBack, strangerLine } from './lib/github-lang.mjs';
+import { BENCH_OWNER_GO, BENCH_REPO, DRY_RUN_LINE, PACKAGE_TASKS, TASK_REPO, applyGateProblems, benchGateProblems, applyRulesets, readMergeSettings, rulesetsReadBack, strangerLine } from './lib/github-lang.mjs';
 import { runBounded } from '../minigit-bench/lib/run.mjs';
 
 /** The registry of the packages the apply's go reads: `spikes/lang-explore/inputs/packages.json`. */
@@ -20,32 +22,37 @@ export const DEFAULT_PACKAGES_FILE = fileURLToPath(new URL('../lang-explore/inpu
 const USAGE = [
   'usage: node spikes/lang-bench/github-rulesets.mjs [--check]',
   '       node spikes/lang-bench/github-rulesets.mjs --apply --dry-run-record <file>',
-  'accepted flags: --check (the default: read, change nothing), --apply (create the absent rulesets), --dry-run-record <file> (required with --apply, refused with --check); any other flag is a usage error (exit 2).',
-  `The repository is fixed in the data (${TASK_REPO}); no flag names another.`,
+  '       node spikes/lang-bench/github-rulesets.mjs --bench [--check]',
+  '       node spikes/lang-bench/github-rulesets.mjs --bench --apply --owner-go <date>',
+  'accepted flags: --check (the default: read, change nothing), --apply (create the absent rulesets), --dry-run-record <file> (required with --apply, refused with --check and --bench), --bench (the bench repository\'s rulesets instead of the task repository\'s), --owner-go <date> (required with --bench --apply, refused otherwise); any other flag is a usage error (exit 2).',
+  `The repository is fixed in the data (${TASK_REPO}, or with --bench ${BENCH_REPO}); no flag names another.`,
   `--apply starts only when spikes/lang-explore/inputs/packages.json shows a passed package (an identity and a sealed archive, both references accepted) for each of the six tasks (${PACKAGE_TASKS.join(', ')}) and the file named by --dry-run-record has "${DRY_RUN_LINE}" as its first line, the sha256 being that of packages.json's bytes now.`,
 ].join('\n');
 const EXIT = Object.freeze({ done: 0, different: 1, usage: 2, gh: 3 });
 
 const MODE_FLAGS = new Set(['--check', '--apply']);
 
-/** `--dry-run-record <file>`: the value must be there and must not be another flag, or it is a usage error naming the missing value. */
-function recordFlag(flags, argv, index) {
+/** A flag that takes one value: the value must be there and must not be another flag, or it is a usage error naming the missing value. */
+function valueFlag({ flags, argv, index, key, what }) {
   const value = argv[index + 1];
-  if (value === undefined || value.startsWith('--')) return { usage: '--dry-run-record needs a file name, and none was given' };
-  return { flags: { ...flags, record: value }, next: index + 2 };
+  if (value === undefined || value.startsWith('--')) return { usage: `${argv[index]} needs ${what}, and none was given` };
+  return { flags: { ...flags, [key]: value }, next: index + 2 };
 }
+
+const VALUE_FLAGS = Object.freeze({ '--dry-run-record': { key: 'record', what: 'a file name' }, '--owner-go': { key: 'ownerGo', what: 'the date of the owner\'s go' } });
 
 /** The flag at `index` applied to `flags`: `{ flags, next }` (`next` is the index after it and its value) or `{ usage }` for an argument that is not accepted. */
 function readFlag(flags, argv, index) {
   const arg = argv[index];
   if (MODE_FLAGS.has(arg)) return { flags: { ...flags, modes: [...flags.modes, arg.slice(2)] }, next: index + 1 };
-  if (arg === '--dry-run-record') return recordFlag(flags, argv, index);
+  if (arg === '--bench') return { flags: { ...flags, bench: true }, next: index + 1 };
+  if (Object.hasOwn(VALUE_FLAGS, arg)) return valueFlag({ flags, argv, index, ...VALUE_FLAGS[arg] });
   return { usage: `${JSON.stringify(arg)} is not an accepted argument` };
 }
 
-/** The flags as written, in order: `{ modes, record }` (`record` undefined when the flag is absent) or `{ usage }` for the first argument that is not accepted. The repository is not a flag: it is `TASK_REPO`, in the data. */
+/** The flags as written, in order: `{ modes, record, ownerGo, bench }` (`record` and `ownerGo` undefined when the flag is absent) or `{ usage }` for the first argument that is not accepted. The repository is not a flag: it is `TASK_REPO`, or with `--bench` `BENCH_REPO`, in the data. */
 function collectFlags(argv) {
-  let flags = { modes: [], record: undefined };
+  let flags = { modes: [], record: undefined, ownerGo: undefined, bench: false };
   let index = 0;
   while (index < argv.length) {
     const read = readFlag(flags, argv, index);
@@ -58,18 +65,28 @@ function collectFlags(argv) {
 const applyProblem = record => (record ? null : '--apply needs --dry-run-record <file>');
 const checkProblem = record => (record === undefined ? null : '--dry-run-record belongs to --apply');
 
+/** The sentence a combination of the bench flags breaks, or `null`: `--owner-go` is the bench apply's, `--dry-run-record` the task repository's. */
+function benchProblem({ modes, record, ownerGo, bench }) {
+  if (!bench) return ownerGo === undefined ? null : '--owner-go belongs to --bench --apply';
+  if (record !== undefined) return '--dry-run-record belongs to the task repository\'s apply, not to --bench';
+  if (modes[0] === 'apply') return ownerGo === undefined ? '--bench --apply needs --owner-go <date of the owner\'s go>' : null;
+  return ownerGo === undefined ? null : '--owner-go belongs to --apply';
+}
+
 /** The sentence a combination of flags breaks, or `null`. */
-function modeProblem({ modes, record }) {
+function modeProblem(flags) {
+  const { modes, record, bench } = flags;
   if (new Set(modes).size > 1) return '--check and --apply are exclusive';
+  if (bench || flags.ownerGo !== undefined) return benchProblem(flags);
   return modes[0] === 'apply' ? applyProblem(record) : checkProblem(record);
 }
 
-/** The flags: `{ mode, record }` or `{ usage }` (a sentence). */
+/** The flags: `{ mode, record, ownerGo, bench }` or `{ usage }` (a sentence). */
 function parseArgs(argv) {
   const flags = collectFlags(argv);
   if (flags.usage !== undefined) return flags;
   const problem = modeProblem(flags);
-  return problem === null ? { mode: flags.modes[0] ?? 'check', record: flags.record } : { usage: problem };
+  return problem === null ? { mode: flags.modes[0] ?? 'check', record: flags.record, ownerGo: flags.ownerGo, bench: flags.bench } : { usage: problem };
 }
 
 /** `packages.json`: `{ packages, packagesSha256 }`, the parsed object and the sha256 of the very bytes that were parsed; both `null` when it cannot be read or parsed. */
@@ -112,10 +129,10 @@ async function sayMergeSettings(repo, run, say) {
   else say(merge.value.length === 0 ? 'merge settings: ok' : `merge settings (report only): ${merge.value.join('; ')}`);
 }
 
-const READING = 'reading the task repository\'s rulesets…';
+const readingOf = repo => `reading the ${repo === BENCH_REPO ? 'bench' : 'task'} repository's rulesets…`;
 
 async function check({ repo, run, say, complain, progress }) {
-  progress(READING);
+  progress(readingOf(repo));
   const back = await rulesetsReadBack({ repo, run });
   if (!back.ok) {
     complain(`github-rulesets: ${back.reason}`);
@@ -123,8 +140,33 @@ async function check({ repo, run, say, complain, progress }) {
   }
   sayStates(back.value.states, say);
   for (const stranger of back.value.strangers) say(strangerLine(stranger));
-  await sayMergeSettings(repo, run, say);
+  if (repo === TASK_REPO) await sayMergeSettings(repo, run, say);
   return back.value.equal ? EXIT.done : EXIT.different;
+}
+
+/** The bench repository's apply: the owner's go of 2026-11-19 is the date given, or nothing is read or written. */
+async function applyBench({ repo, run, say, complain, progress, ownerGo }) {
+  const unmet = benchGateProblems(ownerGo);
+  if (unmet.length > 0) {
+    for (const problem of unmet) complain(`github-rulesets: refused: ${problem}`);
+    complain(`github-rulesets: refused: the apply needs the owner's go of ${BENCH_OWNER_GO}; nothing was read or written.`);
+    return EXIT.different;
+  }
+  progress(readingOf(repo));
+  const applied = await applyRulesets({ repo, run, say, ownerGo });
+  return finishApply({ applied, repo, run, say, complain });
+}
+
+/** What both applies print and return once the library answered. */
+async function finishApply({ applied, repo, run, say, complain }) {
+  if (!applied.ok) {
+    complain(`github-rulesets: ${applied.reason}`);
+    return { env: EXIT.gh, config: EXIT.usage }[applied.kind] ?? EXIT.different;
+  }
+  say(applied.value.outcomes.some(entry => entry.outcome === 'created') ? 'read back after the writes: equal' : 'read back: equal');
+  sayStates(applied.value.readBack.states, say);
+  if (repo === TASK_REPO) await sayMergeSettings(repo, run, say);
+  return EXIT.done;
 }
 
 async function apply({ repo, run, say, complain, progress, record, packagesFile }) {
@@ -136,16 +178,9 @@ async function apply({ repo, run, say, complain, progress, record, packagesFile 
     complain('github-rulesets: refused: the apply needs the owner\'s go of 2026-11-08 (all six packages registered, sealed and accepted, and a dry run clean against this registry); nothing was read or written.');
     return EXIT.different;
   }
-  progress(READING);
+  progress(readingOf(repo));
   const applied = await applyRulesets({ repo, run, say, packages, packagesSha256, recordFirstLine });
-  if (!applied.ok) {
-    complain(`github-rulesets: ${applied.reason}`);
-    return { env: EXIT.gh, config: EXIT.usage }[applied.kind] ?? EXIT.different;
-  }
-  say(applied.value.outcomes.some(entry => entry.outcome === 'created') ? 'read back after the writes: equal' : 'read back: equal');
-  sayStates(applied.value.readBack.states, say);
-  await sayMergeSettings(repo, run, say);
-  return EXIT.done;
+  return finishApply({ applied, repo, run, say, complain });
 }
 
 /** The command: -> the exit code. `run`, `say`, `complain`, `progress` and `packagesFile` are the seams of the tests (the real `runBounded`, stdout, stderr, stderr again for the one progress line before the first read, and `lang-explore/inputs/packages.json`). */
@@ -155,8 +190,9 @@ export async function main({ argv, run = runBounded, say = line => process.stdou
     complain(`github-rulesets: ${parsed.usage}\n${USAGE}`);
     return EXIT.usage;
   }
-  const context = { repo: TASK_REPO, run, say, complain, progress, record: parsed.record, packagesFile };
-  return parsed.mode === 'apply' ? apply(context) : check(context);
+  const context = { repo: parsed.bench ? BENCH_REPO : TASK_REPO, run, say, complain, progress, record: parsed.record, ownerGo: parsed.ownerGo, packagesFile };
+  if (parsed.mode !== 'apply') return check(context);
+  return parsed.bench ? applyBench(context) : apply(context);
 }
 
 if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1]) process.exitCode = await main({ argv: process.argv.slice(2) });

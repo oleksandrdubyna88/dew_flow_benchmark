@@ -1,4 +1,4 @@
-// The shape rule of common.coding-style on the pilot's modules: every top-level function has fewer than 50 lines and a cyclomatic complexity of at most 4, with no exemption (v1's scanner, used as it is).
+// The shape rule of common.coding-style on the pilot's modules (`lib/` and the pre-registration's generators in `prereg/`): every top-level function has fewer than 50 lines and a cyclomatic complexity of at most 4, with no exemption (v1's scanner, used as it is).
 // A source file of this spike that is in neither list fails the second test, so a new module cannot escape the rule by not being listed.
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -7,7 +7,8 @@ import { test } from 'node:test';
 import { functionShapes } from '../../minigit-bench/test/code-shape.mjs';
 import { SPIKE } from '../lib/paths.mjs';
 
-const MEASURED = ['explore.mjs', ...readdirSync(path.join(SPIKE, 'lib')).filter(f => f.endsWith('.mjs')).map(f => `lib/${f}`)];
+const mjsIn = dir => readdirSync(path.join(SPIKE, dir)).filter(f => f.endsWith('.mjs')).map(f => `${dir}/${f}`);
+const MEASURED = ['explore.mjs', ...mjsIn('lib'), ...mjsIn('prereg')];
 
 for (const file of MEASURED) {
   test(`Every_function_of_${file.replace(/\W/g, '_')}_has_under_50_lines_and_a_complexity_of_at_most_4`, () => {
