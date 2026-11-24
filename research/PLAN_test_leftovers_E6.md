@@ -1,6 +1,8 @@
 # PLAN — Test leftovers, E6: benchmark's tests name, own, remove and collect what they make
 
-> Status: **amended 2026-11-18 for the parent's entry 12.1 (row E6-m: every whole suite green at S6's head, no standing failure; the runs without an own `TMPDIR`; the host's dotnet packs back to 10.0.14);** *was:* **amended 2026-11-17 for the parent's epoch 12, which the owner opened the same day (`Narrowed: yes`, worded as its record's Narrowed line; question (a) answered yes); *was:* "for the parent's epoch 12 re-review (its § *Epoch 12*, `Narrowed: yes`; it merges only after the owner opens epoch 12)"**; after the parent's independent review: row E6-m's standing failures are EXACTLY policy-ab-quick's three and the base lists the owner confirms within benchmark #222's counts (lang-explore ≤ 10, lang-bench ≤ 1, minigit-bench 0), the S5 timing list approves nothing, the owned `TMPDIR` keeps only F2's makers' entries; D7's decision point for the runner lines; the S4 and S5 briefs promoted to `research/`; rows E6-i (S4's and S5's halves), E6-k and E6-l observed; after the parent's second plan-gate round (`a0abb03e`): a killed run's claimed fake homes under `~` (and `/var/tmp` decoys) are listed, not collected, until F1/S1's home sweep (the parent's goal exception; row E6-m (7), § 11). Before it: entry 11.2's two runner lines (`spikes/lang-bench/runner/run_samples.py:35`, `:306`) leave S6 and stand, on an approved list of exactly those two, until the language-comparison plan disposes of them; S7 waits for that disposition as well as for D7's S1 and S2, and starts from C# 4, not 2 (row E6-g); policy-ab-quick's three pre-existing Windows-path failures and, in the other spike suites, the pre-existing failures S6's base runs name test by test (the classes benchmark #222's body records), each failing the same way at the head, are S6's only approved suite failures (row E6-m, new; widened after the parent's judge); every remaining story (S6, S7) takes the parent's item 8.1 form: *Files* as bounded folders plus the docs a grep at the story's base finds, line lists and counts as observations at a SHA, *Done when* "zero unexplained findings of both guards in scope; each remaining one an individually approved, listed exception" (§ 6's first paragraph); S6's docs scope gains a dated note beside `todo/PLAN_minigit_stack_bench_E2.md:89`; the minigit-bench and lang-explore whole suites start the system interpreter, the owner's question before S6's gate. S4 merged (#221), S5 merged (#223). Earlier: **amended 2026-11-17 for the parent's epoch 11, which the owner opened the same day (`Narrowed: yes`, row E6-l; conventions #176)** (its § *Epoch 11*, the re-review after entry 10.2: S4's sites
+> Status: **IMPLEMENTED in part, and CLOSED 2026-11-24 with its parent — S1–S6 done, S7 not: § *Closure*.**
+>
+> Was: **amended 2026-11-18 for the parent's entry 12.1 (row E6-m: every whole suite green at S6's head, no standing failure; the runs without an own `TMPDIR`; the host's dotnet packs back to 10.0.14);** *was:* **amended 2026-11-17 for the parent's epoch 12, which the owner opened the same day (`Narrowed: yes`, worded as its record's Narrowed line; question (a) answered yes); *was:* "for the parent's epoch 12 re-review (its § *Epoch 12*, `Narrowed: yes`; it merges only after the owner opens epoch 12)"**; after the parent's independent review: row E6-m's standing failures are EXACTLY policy-ab-quick's three and the base lists the owner confirms within benchmark #222's counts (lang-explore ≤ 10, lang-bench ≤ 1, minigit-bench 0), the S5 timing list approves nothing, the owned `TMPDIR` keeps only F2's makers' entries; D7's decision point for the runner lines; the S4 and S5 briefs promoted to `research/`; rows E6-i (S4's and S5's halves), E6-k and E6-l observed; after the parent's second plan-gate round (`a0abb03e`): a killed run's claimed fake homes under `~` (and `/var/tmp` decoys) are listed, not collected, until F1/S1's home sweep (the parent's goal exception; row E6-m (7), § 11). Before it: entry 11.2's two runner lines (`spikes/lang-bench/runner/run_samples.py:35`, `:306`) leave S6 and stand, on an approved list of exactly those two, until the language-comparison plan disposes of them; S7 waits for that disposition as well as for D7's S1 and S2, and starts from C# 4, not 2 (row E6-g); policy-ab-quick's three pre-existing Windows-path failures and, in the other spike suites, the pre-existing failures S6's base runs name test by test (the classes benchmark #222's body records), each failing the same way at the head, are S6's only approved suite failures (row E6-m, new; widened after the parent's judge); every remaining story (S6, S7) takes the parent's item 8.1 form: *Files* as bounded folders plus the docs a grep at the story's base finds, line lists and counts as observations at a SHA, *Done when* "zero unexplained findings of both guards in scope; each remaining one an individually approved, listed exception" (§ 6's first paragraph); S6's docs scope gains a dated note beside `todo/PLAN_minigit_stack_bench_E2.md:89`; the minigit-bench and lang-explore whole suites start the system interpreter, the owner's question before S6's gate. S4 merged (#221), S5 merged (#223). Earlier: **amended 2026-11-17 for the parent's epoch 11, which the owner opened the same day (`Narrowed: yes`, row E6-l; conventions #176)** (its § *Epoch 11*, the re-review after entry 10.2: S4's sites
 > take a disposition by lifetime, and the M2 and M3 pilot scaffolds write what must outlive the run into the folder the
 > required `BENCH_PILOT_OUT` names, unprefixed, never the temp root (row E6-l, new); row E6-i reads both guards with
 > counts; S4's *Files* name the model-arms docs; D6 for the probe runner's path; S5's shape G bounded; S6 reads both
@@ -22,12 +24,12 @@
 > age); S2 built (#207: the adapted copy, the start-of-run sweep, case 15, the audit; brief `research/PLAN_test_leftovers_E6_S2_brief.md`), merged as `84d4953e`.** Found by S1, not fixed (outside this document's text): `spikes/minigit-bench/lib/score-steps.mjs:57-73`
 > `stepSweep` removes the scorer's own marked folders by marker age. Written new against the shared rules at `d23a2ea` (this
 > repository's pin) and `dew_flow_mcp`'s merged C# helper; the 2026-10-16 draft of this file (`08a87430`) was read as
-> material only. Stories of epic E6 of `dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md` (§ *Epics*, E6;
+> material only. Stories of epic E6 of `dew_flow_conventions · research/PLAN_test_leftovers_rollout.md` (§ *Epics*, E6;
 > § *Epoch 8* item 3, rows E6-a to E6-h; § *Epoch 9* item 3 and § *Epoch 10* item 3, the rows they restate). Scope: `tests/` (Bench.Tests, FakeCli, FakeCoai), `spikes/policy-ab-quick/test/`,
 > `spikes/minigit-bench/lib/heldout-run.mjs`, two product seams (`HarvestGates`, `SolutionSignals`), one CI job, the docs.
 
 **Cited as paths, never links** (the shared `common/planning-docs.md` § *Across repositories*): the parent
-`dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md`; the rule `.agents/conventions/common/test-leftovers.md` and its
+`dew_flow_conventions · research/PLAN_test_leftovers_rollout.md`; the rule `.agents/conventions/common/test-leftovers.md` and its
 detail, janitor and baseline companions (mounted here); the C# template `dew_flow_mcp · tests/Mcp.Tests/Leftovers/`; the
 two adapted copies `dew_flow_connect_other_ais · src_mcp/tests_leftovers/` and
 `dew_flow_creds_for_devs · src_service_defaults/tests/Support/Leftovers/`. *Rule §n* is a section of the rule's detail.
@@ -85,6 +87,29 @@ must pass AND on a counterexample that must fail, at this repository's pins. **p
 run; it is never approved as measured. **blocked**: the check needs something this document does not have; the row names
 what. Where a row's check is a test or a guard run, a reading of today's tree is the starting point and is written as
 such, never as "observed".
+
+## Closure (2026-11-24)
+
+The owner closed the parent plan on 2026-11-24 (`dew_flow_conventions · research/PLAN_test_leftovers_rollout.md`
+§ *Closure*), and this stories document closes with it. No more work is done under it; S7, if taken up later, gets a plan
+of its own.
+
+**Done:** S1 #205; S2 #207 (`84d4953e`); S3 #219; S4 #221; S5 #223; S6 #234 (`17224bf3`, 2026-11-19). At S6's head
+both guards are clean in `spikes/` (Node 87 → 2, default profile 3 → 2, the C# copy 16 → 4), and the four spike suites
+ran whole with no failure: policy-ab-quick 159 tests, minigit-bench 1316, lang-explore 1042, lang-bench 2604 (S6's
+brief, *The final head runs*). On S6's way, #232 (`4e30c5b9`) made every box on the distribution's dotnet show only
+the pinned SDK (`todo/PLAN_minigit_stack_bench_E2.md` amendment D-9). The amendments were #220 and #225; S6's brief
+is promoted with this document.
+
+**Not done: S7** (both guards on in CI and the docs; row E6-g). Its prerequisites are not met (checked 2026-11-24 on
+`main` `ed472384`):
+- `todo/PLAN_bench_test_leftovers_followups.md`'s status line says nothing is implemented; D7's S1 and S2 were not
+  looked for in code;
+- `todo/PLAN_lang_comparison_v2.md` holds no disposition of `spikes/lang-bench/runner/run_samples.py:35` and `:306`.
+
+So on `main` the C# copy stays at 4: the two § 3a `research/` lines and the two runner lines.
+`http/README.md:32-33`, S7's site, stays as it is. Found by S6 and not fixed: the umask dependency (S6's brief,
+fix 8) and the scoring pin's two known limits (`research/module_minigit_bench.md`).
 
 ## 1. The conditions — rows E6-a to E6-l (E6-l added by the epoch-11 amendment), each with its state (the parent's § *Epoch 8* item 3, as § *Epoch 9* item 3 restates it)
 
